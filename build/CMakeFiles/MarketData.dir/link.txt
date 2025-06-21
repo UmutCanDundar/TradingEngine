@@ -1,0 +1,1 @@
+/usr/bin/g++ -g CMakeFiles/MarketData.dir/src/ErrorHandler.cpp.o CMakeFiles/MarketData.dir/src/FIXParser.cpp.o CMakeFiles/MarketData.dir/src/Logger.cpp.o CMakeFiles/MarketData.dir/src/MarketDataHandler.cpp.o CMakeFiles/MarketData.dir/src/MulticastReceiver.cpp.o CMakeFiles/MarketData.dir/src/main.cpp.o -o MarketData  /usr/lib/x86_64-linux-gnu/libfmt.so.9.1.0 

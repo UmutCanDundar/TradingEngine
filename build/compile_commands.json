@@ -1,0 +1,38 @@
+[
+{
+  "directory": "/home/umut/Masaüstü/MarketData/build",
+  "command": "/usr/bin/g++ -DFMT_SHARED -I/home/umut/Masaüstü/MarketData/include -g -std=gnu++20 -o CMakeFiles/MarketData.dir/src/ErrorHandler.cpp.o -c /home/umut/Masaüstü/MarketData/src/ErrorHandler.cpp",
+  "file": "/home/umut/Masaüstü/MarketData/src/ErrorHandler.cpp",
+  "output": "CMakeFiles/MarketData.dir/src/ErrorHandler.cpp.o"
+},
+{
+  "directory": "/home/umut/Masaüstü/MarketData/build",
+  "command": "/usr/bin/g++ -DFMT_SHARED -I/home/umut/Masaüstü/MarketData/include -g -std=gnu++20 -o CMakeFiles/MarketData.dir/src/FIXParser.cpp.o -c /home/umut/Masaüstü/MarketData/src/FIXParser.cpp",
+  "file": "/home/umut/Masaüstü/MarketData/src/FIXParser.cpp",
+  "output": "CMakeFiles/MarketData.dir/src/FIXParser.cpp.o"
+},
+{
+  "directory": "/home/umut/Masaüstü/MarketData/build",
+  "command": "/usr/bin/g++ -DFMT_SHARED -I/home/umut/Masaüstü/MarketData/include -g -std=gnu++20 -o CMakeFiles/MarketData.dir/src/Logger.cpp.o -c /home/umut/Masaüstü/MarketData/src/Logger.cpp",
+  "file": "/home/umut/Masaüstü/MarketData/src/Logger.cpp",
+  "output": "CMakeFiles/MarketData.dir/src/Logger.cpp.o"
+},
+{
+  "directory": "/home/umut/Masaüstü/MarketData/build",
+  "command": "/usr/bin/g++ -DFMT_SHARED -I/home/umut/Masaüstü/MarketData/include -g -std=gnu++20 -o CMakeFiles/MarketData.dir/src/MarketDataHandler.cpp.o -c /home/umut/Masaüstü/MarketData/src/MarketDataHandler.cpp",
+  "file": "/home/umut/Masaüstü/MarketData/src/MarketDataHandler.cpp",
+  "output": "CMakeFiles/MarketData.dir/src/MarketDataHandler.cpp.o"
+},
+{
+  "directory": "/home/umut/Masaüstü/MarketData/build",
+  "command": "/usr/bin/g++ -DFMT_SHARED -I/home/umut/Masaüstü/MarketData/include -g -std=gnu++20 -o CMakeFiles/MarketData.dir/src/MulticastReceiver.cpp.o -c /home/umut/Masaüstü/MarketData/src/MulticastReceiver.cpp",
+  "file": "/home/umut/Masaüstü/MarketData/src/MulticastReceiver.cpp",
+  "output": "CMakeFiles/MarketData.dir/src/MulticastReceiver.cpp.o"
+},
+{
+  "directory": "/home/umut/Masaüstü/MarketData/build",
+  "command": "/usr/bin/g++ -DFMT_SHARED -I/home/umut/Masaüstü/MarketData/include -g -std=gnu++20 -o CMakeFiles/MarketData.dir/src/main.cpp.o -c /home/umut/Masaüstü/MarketData/src/main.cpp",
+  "file": "/home/umut/Masaüstü/MarketData/src/main.cpp",
+  "output": "CMakeFiles/MarketData.dir/src/main.cpp.o"
+}
+]
