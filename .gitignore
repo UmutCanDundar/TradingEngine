@@ -1,0 +1,22 @@
+# Derleme dosyaları
+*.o
+*.obj
+*.so
+*.a
+*.exe
+*.out
+
+# Derleme klasörleri
+build/
+
+
+# CMake dosyaları
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# VSCode ayarları
+.vscode/
+
+
