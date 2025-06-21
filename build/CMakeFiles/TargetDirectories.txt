@@ -1,4 +1,0 @@
-/home/umut/Masaüstü/MarketData/build/CMakeFiles/GeneratedFiles.dir
-/home/umut/Masaüstü/MarketData/build/CMakeFiles/MarketData.dir
-/home/umut/Masaüstü/MarketData/build/CMakeFiles/edit_cache.dir
-/home/umut/Masaüstü/MarketData/build/CMakeFiles/rebuild_cache.dir
