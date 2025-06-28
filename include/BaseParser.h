@@ -12,14 +12,6 @@ public:
     }
 };
 
-// class ITCHParser : public BaseParser<ITCHParser>
-// {
-// public:
-//     inline void parse(const char *data, size_t len) noexcept
-//     {
-//     }
-// };
-
 // class SBEParser : public BaseParser<SBEParser>
 // {
 // public:

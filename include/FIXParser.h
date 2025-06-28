@@ -38,7 +38,7 @@ private:
     FIXMessage fixMsg_{};
 
     static constexpr char SOH = '\x01';
-    static constexpr size_t MAX_TAG = 256;
+    static constexpr size_t MAX_TAG = 192;
 
     static inline int parseFixedPoint(std::string_view strnum) noexcept
     {

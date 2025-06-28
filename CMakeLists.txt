@@ -28,10 +28,24 @@ add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateIpPort.py
 )
 
+add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages.h
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateITCHMessages.py
+    DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateITCHMessages.py
+)
+
+add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedSBEMessages.h
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateSBEMessages.py
+    DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateSBEMessages.py
+)
+
 # Bu custom command'i tetikleyen hedef
 add_custom_target(GeneratedFiles ALL
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedErrorMap.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedIpPort.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSBEMessages.h
 )
 
 # main.cpp ve diğer kaynak dosyaları
