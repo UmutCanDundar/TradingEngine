@@ -139,6 +139,7 @@ def generate_enum(messages):
      for i, msg in enumerate(messages[1:]):
             types = f" {msg ["name"].upper()} = {i},"
             line.append(types)
+     line.append(f" unknownSBEtype = 99")
      line.append(f"}};")
      return" ".join(line)
 
@@ -147,9 +148,10 @@ def generate_func(messages):
     line.append("   switch(templateId) {")
     for msg in messages[1:]:
         line.append(f"      case {templateID[msg["name"]]}: return SBETypes::{msg["name"].upper()}; ")
+    line.append(f"      default: return SBETypes::unknownSBEtype;")
     line.append("   }")
     line.append("}")
-    return "\n".join(line) 
+    return "\n".join(line)
 
 file = generate_file(messages)
 with open("../include/GeneratedSBEMessages.h", "w") as f:

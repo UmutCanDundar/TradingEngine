@@ -86,18 +86,19 @@ struct alignas(64) ITCHSystemEventMessage {
     char pad2[47];                  // Doldurma (64 byte hizalama için)
 };
 
-enum ITCHTypes : uint8_t {   A = 0,  F = 1,  X = 2,  E = 3,  C = 4,  D = 5,  P = 6,  S = 7, };
+enum ITCHTypes : uint8_t {   A = 0,  F = 1,  X = 2,  E = 3,  C = 4,  D = 5,  P = 6,  S = 7,  unknownITCHtype = 99 };
 
 inline constexpr ITCHTypes MessageIndex(char type) {
 
    switch(type) {
-      case 'A': return ITCHTypes::A; 
-      case 'F': return ITCHTypes::F; 
-      case 'X': return ITCHTypes::X; 
-      case 'E': return ITCHTypes::E; 
-      case 'C': return ITCHTypes::C; 
-      case 'D': return ITCHTypes::D; 
-      case 'P': return ITCHTypes::P; 
-      case 'S': return ITCHTypes::S; 
+      case 'A': return ITCHTypes::A;
+      case 'F': return ITCHTypes::F;
+      case 'X': return ITCHTypes::X;
+      case 'E': return ITCHTypes::E;
+      case 'C': return ITCHTypes::C;
+      case 'D': return ITCHTypes::D;
+      case 'P': return ITCHTypes::P;
+      case 'S': return ITCHTypes::S;
+      default: return ITCHTypes::unknownITCHtype;
    }
 }

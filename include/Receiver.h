@@ -1,26 +1,33 @@
-// MulticastReceiver.h
+// Receiver.h
 #pragma once
 #include "ErrorHandler.h"
 #include "common.h"
 #include "GeneratedIpPort.h"
 
-#include <arpa/inet.h>  // IP address conversion (inet - string <-> binary)
-#include <cstring>      // C-style mem ops
-#include <netinet/in.h> // socket address structs
-#include <sys/socket.h> // socket functions
+#include <arpa/inet.h>
+#include <cstring>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
-#include <unistd.h> // close()
+#include <unistd.h>
 #include <cerrno>
 #include <boost/lockfree/spsc_queue.hpp>
 #include <array>
 #include <vector>
 
-inline constexpr size_t PACKET_SIZE = 2048;
+inline constexpr size_t DATA_SIZE = 2048;
 inline constexpr size_t QUEUE_CAPACITY = 1024;
-using spscQueue_t = boost::lockfree::spsc_queue<std::array<char, PACKET_SIZE>, boost::lockfree::capacity<QUEUE_CAPACITY>>;
 
-class MulticastReceiver
+struct PacketWithProtocol
+{
+  Protocol protocol;
+  std::array<char, DATA_SIZE> data;
+};
+
+using spscQueue_t = boost::lockfree::spsc_queue<PacketWithProtocol, boost::lockfree::capacity<QUEUE_CAPACITY>>;
+
+class Receiver
 {
 private:
   std::vector<uint32_t> joined_ips{};
@@ -49,9 +56,8 @@ private:
     epoll_event ev[PORTS_COUNT];
     for (uint8_t i = 0; i < PORTS_COUNT; i++)
     {
-
       ev[i].events = EPOLLIN | EPOLLET;
-      ev[i].data.fd = socks_[i];
+      ev[i].data.u32 = i;
 
       if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, socks_[i], &ev[i]) < 0)
         ErrorHandler::handleError(errno);
@@ -64,13 +70,15 @@ private:
     std::array<int, PORTS_COUNT> socks{};
     for (uint8_t i = 0; i < PORTS_COUNT; i++)
     {
-      int sock = ::socket(AF_INET, SOCK_DGRAM, 0);
+      int sock_type = (PortProtocol[i] == Protocol::FIX) ? SOCK_STREAM : SOCK_DGRAM;
+      int sock = ::socket(AF_INET, sock_type, 0);
+
       while (true)
       {
         if (UNLIKELY(sock < 0))
         {
           ErrorHandler::handleError(errno);
-          sock = ::socket(AF_INET, SOCK_DGRAM, 0);
+          sock = ::socket(AF_INET, sock_type, 0);
           continue;
         }
 
@@ -80,46 +88,67 @@ private:
           ErrorHandler::handleError(errno);
           continue;
         }
+        break;
       }
 
-      sockaddr_in localAddr{
-          AF_INET,
-          htons(Ports[i]),
-          {htonl(INADDR_ANY)},
-          {}};
-
-      while (true)
+      if (PortProtocol[i] == Protocol::FIX)
       {
-        if (UNLIKELY(::bind(sock, reinterpret_cast<sockaddr *>(&localAddr), sizeof(localAddr)) < 0))
-        {
-          ErrorHandler::handleError(errno);
-          continue;
-        }
-      }
+        sockaddr_in addr{
+            AF_INET,
+            htons(Ports[i]),
+            {IPs[i][0]},
+            {}};
 
-      for (const auto &ip : IPs[i])
-      {
-
-        ip_mreq mreq{{ip}, {htonl(INADDR_ANY)}};
         while (true)
         {
-          if (UNLIKELY(::setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0))
+          if (UNLIKELY(::connect(sock, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0))
           {
             ErrorHandler::handleError(errno);
             continue;
           }
-          joined_ips.push_back(ip);
           break;
         }
       }
+      else
+      {
+        sockaddr_in addr{
+            AF_INET,
+            htons(Ports[i]),
+            {htonl(INADDR_ANY)},
+            {}};
 
+        while (true)
+        {
+          if (UNLIKELY(::bind(sock, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0))
+          {
+            ErrorHandler::handleError(errno);
+            continue;
+          }
+          break;
+        }
+
+        for (const auto &ip : IPs[i])
+        {
+          ip_mreq mreq{{ip}, {htonl(INADDR_ANY)}};
+          while (true)
+          {
+            if (UNLIKELY(::setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0))
+            {
+              ErrorHandler::handleError(errno);
+              continue;
+            }
+            joined_ips.push_back(ip);
+            break;
+          }
+        }
+      }
       socks[i] = sock;
     }
     return socks;
   }
 
 public:
-  MulticastReceiver(spscQueue_t queue) noexcept
+  Receiver(spscQueue_t &queue) noexcept
       : socks_(Init_Sockets()),
         epoll_fd_(setupEpoll()),
         queue_(queue)
@@ -127,9 +156,8 @@ public:
     makeSocketNonBlocking();
   }
 
-  void run() noexcept
+  void receive() noexcept
   {
-
     constexpr int MAX_EVENTS = 10;
     epoll_event events[MAX_EVENTS];
 
@@ -145,11 +173,21 @@ public:
 
       for (int i = 0; i < nfds; ++i)
       {
-        int sock = events[i].data.fd;
+        int sock = socks_[events[i].data.u32];
         while (true)
         {
-          std::array<char, PACKET_SIZE> packet{};
-          ssize_t len = recvfrom(sock, packet.data(), packet.size(), 0, nullptr, nullptr);
+          PacketWithProtocol pkt{};
+          ssize_t len = 0;
+
+          if (PortProtocol[events[i].data.u32] == Protocol::FIX)
+          {
+            len = ::recv(sock, pkt.data.data(), pkt.data.size(), 0);
+          }
+          else
+          {
+            len = ::recvfrom(sock, pkt.data.data(), pkt.data.size(), 0, nullptr, nullptr);
+          }
+
           if (len < 0)
           {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -158,10 +196,12 @@ public:
           }
           else
           {
+            pkt.protocol = PortProtocol[events[i].data.u32];
             static int lost_package{0};
-            if (!queue_.push(std::move(packet)))
+            if (!queue_.push(std::move(pkt)))
             {
               ++lost_package;
+              // Daha sonra loglama yapılacak.
             }
           }
         }
@@ -169,25 +209,28 @@ public:
     }
   }
 
-  ~MulticastReceiver()
+  ~Receiver()
   {
     auto ip = joined_ips.begin();
 
-    for (const auto &sock : socks_)
+    for (uint8_t i = 0; i < PORTS_COUNT; i++)
     {
-      while (ip != joined_ips.end())
+      if (PortProtocol[i] != Protocol::FIX)
       {
-        ip_mreq mreq{{*ip}, {htonl(INADDR_ANY)}};
-        if (::setsockopt(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) < 0)
+        while (ip != joined_ips.end())
         {
-          break;
-        }
-        else
-        {
-          ip++;
+          ip_mreq mreq{{*ip}, {htonl(INADDR_ANY)}};
+          if (::setsockopt(socks_[i], IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) < 0)
+          {
+            break;
+          }
+          else
+          {
+            ip++;
+          }
         }
       }
-      ::close(sock);
+      ::close(socks_[i]);
     }
   }
 };

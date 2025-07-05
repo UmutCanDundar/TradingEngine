@@ -2,27 +2,27 @@
 
 #include "BaseParser.h"
 #include "GeneratedITCHMessages.h"
+#include "Logger.h"
 #include <cstdint>
 #include <cstring>
 #include <array>
+#include <string_view>
+#include <variant>
 
-union alignas(64) ITCHMessage
-{
-    ITCHAddOrderMessage addorder;
-    ITCHAddOrderMPIDMessage addorderMPID;
-    ITCHCancelMessage cancel;
-    ITCHExecutedMessage executed;
-    ITCHExecutedWithPriceMessage executedwp;
-    ITCHDeleteMessage del;
-    ITCHTradeMessage trade;
-    ITCHSystemEventMessage systemevent;
-};
+using ITCHMessage = std::variant<
+    ITCHAddOrderMessage,
+    ITCHAddOrderMPIDMessage,
+    ITCHCancelMessage,
+    ITCHExecutedMessage,
+    ITCHExecutedWithPriceMessage,
+    ITCHDeleteMessage,
+    ITCHTradeMessage,
+    ITCHSystemEventMessage>;
 
-class ITCHParser : public BaseParser<ITCHParser>
+class ITCHParser
 {
 private:
     static constexpr size_t MAX_MESSAGES = 8;
-    ITCHMessage ITCHmsg_{};
 
     using MessageHandlerFunc = void (*)(const char *, ITCHMessage &) noexcept;
 
@@ -32,75 +32,91 @@ private:
 
         handlers[0] = [](const char *data, ITCHMessage &msg) noexcept
         {
-            std::memcpy(&msg.addorder.message_type, data, 1);
-            std::memcpy(&msg.addorder.timestamp, data + 1, 8);
-            std::memcpy(&msg.addorder.order_ref, data + 9, 8);
-            std::memcpy(&msg.addorder.side, data + 17, 1);
-            std::memcpy(&msg.addorder.quantity, data + 18, 4);
-            std::memcpy(&msg.addorder.stock, data + 22, 8);
-            std::memcpy(&msg.addorder.price, data + 30, 4);
+            ITCHAddOrderMessage m{};
+            std::memcpy(&m.message_type, data, 1);
+            std::memcpy(&m.timestamp, data + 1, 8);
+            std::memcpy(&m.order_ref, data + 9, 8);
+            std::memcpy(&m.side, data + 17, 1);
+            std::memcpy(&m.quantity, data + 18, 4);
+            std::memcpy(&m.stock, data + 22, 8);
+            std::memcpy(&m.price, data + 30, 4);
+            msg = m;
         };
 
         handlers[1] = [](const char *data, ITCHMessage &msg) noexcept
         {
-            std::memcpy(&msg.addorderMPID.message_type, data, 1);
-            std::memcpy(&msg.addorderMPID.timestamp, data + 1, 8);
-            std::memcpy(&msg.addorderMPID.order_ref, data + 9, 8);
-            std::memcpy(&msg.addorderMPID.side, data + 17, 1);
-            std::memcpy(&msg.addorderMPID.quantity, data + 18, 4);
-            std::memcpy(&msg.addorderMPID.stock, data + 22, 8);
-            std::memcpy(&msg.addorderMPID.price, data + 30, 4);
-            std::memcpy(&msg.addorderMPID.mpid, data + 34, 4);
+            ITCHAddOrderMPIDMessage m{};
+            std::memcpy(&m.message_type, data, 1);
+            std::memcpy(&m.timestamp, data + 1, 8);
+            std::memcpy(&m.order_ref, data + 9, 8);
+            std::memcpy(&m.side, data + 17, 1);
+            std::memcpy(&m.quantity, data + 18, 4);
+            std::memcpy(&m.stock, data + 22, 8);
+            std::memcpy(&m.price, data + 30, 4);
+            std::memcpy(&m.mpid, data + 34, 4);
+            msg = m;
         };
 
         handlers[2] = [](const char *data, ITCHMessage &msg) noexcept
         {
-            std::memcpy(&msg.cancel.message_type, data, 1);
-            std::memcpy(&msg.cancel.timestamp, data + 1, 8);
-            std::memcpy(&msg.cancel.order_ref, data + 9, 8);
-            std::memcpy(&msg.cancel.cancelled_quantity, data + 17, 4);
+            ITCHCancelMessage m{};
+            std::memcpy(&m.message_type, data, 1);
+            std::memcpy(&m.timestamp, data + 1, 8);
+            std::memcpy(&m.order_ref, data + 9, 8);
+            std::memcpy(&m.cancelled_quantity, data + 17, 4);
+            msg = m;
         };
 
         handlers[3] = [](const char *data, ITCHMessage &msg) noexcept
         {
-            std::memcpy(&msg.executed.message_type, data, 1);
-            std::memcpy(&msg.executed.timestamp, data + 1, 8);
-            std::memcpy(&msg.executed.order_ref, data + 9, 8);
-            std::memcpy(&msg.executed.executed_quantity, data + 17, 4);
+            ITCHExecutedMessage m{};
+            std::memcpy(&m.message_type, data, 1);
+            std::memcpy(&m.timestamp, data + 1, 8);
+            std::memcpy(&m.order_ref, data + 9, 8);
+            std::memcpy(&m.executed_quantity, data + 17, 4);
+            msg = m;
         };
 
         handlers[4] = [](const char *data, ITCHMessage &msg) noexcept
         {
-            std::memcpy(&msg.executedwp.message_type, data, 1);
-            std::memcpy(&msg.executedwp.timestamp, data + 1, 8);
-            std::memcpy(&msg.executedwp.order_ref, data + 9, 8);
-            std::memcpy(&msg.executedwp.executed_quantity, data + 17, 4);
-            std::memcpy(&msg.executedwp.execution_price, data + 21, 4);
+            ITCHExecutedWithPriceMessage m{};
+            std::memcpy(&m.message_type, data, 1);
+            std::memcpy(&m.timestamp, data + 1, 8);
+            std::memcpy(&m.order_ref, data + 9, 8);
+            std::memcpy(&m.executed_quantity, data + 17, 4);
+            std::memcpy(&m.execution_price, data + 21, 4);
+            msg = m;
         };
 
         handlers[5] = [](const char *data, ITCHMessage &msg) noexcept
         {
-            std::memcpy(&msg.del.message_type, data, 1);
-            std::memcpy(&msg.del.timestamp, data + 1, 8);
-            std::memcpy(&msg.del.order_ref, data + 9, 8);
+            ITCHDeleteMessage m{};
+            std::memcpy(&m.message_type, data, 1);
+            std::memcpy(&m.timestamp, data + 1, 8);
+            std::memcpy(&m.order_ref, data + 9, 8);
+            msg = m;
         };
 
         handlers[6] = [](const char *data, ITCHMessage &msg) noexcept
         {
-            std::memcpy(&msg.trade.message_type, data, 1);
-            std::memcpy(&msg.trade.timestamp, data + 1, 8);
-            std::memcpy(&msg.trade.order_ref, data + 9, 8);
-            std::memcpy(&msg.trade.stock, data + 17, 8);
-            std::memcpy(&msg.trade.quantity, data + 25, 4);
-            std::memcpy(&msg.trade.price, data + 29, 4);
-            std::memcpy(&msg.trade.match_id, data + 33, 4);
+            ITCHTradeMessage m{};
+            std::memcpy(&m.message_type, data, 1);
+            std::memcpy(&m.timestamp, data + 1, 8);
+            std::memcpy(&m.order_ref, data + 9, 8);
+            std::memcpy(&m.stock, data + 17, 8);
+            std::memcpy(&m.quantity, data + 25, 4);
+            std::memcpy(&m.price, data + 29, 4);
+            std::memcpy(&m.match_id, data + 33, 4);
+            msg = m;
         };
 
         handlers[7] = [](const char *data, ITCHMessage &msg) noexcept
         {
-            std::memcpy(&msg.systemevent.message_type, data, 1);
-            std::memcpy(&msg.systemevent.timestamp, data + 1, 8);
-            std::memcpy(&msg.systemevent.event_code, data + 9, 1);
+            ITCHSystemEventMessage m{};
+            std::memcpy(&m.message_type, data, 1);
+            std::memcpy(&m.timestamp, data + 1, 8);
+            std::memcpy(&m.event_code, data + 9, 1);
+            msg = m;
         };
 
         return handlers;
@@ -109,8 +125,12 @@ private:
     static inline std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers = makeMessageHandlersLookup();
 
 public:
-    void parse(const char *data) noexcept
+    ITCHMessage parse(const char *data) noexcept
     {
-        MessageHandlers[MessageIndex(*data)](data, ITCHmsg_);
+        ITCHMessage ITCHmsg_;
+        size_t index = MessageIndex(*data);
+        if (index != 99)
+            MessageHandlers[index](data, ITCHmsg_);
+        return ITCHmsg_;
     }
 };

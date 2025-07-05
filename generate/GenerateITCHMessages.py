@@ -143,6 +143,7 @@ def generate_enum(messages):
          default = msg["fields"][0][1]  
          types = f" {default.strip("'")} = {i},"
          line.append(types)
+     line.append(f" unknownITCHtype = 99")
      line.append(f"}};")
      return" ".join(line)
 
@@ -151,7 +152,8 @@ def generate_func(messages):
     line.append("   switch(type) {")
     for i, msg in enumerate(messages):
         default = msg["fields"][0][1]  
-        line.append(f"      case {default}: return ITCHTypes::{default.strip("'")}; ")
+        line.append(f"      case {default}: return ITCHTypes::{default.strip("'")};")
+    line.append(f"      default: return ITCHTypes::unknownITCHtype;")
     line.append("   }")
     line.append("}")
     return "\n".join(line) 

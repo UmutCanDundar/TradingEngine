@@ -5,88 +5,102 @@
 #include <cstdint>
 #include <cstring>
 #include <array>
+#include <variant>
 
-union alignas(64) SBEMessage
-{
-    SBEAddOrderMessage addorder;
-    SBEDeleteOrderMessage deleteorder;
-    SBETradeMessage trade;
-    SBEModifyOrderMessage modifyorder;
-    SBEHeartbeatMessage heartbeat;
-    SBEMarketStatusMessage marketstatus;
-    SBEInstrumentDefinitionMessage instrumentdef;
-    SBESequenceResetMessage seqreset;
-};
+using SBEMessage = std::variant<
+    SBEAddOrderMessage,
+    SBEDeleteOrderMessage,
+    SBETradeMessage,
+    SBEModifyOrderMessage,
+    SBEHeartbeatMessage,
+    SBEMarketStatusMessage,
+    SBEInstrumentDefinitionMessage,
+    SBESequenceResetMessage>;
 
 class SBEParser
 {
 private:
     static constexpr size_t MAX_MESSAGES = 8;
-    SBEMessage SBEmsg_{};
 
     using MessageHandlerFunc = void (*)(const char *, SBEMessage &) noexcept;
 
     static inline std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept
     {
-        alignas(64) std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
+        std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
 
         handlers[0] = [](const char *data, SBEMessage &msg) noexcept
         {
-            std::memcpy(&msg.addorder.header, data, sizeof(SBEHeader));
-            std::memcpy(&msg.addorder.orderId, data + 8, 8);
-            std::memcpy(&msg.addorder.price, data + 16, 4);
-            std::memcpy(&msg.addorder.quantity, data + 20, 4);
-            std::memcpy(&msg.addorder.side, data + 24, 1);
+            SBEAddOrderMessage m{};
+            std::memcpy(&m.header, data, sizeof(SBEHeader));
+            std::memcpy(&m.orderId, data + 8, 8);
+            std::memcpy(&m.price, data + 16, 4);
+            std::memcpy(&m.quantity, data + 20, 4);
+            std::memcpy(&m.side, data + 24, 1);
+            msg = m;
         };
 
         handlers[1] = [](const char *data, SBEMessage &msg) noexcept
         {
-            std::memcpy(&msg.deleteorder.header, data, sizeof(SBEHeader));
-            std::memcpy(&msg.deleteorder.orderId, data + 8, 8);
+            SBEDeleteOrderMessage m{};
+            std::memcpy(&m.header, data, sizeof(SBEHeader));
+            std::memcpy(&m.orderId, data + 8, 8);
+            msg = m;
         };
 
         handlers[2] = [](const char *data, SBEMessage &msg) noexcept
         {
-            std::memcpy(&msg.trade.header, data, sizeof(SBEHeader));
-            std::memcpy(&msg.trade.tradeId, data + 8, 8);
-            std::memcpy(&msg.trade.orderId, data + 16, 8);
-            std::memcpy(&msg.trade.price, data + 24, 4);
-            std::memcpy(&msg.trade.quantity, data + 28, 4);
-            std::memcpy(&msg.trade.aggressorSide, data + 32, 1);
+            SBETradeMessage m{};
+            std::memcpy(&m.header, data, sizeof(SBEHeader));
+            std::memcpy(&m.tradeId, data + 8, 8);
+            std::memcpy(&m.orderId, data + 16, 8);
+            std::memcpy(&m.price, data + 24, 4);
+            std::memcpy(&m.quantity, data + 28, 4);
+            std::memcpy(&m.aggressorSide, data + 32, 1);
+            msg = m;
         };
 
         handlers[3] = [](const char *data, SBEMessage &msg) noexcept
         {
-            std::memcpy(&msg.modifyorder.header, data, sizeof(SBEHeader));
-            std::memcpy(&msg.modifyorder.orderId, data + 8, 8);
-            std::memcpy(&msg.modifyorder.newQuantity, data + 16, 4);
+            SBEModifyOrderMessage m{};
+            std::memcpy(&m.header, data, sizeof(SBEHeader));
+            std::memcpy(&m.orderId, data + 8, 8);
+            std::memcpy(&m.newQuantity, data + 16, 4);
+            msg = m;
         };
 
         handlers[4] = [](const char *data, SBEMessage &msg) noexcept
         {
-            std::memcpy(&msg.heartbeat.header, data, sizeof(SBEHeader));
-            std::memcpy(&msg.heartbeat.timestamp, data + 8, 8);
+            SBEHeartbeatMessage m{};
+            std::memcpy(&m.header, data, sizeof(SBEHeader));
+            std::memcpy(&m.timestamp, data + 8, 8);
+            msg = m;
         };
 
         handlers[5] = [](const char *data, SBEMessage &msg) noexcept
         {
-            std::memcpy(&msg.marketstatus.header, data, sizeof(SBEHeader));
-            std::memcpy(&msg.marketstatus.instrumentId, data + 8, 8);
-            std::memcpy(&msg.marketstatus.marketState, data + 16, 1);
+            SBEMarketStatusMessage m{};
+            std::memcpy(&m.header, data, sizeof(SBEHeader));
+            std::memcpy(&m.instrumentId, data + 8, 8);
+            std::memcpy(&m.marketState, data + 16, 1);
+            msg = m;
         };
 
         handlers[6] = [](const char *data, SBEMessage &msg) noexcept
         {
-            std::memcpy(&msg.instrumentdef.header, data, sizeof(SBEHeader));
-            std::memcpy(&msg.instrumentdef.instrumentId, data + 8, 8);
-            std::memcpy(&msg.instrumentdef.lotSize, data + 16, 4);
-            std::memcpy(&msg.instrumentdef.currencyCode, data + 20, 3);
+            SBEInstrumentDefinitionMessage m{};
+            std::memcpy(&m.header, data, sizeof(SBEHeader));
+            std::memcpy(&m.instrumentId, data + 8, 8);
+            std::memcpy(&m.lotSize, data + 16, 4);
+            std::memcpy(&m.currencyCode, data + 20, 3);
+            msg = m;
         };
 
         handlers[7] = [](const char *data, SBEMessage &msg) noexcept
         {
-            std::memcpy(&msg.seqreset.header, data, sizeof(SBEHeader));
-            std::memcpy(&msg.seqreset.newSeqNo, data + 8, 8);
+            SBESequenceResetMessage m{};
+            std::memcpy(&m.header, data, sizeof(SBEHeader));
+            std::memcpy(&m.newSeqNo, data + 8, 8);
+            msg = m;
         };
 
         return handlers;
@@ -95,9 +109,13 @@ private:
     static inline std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers = makeMessageHandlersLookup();
 
 public:
-    void parse(const char *data) noexcept
+    SBEMessage parse(const char *data) noexcept
     {
-        uint16_t templateId = data[2] | (data[3] << 8);
-        MessageHandlers[MessageIndex(templateId)](data, SBEmsg_);
+        SBEMessage SBEmsg_;
+        uint16_t templateId = static_cast<uint8_t>(data[2]) | (static_cast<uint8_t>(data[3]) << 8);
+        size_t index = MessageIndex(templateId);
+        if (index != 99)
+            MessageHandlers[index](data, SBEmsg_);
+        return SBEmsg_;
     }
 };

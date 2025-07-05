@@ -64,7 +64,7 @@ public:
             std::abort();
             break;
         case ErrorStrategy::Custom:
-            // will be completed
+            // sonra yapılacak
             break;
         default:
             break;
@@ -84,7 +84,7 @@ public:
             std::abort();
             break;
         case ErrorStrategy::Custom:
-            // will be completed
+            // sonra yapılacak
             break;
         default:
             break;

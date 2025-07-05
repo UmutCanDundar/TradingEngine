@@ -69,7 +69,7 @@ struct alignas(64) SBESequenceResetMessage {
     uint8_t pad[48];              // padding (64 byte hizalama için)
 };
 
-enum SBETypes : uint8_t {   SBEADDORDERMESSAGE = 0,  SBEDELETEORDERMESSAGE = 1,  SBETRADEMESSAGE = 2,  SBEMODIFYORDERMESSAGE = 3,  SBEHEARTBEATMESSAGE = 4,  SBEMARKETSTATUSMESSAGE = 5,  SBEINSTRUMENTDEFINITIONMESSAGE = 6,  SBESEQUENCERESETMESSAGE = 7, };
+enum SBETypes : uint8_t {   SBEADDORDERMESSAGE = 0,  SBEDELETEORDERMESSAGE = 1,  SBETRADEMESSAGE = 2,  SBEMODIFYORDERMESSAGE = 3,  SBEHEARTBEATMESSAGE = 4,  SBEMARKETSTATUSMESSAGE = 5,  SBEINSTRUMENTDEFINITIONMESSAGE = 6,  SBESEQUENCERESETMESSAGE = 7,  unknownSBEtype = 99 };
 
 inline constexpr SBETypes MessageIndex(uint16_t templateId) {
 
@@ -82,5 +82,6 @@ inline constexpr SBETypes MessageIndex(uint16_t templateId) {
       case 5: return SBETypes::SBEMARKETSTATUSMESSAGE; 
       case 6: return SBETypes::SBEINSTRUMENTDEFINITIONMESSAGE; 
       case 7: return SBETypes::SBESEQUENCERESETMESSAGE; 
+      default: return SBETypes::unknownSBEtype;
    }
 }
