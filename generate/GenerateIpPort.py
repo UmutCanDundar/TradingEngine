@@ -7,6 +7,7 @@ PORTS_COUNT = len(PORTS)
 IPs = {
     1304: {"123.0.12.12", "122.05.11.11"},
     }
+IPs_COUNT = sum(len(ips) for ips in IPs.values())
 
 IPs_to_int32_and_nl = {}
 for port, ips in IPs.items():
@@ -18,17 +19,22 @@ for port, ips in IPs.items():
       int32_nl_ips.add(ip_nl)
     IPs_to_int32_and_nl[port] = int32_nl_ips
 
-Protocols = {"FIX", "ITCH", "SBE"}
 PortProtocol = {
      1304: "FIX"
      }
 
+PortVenue = {
+     1304: "BIST"
+}
+
 with open("../include/GeneratedIpPort.h", "w") as f:
     f.write("// Generated automatically. DO NOT EDIT!\n\n")
     f.write("#pragma once\n")
-    f.write("#include <array>\n#include <cstdint>\n#include <vector>\n\n")
+    f.write("#include <array>\n#include <cstdint>\n#include <vector>\n#include \"Protocol-Venue.h\"\n\n")
     
     f.write(f"inline constexpr size_t PORTS_COUNT = {PORTS_COUNT};\n\n")
+    f.write(f"inline constexpr size_t IPs_COUNT = {PORTS_COUNT};\n\n")
+   
 
     f.write(f"inline constexpr std::array<uint16_t, {PORTS_COUNT}> Ports {{\n")
     for port in PORTS:
@@ -42,12 +48,12 @@ with open("../include/GeneratedIpPort.h", "w") as f:
             f.write(f"    std::vector<uint32_t>{{{ips_str}}}, // Port{port}: {IPs[port]}\n")
     f.write(f"}};\n\n")
 
-    f.write("enum class Protocol : uint8_t { ")
-    for protocol in Protocols:
-        f.write(f"{protocol}, ")
-    f.write("};\n\n")
-
     f.write(f"inline constexpr std::array<Protocol, PORTS_COUNT> PortProtocol {{\n")
     for port in PortProtocol.keys():
             f.write(f"    Protocol::{PortProtocol[port]}, // Port {port}\n")
+    f.write(f"}};\n")
+
+    f.write(f"inline constexpr std::array<Venue, PORTS_COUNT> PortVenue {{\n")
+    for port in PortVenue.keys():
+            f.write(f"    Venue::{PortVenue[port]}, // Port {port}\n")
     f.write(f"}};\n")

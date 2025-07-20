@@ -7,6 +7,16 @@
 
 #include <variant>
 
+template <typename T>
+struct MessageWithVenue
+{
+    T msg;
+    Venue venue;
+
+    MessageWithVenue(const T &msg, Venue ven) : msg(msg), venue(ven) {}
+    MessageWithVenue(T &&msg, Venue ven) : msg(std::move(msg)), venue(ven) {}
+};
+
 class Parser
 {
 private:
@@ -18,18 +28,18 @@ private:
 public:
     Parser(spscQueue_t &queue) : queue_(queue) {}
 
-    std::variant<FIXMessage, ITCHMessage, SBEMessage> parse()
+    MessageWithVenue<std::variant<FIXMessage, ITCHMessage, SBEMessage>> parse()
     {
-        PacketWithProtocol pkt;
+        Packet pkt;
         queue_.pop(pkt);
         switch (pkt.protocol)
         {
         case Protocol::FIX:
-            return fixparser_.parse(pkt.data.data());
+            return MessageWithVenue<std::variant<FIXMessage, ITCHMessage, SBEMessage>>(fixparser_.parse(pkt.data.data()), pkt.venue);
         case Protocol::ITCH:
-            return itchparser_.parse(pkt.data.data());
+            return MessageWithVenue<std::variant<FIXMessage, ITCHMessage, SBEMessage>>(itchparser_.parse(pkt.data.data()), pkt.venue);
         case Protocol::SBE:
-            return sbeparser_.parse(pkt.data.data());
+            return MessageWithVenue<std::variant<FIXMessage, ITCHMessage, SBEMessage>>(sbeparser_.parse(pkt.data.data()), pkt.venue);
         }
     }
 };

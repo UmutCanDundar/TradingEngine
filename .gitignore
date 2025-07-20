@@ -8,6 +8,7 @@
 
 # Derleme klasörleri
 build/
+third-party/
 
 
 # CMake dosyaları
@@ -19,4 +20,6 @@ Makefile
 # VSCode ayarları
 .vscode/
 
-
+#custom
+deneme.h
+deneme.cpp

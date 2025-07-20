@@ -19,13 +19,14 @@
 inline constexpr size_t DATA_SIZE = 2048;
 inline constexpr size_t QUEUE_CAPACITY = 1024;
 
-struct PacketWithProtocol
+struct Packet
 {
+  Venue venue;
   Protocol protocol;
   std::array<char, DATA_SIZE> data;
 };
 
-using spscQueue_t = boost::lockfree::spsc_queue<PacketWithProtocol, boost::lockfree::capacity<QUEUE_CAPACITY>>;
+using spscQueue_t = boost::lockfree::spsc_queue<Packet, boost::lockfree::capacity<QUEUE_CAPACITY>>;
 
 class Receiver
 {
@@ -67,6 +68,8 @@ private:
 
   std::array<int, PORTS_COUNT> Init_Sockets()
   {
+    joined_ips.reserve(IPs_COUNT);
+
     std::array<int, PORTS_COUNT> socks{};
     for (uint8_t i = 0; i < PORTS_COUNT; i++)
     {
@@ -176,7 +179,7 @@ public:
         int sock = socks_[events[i].data.u32];
         while (true)
         {
-          PacketWithProtocol pkt{};
+          Packet pkt{};
           ssize_t len = 0;
 
           if (PortProtocol[events[i].data.u32] == Protocol::FIX)
@@ -197,6 +200,7 @@ public:
           else
           {
             pkt.protocol = PortProtocol[events[i].data.u32];
+            pkt.venue = PortVenue[events[i].data.u32];
             static int lost_package{0};
             if (!queue_.push(std::move(pkt)))
             {

@@ -54,4 +54,6 @@ add_executable(MarketData ${SOURCES})
 # include path ve bağımlılık
 target_include_directories(MarketData PRIVATE include)
 add_dependencies(MarketData GeneratedFiles)
-target_link_libraries(MarketData PRIVATE fmt::fmt)
+add_subdirectory(third-party/absl/abseil-cpp)
+target_link_libraries(MarketData PRIVATE fmt::fmt absl::flat_hash_map absl::hash)
+

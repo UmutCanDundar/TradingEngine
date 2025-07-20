@@ -25,11 +25,11 @@ struct alignas(64) FIXMessage
     uint32_t filled_qty = 0;    // 4 byte, FIX Tag 32: Doldurulan miktar (Filled Qty)
     uint32_t transact_time = 0; // 4 byte, FIX Tag 60: İşlem zamanı (UTC timestamp saniye cinsinden)
 
-    std::string_view symbol; // 16 byte, FIX Tag 55: İşlem gören varlık (Symbol)
-    std::string_view fix_version;
+    std::string_view symbol;   // 16 byte, FIX Tag 55: İşlem gören varlık (Symbol)
+    std::string_view order_id; // 16 byte, FIX Tag 37: Broker tarafından atanan emir ID'si (Order ID)
 
+    std::string_view fix_version;
     std::string_view cl_ord_id; // 16 byte, FIX Tag 11: Müşteri emir ID'si (Client Order ID)
-    std::string_view order_id;  // 16 byte, FIX Tag 37: Broker tarafından atanan emir ID'si (Order ID)
     std::string_view exec_id;   // 16 byte, FIX Tag 17: Gerçekleşme ID'si (Execution ID)
 
     char pad2[16]; // 16 byte padding
@@ -131,11 +131,13 @@ public:
                     soh_pos = search_pos;
                 }
 
-                std::string_view tag(data + pos, eq_pos - pos);
                 std::string_view value(data + eq_pos + 1, soh_pos - (eq_pos + 1));
 
-                uint8_t tag_num = parseNumber(tag.data(), tag.size());
-                tagHandlers[tag_num](value, fixMsg_);
+                uint8_t tag = parseNumber(data + pos, eq_pos - pos);
+                auto handler = tagHandlers[tag];
+                if (handler)
+                    handler(value, fixMsg_);
+        
 
                 pos = soh_pos + 1;
 
@@ -162,7 +164,10 @@ public:
             // Value kısmı [eq_pos+1, soh_pos)
             std::string_view value(data + eq_pos + 1, soh_pos - (eq_pos + 1));
 
-            tagHandlers[tag](value, fixMsg_);
+            auto handler = tagHandlers[tag];
+            if (handler)
+                handler(value, fixMsg_);
+    
 
             pos = soh_pos + 1;
         }
