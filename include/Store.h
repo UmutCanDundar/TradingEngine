@@ -197,7 +197,7 @@ private:
     // ================= FIX Handler ===================
     void update_order(const MessageWithVenue<FIXMessage> &fixMsg) noexcept
     {
-        auto &msg = fixMsg.msg;
+        const auto &msg = fixMsg.msg;
 
         alignas(64) constexpr auto allowed_exec_type = []
         {

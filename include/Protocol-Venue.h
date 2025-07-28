@@ -11,5 +11,7 @@ enum class Protocol : uint8_t
 
 enum class Venue : uint8_t
 {
-   BIST
+   BIST,
+   NYSE,
+   NASDAQ
 };
