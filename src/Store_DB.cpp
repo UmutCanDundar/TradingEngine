@@ -1,11 +1,11 @@
-#include "DBStore.h"
+#include "Store_DB.h"
 
 #include <cstring>
 #include <variant>
 
 using namespace clickhouse;
 
-DBStore::DBStore(const std::string &host, const int &port)
+Store_DB::Store_DB(const std::string &host, const int &port)
 {
    clickhouse::ClientOptions options;
    options.SetHost(host);
@@ -13,7 +13,7 @@ DBStore::DBStore(const std::string &host, const int &port)
    client_ = std::make_unique<clickhouse::Client>(options);
 }
 
-void DBStore::insert(const MessageWithVenue<FIXMessage> &fixMsg)
+void Store_DB::insert(const MessageWithVenue<FIXMessage> &fixMsg)
 {
    Block block;
    const auto &msg = fixMsg.msg;
@@ -94,7 +94,7 @@ void DBStore::insert(const MessageWithVenue<FIXMessage> &fixMsg)
 }
 
 // === INSERT ITCH ===
-void DBStore::insert(const MessageWithVenue<ITCHMessage> &itchMsg)
+void Store_DB::insert(const MessageWithVenue<ITCHMessage> &itchMsg)
 {
    std::visit([this, venue = itchMsg.venue](const auto &m)
               {
@@ -261,7 +261,7 @@ void DBStore::insert(const MessageWithVenue<ITCHMessage> &itchMsg)
 }
 
 // === INSERT SBE ===
-void DBStore::insert(const MessageWithVenue<SBEMessage> &sbeMsg)
+void Store_DB::insert(const MessageWithVenue<SBEMessage> &sbeMsg)
 {
    std::visit([this, venue = sbeMsg.venue](const auto &m)
               {
@@ -383,7 +383,7 @@ void DBStore::insert(const MessageWithVenue<SBEMessage> &sbeMsg)
         client_->Insert("SBE_Table", block); }, sbeMsg.msg);
 }
 // === INSERT ORDER ===
-void DBStore::insert(const Order &order)
+void Store_DB::insert(const Order &order)
 {
    std::string symbol = std::string(order.symbol.data(), 8);
    symbol.erase(std::find_if(symbol.begin(), symbol.end(), [](const char &c)

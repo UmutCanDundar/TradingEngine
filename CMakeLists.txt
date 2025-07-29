@@ -4,8 +4,6 @@ project(MarketData)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_compile_options(-Wno-error=deprecated-enum-enum-conversion)
-
 file(GLOB_RECURSE SOURCES CMAKE_CONFIGURE_DEPENDS 
       ${CMAKE_SOURCE_DIR}/src/*.cpp 
     )
@@ -67,8 +65,19 @@ add_executable(MarketData ${SOURCES})
 
 # include path ve bağımlılık
 target_include_directories(MarketData PRIVATE include)
+
+target_link_libraries(MarketData PRIVATE fmt::fmt absl::flat_hash_map absl::hash clickhouse-cpp-lib Threads::Threads)
+
+target_compile_options(MarketData PRIVATE 
+    -mavx2 
+    -Wno-deprecated-enum-enum-conversion
+)
+
 add_dependencies(MarketData GeneratedFiles SetupSqlTables)
+
 add_subdirectory(third-party/absl/abseil-cpp)
 add_subdirectory(third-party/clickhouse/clickhouse-cpp)
-target_link_libraries(MarketData PRIVATE fmt::fmt absl::flat_hash_map absl::hash clickhouse-cpp-lib Threads::Threads)
+
+
+
 

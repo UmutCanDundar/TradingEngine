@@ -1,14 +1,15 @@
 #pragma once
 
 #include <clickhouse/client.h>
-#include "Store.h"
+#include "Store_RAM.h"
 
+#include <variant>
 #include <memory>
 
-class DBStore
+class Store_DB
 {
 public:
-    DBStore(const std::string &host = "127.0.0.1", const int &port = 9000);
+    Store_DB(const std::string &host = "127.0.0.1", const int &port = 9000);
 
     template <typename T>
     void dispatch_insert(const MessageWithVenue<T> &msg) noexcept
@@ -39,6 +40,8 @@ private:
             return "NYSE";
         case Venue::BIST:
             return "BIST";
+        default:
+            __builtin_unreachable();
         }
     }
 
@@ -52,6 +55,8 @@ private:
             return "ITCH";
         case Protocol::SBE:
             return "SBE";
+        default:
+            __builtin_unreachable();
         }
     }
     inline std::string status_to_string(Status status)
@@ -103,6 +108,8 @@ private:
             return "Accepted";
         case Status::Restated:
             return "Restated";
+        default:
+            __builtin_unreachable();
         }
     }
 
