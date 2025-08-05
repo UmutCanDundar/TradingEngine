@@ -1,32 +1,41 @@
 #include "Parser_FIX.h"
 
+Parser_FIX::Parser_FIX() noexcept
+{
+   fixMsg_pool_.set_next_size(FIX_QUEUE_CAPACITY);
+   for (size_t i = 0; i <= FIX_QUEUE_CAPACITY; i++)
+      free_fixMsg_list_.push(fixMsg_pool_.construct());
+}
+
 std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::makeTagHandlersLookup() noexcept
 {
    std::array<TagHandlerFunc, MAX_TAG> handlers{};
    // clang-format off
-        handlers[8]  = [](std::string_view val, FIXMessage &msg) noexcept { msg.fix_version = val; };
-        handlers[35] = [](std::string_view val, FIXMessage &msg) noexcept { msg.msg_type = val[0]; };
-        handlers[44] = [](std::string_view val, FIXMessage &msg) noexcept { msg.price = parseFixedPoint(val); };
-        handlers[38] = [](std::string_view val, FIXMessage &msg) noexcept { msg.quantity = static_cast<uint32_t>(parseFixedPoint(val)); };
-        handlers[151] = [](std::string_view val, FIXMessage &msg) noexcept { msg.leaves_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
-        handlers[32] = [](std::string_view val, FIXMessage &msg) noexcept { msg.filled_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
-        handlers[60] = [](std::string_view val, FIXMessage &msg) noexcept { msg.transact_time = static_cast<uint32_t>(parseFixedPoint(val)); };
-        handlers[54] = [](std::string_view val, FIXMessage &msg) noexcept { msg.side = val[0]; };
-        handlers[40] = [](std::string_view val, FIXMessage &msg) noexcept { msg.ord_type = val[0]; };
-        handlers[59] = [](std::string_view val, FIXMessage &msg) noexcept { msg.time_in_force = val[0]; };
-        handlers[39] = [](std::string_view val, FIXMessage &msg) noexcept { msg.ord_status = val[0]; };
-        handlers[150] = [](std::string_view val, FIXMessage &msg) noexcept { msg.exec_type = val[0]; };
-        handlers[55] = [](std::string_view val, FIXMessage &msg) noexcept { msg.symbol = val; };
-        handlers[11] = [](std::string_view val, FIXMessage &msg) noexcept { msg.cl_ord_id = val; };
-        handlers[37] = [](std::string_view val, FIXMessage &msg) noexcept { msg.order_id = val; };
-        handlers[17] = [](std::string_view val, FIXMessage &msg) noexcept { msg.exec_id = val; };
+        handlers[8]  = [](std::string_view val, FIXMessage *msg) noexcept { msg->fix_version = val; };
+        handlers[35] = [](std::string_view val, FIXMessage *msg) noexcept { msg->msg_type = val[0]; };
+        handlers[44] = [](std::string_view val, FIXMessage *msg) noexcept { msg->price = parseFixedPoint(val); };
+        handlers[38] = [](std::string_view val, FIXMessage *msg) noexcept { msg->quantity = static_cast<uint32_t>(parseFixedPoint(val)); };
+        handlers[151] = [](std::string_view val, FIXMessage *msg) noexcept { msg->leaves_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
+        handlers[32] = [](std::string_view val, FIXMessage *msg) noexcept { msg->filled_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
+        handlers[60] = [](std::string_view val, FIXMessage *msg) noexcept { msg->transact_time = static_cast<uint32_t>(parseFixedPoint(val)); };
+        handlers[54] = [](std::string_view val, FIXMessage *msg) noexcept { msg->side = val[0]; };
+        handlers[40] = [](std::string_view val, FIXMessage *msg) noexcept { msg->ord_type = val[0]; };
+        handlers[59] = [](std::string_view val, FIXMessage *msg) noexcept { msg->time_in_force = val[0]; };
+        handlers[39] = [](std::string_view val, FIXMessage *msg) noexcept { msg->ord_status = val[0]; };
+        handlers[150] = [](std::string_view val, FIXMessage *msg) noexcept { msg->exec_type = val[0]; };
+        handlers[55] = [](std::string_view val, FIXMessage *msg) noexcept { msg->symbol = val; };
+        handlers[11] = [](std::string_view val, FIXMessage *msg) noexcept { msg->cl_ord_id = val; };
+        handlers[37] = [](std::string_view val, FIXMessage *msg) noexcept { msg->order_id = val; };
+        handlers[17] = [](std::string_view val, FIXMessage *msg) noexcept { msg->exec_id = val; };
         //clang-format on
         return handlers;
     }
 
-FIXMessage Parser_FIX::parse(const char *data) noexcept
+FIXMessage* Parser_FIX::parse(const char *data) noexcept
 {
-   FIXMessage fixMsg_;
+   FIXMessage* fixMsg_ {nullptr};
+   free_fixMsg_list_.pop(fixMsg_);
+
    size_t pos = 0;
    size_t len = strlen(data);
 

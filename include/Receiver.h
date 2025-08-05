@@ -13,20 +13,23 @@
 #include <unistd.h>
 #include <cerrno>
 #include <boost/lockfree/spsc_queue.hpp>
+#include <boost/pool/object_pool.hpp>
 #include <array>
 #include <vector>
 
-inline constexpr size_t DATA_SIZE = 2048;
-inline constexpr size_t QUEUE_CAPACITY = 1024;
-
 struct Packet
 {
+  static constexpr size_t DATA_SIZE = 2048;
+
   Venue venue;
   Protocol protocol;
   std::array<char, DATA_SIZE> data;
 };
 
-using spscQueue_t = boost::lockfree::spsc_queue<Packet, boost::lockfree::capacity<QUEUE_CAPACITY>>;
+inline constexpr size_t PACKET_QUEUE_CAPACITY = 1024;
+
+using spscPacketQueue_t = boost::lockfree::spsc_queue<Packet *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
+using PacketPool = boost::object_pool<Packet>;
 
 class Receiver
 {
@@ -34,18 +37,24 @@ private:
   std::vector<uint32_t> joined_ips{};
   std::array<int, PORTS_COUNT> socks_{};
   int epoll_fd_{0};
-  spscQueue_t &queue_;
+
+  spscPacketQueue_t &receiver_to_parser_;
+  PacketPool packet_pool_;
+  spscPacketQueue_t free_pkt_list_;
 
   void makeSocketNonBlocking() noexcept;
-
   int setupEpoll() noexcept;
-
   std::array<int, PORTS_COUNT> Init_Sockets() noexcept;
 
 public:
-  Receiver(spscQueue_t &queue) noexcept;
+  Receiver(spscPacketQueue_t &receiver_to_parser) noexcept;
 
   void receive() noexcept;
+
+  inline void releasePacket(Packet *pkt) noexcept
+  {
+    free_pkt_list_.push(pkt);
+  }
 
   ~Receiver() noexcept;
 };

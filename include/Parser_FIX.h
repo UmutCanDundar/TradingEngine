@@ -7,6 +7,8 @@
 #include <array>
 #include <cstring>
 #include <immintrin.h>
+#include <boost/lockfree/spsc_queue.hpp>
+#include <boost/pool/object_pool.hpp>
 
 struct alignas(64) FIXMessage
 {
@@ -35,9 +37,17 @@ struct alignas(64) FIXMessage
     char pad2[16]; // 16 byte padding
 };
 
+inline constexpr size_t FIX_QUEUE_CAPACITY = 1024;
+
+using FIXMessagePool = boost::object_pool<FIXMessage>;
+using spscFIXQueue_t = boost::lockfree::spsc_queue<FIXMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
+
 class Parser_FIX
 {
 private:
+        FIXMessagePool fixMsg_pool_;
+    spscFIXQueue_t free_fixMsg_list_;
+
     static constexpr char SOH = '\x01';
     static constexpr size_t MAX_TAG = 192;
 
@@ -65,12 +75,19 @@ private:
         return result;
     }
 
-    using TagHandlerFunc = void (*)(std::string_view, FIXMessage &) noexcept;
+    using TagHandlerFunc = void (*)(std::string_view, FIXMessage *) noexcept;
 
     static std::array<TagHandlerFunc, MAX_TAG> makeTagHandlersLookup() noexcept;
 
     static std::array<TagHandlerFunc, MAX_TAG> tagHandlers;
 
 public:
-    FIXMessage parse(const char *data) noexcept;
+    Parser_FIX() noexcept;
+
+    inline void releaseFIX(FIXMessage *fixMsg) noexcept
+    {
+        free_fixMsg_list_.push(fixMsg);
+    }
+
+    FIXMessage *parse(const char *data) noexcept;
 };

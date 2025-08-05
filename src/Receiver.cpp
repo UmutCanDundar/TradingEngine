@@ -114,12 +114,16 @@ std::array<int, PORTS_COUNT> Receiver::Init_Sockets() noexcept
    return socks;
 }
 
-Receiver::Receiver(spscQueue_t &queue) noexcept
+Receiver::Receiver(spscPacketQueue_t &receiver_to_parser) noexcept
     : socks_(Init_Sockets()),
       epoll_fd_(setupEpoll()),
-      queue_(queue)
+      receiver_to_parser_(receiver_to_parser)
 {
    makeSocketNonBlocking();
+
+   packet_pool_.set_next_size(PACKET_QUEUE_CAPACITY);
+   for (size_t i = 0; i <= PACKET_QUEUE_CAPACITY; i++)
+      free_pkt_list_.push(packet_pool_.construct());
 }
 
 void Receiver::receive() noexcept
@@ -142,16 +146,23 @@ void Receiver::receive() noexcept
          int sock = socks_[events[i].data.u32];
          while (true)
          {
-            Packet pkt{};
+            static int lost_package{0};
+
+            Packet *pkt = nullptr;
+            if (!free_pkt_list_.pop(pkt))
+            {
+               ++lost_package;
+               break;
+            }
             ssize_t len = 0;
 
             if (PortProtocol[events[i].data.u32] == Protocol::FIX)
             {
-               len = ::recv(sock, pkt.data.data(), pkt.data.size(), 0);
+               len = ::recv(sock, pkt->data.data(), pkt->data.size(), 0);
             }
             else
             {
-               len = ::recvfrom(sock, pkt.data.data(), pkt.data.size(), 0, nullptr, nullptr);
+               len = ::recvfrom(sock, pkt->data.data(), pkt->data.size(), 0, nullptr, nullptr);
             }
 
             if (len < 0)
@@ -162,12 +173,13 @@ void Receiver::receive() noexcept
             }
             else
             {
-               pkt.protocol = PortProtocol[events[i].data.u32];
-               pkt.venue = PortVenue[events[i].data.u32];
+               pkt->protocol = PortProtocol[events[i].data.u32];
+               pkt->venue = PortVenue[events[i].data.u32];
                static int lost_package{0};
-               if (!queue_.push(std::move(pkt)))
+               if (!receiver_to_parser_.push(pkt))
                {
                   ++lost_package;
+                  break;
                   // Daha sonra loglama yapılacak.
                }
             }

@@ -1,4 +1,14 @@
 #include "ErrorHandler.h"
+#include "Logger.h"
+
+#include <cstdio>  // snprintf
+#include <cstring> // strerror
+#include <cerrno>  // errno
+#include <string>  // std::string
+#include <thread>
+#include <chrono>
+
+using namespace std::chrono;
 
 void ErrorHandler::BackoffRetry() noexcept
 {

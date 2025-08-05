@@ -1,19 +1,9 @@
 #pragma once
 
 #include "GeneratedErrorMap.h"
-#include "Logger.h"
 
-#include <cstdio>  // snprintf
-#include <cstring> // strerror
-#include <cerrno>  // errno
-#include <string>  // std::string
 #include <cstdint>
-#include <thread>
-#include <chrono>
 
-using namespace std::chrono;
-
-// 4. ErrorHandler sınıfı
 class ErrorHandler
 {
 private:

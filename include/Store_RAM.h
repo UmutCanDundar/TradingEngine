@@ -115,11 +115,15 @@ struct OrderKeyHash
     }
 };
 
+inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;
+
+using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
+using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<ITCHMessage>, MessageWithVenue<SBEMessage>>, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
+
 class Store_RAM
 {
 private:
-    static constexpr size_t ORDER_POOL_SIZE = 65536; // 8MB @128B each
-    static constexpr size_t QUEUE_SIZE = 65536;
+    static constexpr size_t ORDER_POOL_CAPACITY = 65536; // 8MB @128B each
 
     alignas(64) std::vector<Order> order_pool_;
     size_t next_slot = 0;
@@ -127,7 +131,9 @@ private:
     absl::flat_hash_map<OrderKey, Order *, OrderKeyHash> order_map_;
     absl::flat_hash_map<uint64_t, SymbolMeta> instrument_cache_;
 
-    boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<QUEUE_SIZE>> update_queue;
+    spscMessageQueue_t &parser_to_store_;
+    spscOrderQueue_t &store_to_strategy_;
+    spscDbQueue_t &store_to_db_;
 
     [[gnu::always_inline]] static inline void copy_symbol(std::array<char, 8> &dest, std::string_view src) noexcept
     {
@@ -143,15 +149,17 @@ private:
         }
     }
 
-    void handle_instrument_definition(const SBEInstrumentDefinitionMessage &msg) noexcept;
+    void handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg) noexcept;
 
 public:
-    Store_RAM() noexcept;
+    Store_RAM(spscMessageQueue_t &parser_to_store,
+              spscOrderQueue_t &store_to_strategy,
+              spscDbQueue_t &store_to_db) noexcept;
 
     inline Order *poll_update() noexcept
     {
         Order *order = nullptr;
-        if (update_queue.pop(order))
+        if (store_to_strategy_.pop(order))
             return order;
         return nullptr;
     }
@@ -162,194 +170,194 @@ public:
         this->update_order(msg);
     }
 
-    void dispatch_update_order(const MessageWithVenue<std::variant<FIXMessage, ITCHMessage, SBEMessage>> &msgWithVenue) noexcept;
+    void dispatch_update_order(const MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> &msgWithVenue) noexcept;
 
 private:
     Order *add_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
     Order *get_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
 
-    void update_order(const MessageWithVenue<FIXMessage> &fixMsg) noexcept;
+    void update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept;
     void update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept;
 
     // ===== FIX fillers =====
-    inline void fill_fix_new(Order &order, const FIXMessage &msg) noexcept
+    inline void fill_fix_new(Order &order, const FIXMessage *msg) noexcept
     {
-        order.price = msg.price;
-        order.quantity = msg.quantity;
+        order.price = msg->price;
+        order.quantity = msg->quantity;
         order.filled_quantity = 0; // Yeni emir, henüz doldurulmamış
-        copy_symbol(order.symbol, msg.symbol);
-        order.side = (msg.side == '1') ? Side::Buy : Side::Sell; // FIX: '1'=Buy, '2'=Sell
+        copy_symbol(order.symbol, msg->symbol);
+        order.side = (msg->side == '1') ? Side::Buy : Side::Sell; // FIX: '1'=Buy, '2'=Sell
         order.status = Status::New;
 
-        order.order_id = absl::Hash<std::string_view>{}(msg.order_id);
-        order.client_order_id = absl::Hash<std::string_view>{}(msg.cl_ord_id);
+        order.order_id = absl::Hash<std::string_view>{}(msg->order_id);
+        order.client_order_id = absl::Hash<std::string_view>{}(msg->cl_ord_id);
 
-        order.timestamp = static_cast<uint64_t>(msg.transact_time);
+        order.timestamp = static_cast<uint64_t>(msg->transact_time);
         order.last_update_time = order.timestamp;
 
-        order.message_type = static_cast<uint16_t>(msg.msg_type);
+        order.message_type = static_cast<uint16_t>(msg->msg_type);
         order.protocol = Protocol::FIX;
 
-        order.time_in_force = static_cast<uint8_t>(msg.time_in_force);
-        order.order_type = static_cast<uint8_t>(msg.ord_type);
-        // order.timestamp_ns = static_cast<uint64_t>(msg.transact_time) * 1'000'000'000ULL;
+        order.time_in_force = static_cast<uint8_t>(msg->time_in_force);
+        order.order_type = static_cast<uint8_t>(msg->ord_type);
+        // order.timestamp_ns = static_cast<uint64_t>(msg->transact_time) * 1'000'000'000ULL;
         // Diğer opsiyonel alanlar sıfır kalabilir
     }
 
-    inline void fill_fix_cancel(Order &order, const FIXMessage &msg) noexcept
+    inline void fill_fix_cancel(Order &order, const FIXMessage *msg) noexcept
     {
         order.status = Status::Cancelled;
-        order.last_update_time = static_cast<uint64_t>(msg.transact_time);
+        order.last_update_time = static_cast<uint64_t>(msg->transact_time);
     }
 
-    inline void fill_fix_modify(Order &order, const FIXMessage &msg) noexcept
+    inline void fill_fix_modify(Order &order, const FIXMessage *msg) noexcept
     {
-        order.price = static_cast<uint64_t>(msg.price);
-        order.quantity = msg.quantity;
-        order.time_in_force = static_cast<uint8_t>(msg.time_in_force);
-        order.last_update_time = static_cast<uint64_t>(msg.transact_time);
+        order.price = static_cast<uint64_t>(msg->price);
+        order.quantity = msg->quantity;
+        order.time_in_force = static_cast<uint8_t>(msg->time_in_force);
+        order.last_update_time = static_cast<uint64_t>(msg->transact_time);
     }
 
-    void fill_fix_exec_report(Order &order, const FIXMessage &msg) noexcept;
+    void fill_fix_exec_report(Order &order, const FIXMessage *msg) noexcept;
 
-    inline void fill_fix_cancel_reject(Order &order, const FIXMessage &msg) noexcept
+    inline void fill_fix_cancel_reject(Order &order, const FIXMessage *msg) noexcept
     {
         // Cancel reject’te status değişmez, sadece zaman güncellenebilir(bakılacak?)
         order.status = Status::CancelReject;
-        order.last_update_time = static_cast<uint64_t>(msg.transact_time);
+        order.last_update_time = static_cast<uint64_t>(msg->transact_time);
     }
 
     // ===== ITCH fillers =====
-    inline void fill_itch_add(Order &order, const ITCHAddOrderMessage &msg) noexcept
+    inline void fill_itch_add(Order &order, const ITCHAddOrderMessage *msg) noexcept
     {
-        order.price = static_cast<int64_t>(msg.price);
-        order.quantity = msg.quantity;
+        order.price = static_cast<int64_t>(msg->price);
+        order.quantity = msg->quantity;
         order.filled_quantity = 0;
-        copy_symbol(order.symbol, msg.stock);
-        order.side = (msg.side == 'B') ? Side::Buy : Side::Sell;
+        copy_symbol(order.symbol, msg->stock);
+        order.side = (msg->side == 'B') ? Side::Buy : Side::Sell;
         order.status = Status::New;
 
-        order.order_id = msg.order_ref;
-        order.timestamp = msg.timestamp / 1000000000ULL; // nanosaniyeyi saniyeye çevir
+        order.order_id = msg->order_ref;
+        order.timestamp = msg->timestamp / 1000000000ULL; // nanosaniyeyi saniyeye çevir
         order.last_update_time = order.timestamp;
 
-        order.message_type = static_cast<uint16_t>(msg.message_type);
+        order.message_type = static_cast<uint16_t>(msg->message_type);
         order.protocol = Protocol::ITCH;
 
-        // order.timestamp_ns = msg.timestamp;
+        // order.timestamp_ns = msg->timestamp;
     }
 
-    inline void fill_itch_add(Order &order, const ITCHAddOrderMPIDMessage &msg) noexcept
+    inline void fill_itch_add(Order &order, const ITCHAddOrderMPIDMessage *msg) noexcept
     {
-        order.price = static_cast<int64_t>(msg.price);
-        order.quantity = msg.quantity;
+        order.price = static_cast<int64_t>(msg->price);
+        order.quantity = msg->quantity;
         order.filled_quantity = 0;
-        copy_symbol(order.symbol, msg.stock);
-        order.side = (msg.side == 'B') ? Side::Buy : Side::Sell;
+        copy_symbol(order.symbol, msg->stock);
+        order.side = (msg->side == 'B') ? Side::Buy : Side::Sell;
         order.status = Status::New;
 
-        order.order_id = msg.order_ref;
-        order.timestamp = msg.timestamp / 1000000000ULL;
+        order.order_id = msg->order_ref;
+        order.timestamp = msg->timestamp / 1000000000ULL;
         order.last_update_time = order.timestamp;
 
-        order.message_type = static_cast<uint16_t>(msg.message_type);
+        order.message_type = static_cast<uint16_t>(msg->message_type);
         order.protocol = Protocol::ITCH;
 
-        // order.timestamp_ns = msg.timestamp;
+        // order.timestamp_ns = msg->timestamp;
         // MPID alanı order struct'ta yok, gerekirse eklenebilir
     }
 
-    inline void fill_itch_cancel(Order &order, const ITCHCancelMessage &msg) noexcept
+    inline void fill_itch_cancel(Order &order, const ITCHCancelMessage *msg) noexcept
     {
         if (order.filled_quantity > 0)
             order.status = Status::PartiallyFilled_Cancelled;
         else
             order.status = Status::Cancelled;
 
-        order.last_update_time = msg.timestamp / 1000000000ULL;
-        order.cancelled_quantity = msg.cancelled_quantity;
+        order.last_update_time = msg->timestamp / 1000000000ULL;
+        order.cancelled_quantity = msg->cancelled_quantity;
     }
 
-    inline void fill_itch_exec_report(Order &order, const ITCHExecutedMessage &msg) noexcept
+    inline void fill_itch_exec_report(Order &order, const ITCHExecutedMessage *msg) noexcept
     {
-        order.filled_quantity += msg.executed_quantity;
-        order.last_update_time = msg.timestamp / 1000000000ULL;
+        order.filled_quantity += msg->executed_quantity;
+        order.last_update_time = msg->timestamp / 1000000000ULL;
         if (order.filled_quantity < order.quantity)
             order.status = Status::Partial;
         else
             order.status = Status::Filled;
     }
 
-    inline void fill_itch_exec_report(Order &order, const ITCHExecutedWithPriceMessage &msg) noexcept
+    inline void fill_itch_exec_report(Order &order, const ITCHExecutedWithPriceMessage *msg) noexcept
     {
-        fill_itch_exec_report(order, reinterpret_cast<const ITCHExecutedMessage &>(msg));
-        order.price = static_cast<int64_t>(msg.execution_price);
+        fill_itch_exec_report(order, reinterpret_cast<const ITCHExecutedMessage *>(msg));
+        order.price = static_cast<int64_t>(msg->execution_price);
     }
 
-    inline void fill_itch_delete(Order &order, const ITCHDeleteMessage &msg) noexcept
+    inline void fill_itch_delete(Order &order, const ITCHDeleteMessage *msg) noexcept
     {
         if (order.filled_quantity > 0)
             order.status = Status::PartiallyFilled_Cancelled;
         else
             order.status = Status::Cancelled;
-        order.last_update_time = msg.timestamp / 1000000000ULL;
+        order.last_update_time = msg->timestamp / 1000000000ULL;
     }
 
-    inline void fill_itch_trade(Order &order, const ITCHTradeMessage &msg) noexcept
+    inline void fill_itch_trade(Order &order, const ITCHTradeMessage *msg) noexcept
     {
-        order.filled_quantity += msg.quantity;
-        order.last_update_time = msg.timestamp / 1000000000ULL;
-        copy_symbol(order.symbol, msg.stock);
-        order.price = static_cast<int64_t>(msg.price);
+        order.filled_quantity += msg->quantity;
+        order.last_update_time = msg->timestamp / 1000000000ULL;
+        copy_symbol(order.symbol, msg->stock);
+        order.price = static_cast<int64_t>(msg->price);
         // Genelde trade mesajları yeni emir yaratmaz, sadece execution bilgisi verir
     }
 
     // ===== SBE fillers =====
-    inline void fill_sbe_add(Order &order, const SBEAddOrderMessage &msg) noexcept
+    inline void fill_sbe_add(Order &order, const SBEAddOrderMessage *msg) noexcept
     {
-        order.price = static_cast<int64_t>(msg.price);
-        order.quantity = msg.quantity;
-        order.side = (msg.side == 0) ? Side::Buy : Side::Sell;
+        order.price = static_cast<int64_t>(msg->price);
+        order.quantity = msg->quantity;
+        order.side = (msg->side == 0) ? Side::Buy : Side::Sell;
         order.status = Status::New;
 
-        order.instrument_id = msg.header.schemaId; // veya header.version kullanılabilir
+        order.instrument_id = msg->header.schemaId; // veya header.version kullanılabilir
         auto it = instrument_cache_.find(order.instrument_id);
         if (it != instrument_cache_.end())
         {
             order.symbol = it->second.symbol;
         }
 
-        order.timestamp = msg.header.version / 1'000'000'000ULL;
+        order.timestamp = msg->header.version / 1'000'000'000ULL;
         order.last_update_time = order.timestamp;
 
-        order.message_type = msg.header.templateId;
+        order.message_type = msg->header.templateId;
         order.protocol = Protocol::SBE;
 
-        // order.timestamp_ns = msg.header.version;
+        // order.timestamp_ns = msg->header.version;
     }
 
-    inline void fill_sbe_modify(Order &order, const SBEModifyOrderMessage &msg) noexcept
+    inline void fill_sbe_modify(Order &order, const SBEModifyOrderMessage *msg) noexcept
     {
-        order.quantity = msg.newQuantity;
-        order.last_update_time = msg.header.version / 1'000'000'000ULL;
+        order.quantity = msg->newQuantity;
+        order.last_update_time = msg->header.version / 1'000'000'000ULL;
     }
 
-    inline void fill_sbe_cancel(Order &order, const SBEDeleteOrderMessage &msg) noexcept
+    inline void fill_sbe_cancel(Order &order, const SBEDeleteOrderMessage *msg) noexcept
     {
         if (order.filled_quantity > 0)
             order.status = Status::PartiallyFilled_Cancelled;
         else
             order.status = Status::Cancelled;
 
-        order.last_update_time = msg.header.version / 1'000'000'000ULL;
+        order.last_update_time = msg->header.version / 1'000'000'000ULL;
     }
 
-    inline void fill_sbe_trade(Order &order, const SBETradeMessage &msg) noexcept
+    inline void fill_sbe_trade(Order &order, const SBETradeMessage *msg) noexcept
     {
-        order.price = static_cast<int64_t>(msg.price);
-        order.filled_quantity += msg.quantity;
-        order.instrument_id = msg.header.schemaId;
+        order.price = static_cast<int64_t>(msg->price);
+        order.filled_quantity += msg->quantity;
+        order.instrument_id = msg->header.schemaId;
 
         if (order.filled_quantity < order.quantity)
             order.status = Status::Partial;
@@ -362,8 +370,8 @@ private:
             order.symbol = it->second.symbol;
         }
 
-        order.last_update_time = msg.header.version / 1'000'000'000ULL;
-        order.message_type = msg.header.templateId;
+        order.last_update_time = msg->header.version / 1'000'000'000ULL;
+        order.message_type = msg->header.templateId;
         order.protocol = Protocol::SBE;
     }
 };

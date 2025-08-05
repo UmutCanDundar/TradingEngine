@@ -1,34 +1,15 @@
 #pragma once
 
-#include <clickhouse/client.h>
 #include "Store_RAM.h"
 
+#include <clickhouse/client.h>
 #include <variant>
-#include <memory>
 
 class Store_DB
 {
-public:
-    Store_DB(const std::string &host = "127.0.0.1", const int &port = 9000);
-
-    template <typename T>
-    void dispatch_insert(const MessageWithVenue<T> &msg) noexcept
-    {
-        this->insert(msg);
-    }
-
-    void dispatch_insert(const MessageWithVenue<std::variant<FIXMessage, ITCHMessage, SBEMessage>> &msgWithVenue) noexcept
-    {
-        std::visit([this, &msgWithVenue](const auto &inner_msg)
-                   {
-            using MsgType = std::decay_t<decltype(inner_msg)>;
-            this->dispatch_insert(MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue}); }, msgWithVenue.msg);
-    }
-
-    void insert(const Order &order);
-
 private:
     std::unique_ptr<clickhouse::Client> client_;
+    spscDbQueue_t &store_to_db_;
 
     inline std::string venue_to_string(Venue venue)
     {
@@ -115,5 +96,19 @@ private:
 
     void insert(const MessageWithVenue<SBEMessage> &sbeMsg);
     void insert(const MessageWithVenue<ITCHMessage> &itchMsg);
-    void insert(const MessageWithVenue<FIXMessage> &fixMsg);
+    void insert(const MessageWithVenue<FIXMessage *> &fixMsg);
+    void insert(const Order *order);
+
+public:
+    Store_DB(spscDbQueue_t &store_to_db, const std::string &host = "127.0.0.1", const int &port = 9000);
+
+    void dispatch_insert() noexcept
+    {
+        std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<ITCHMessage>, MessageWithVenue<SBEMessage>> data;
+        store_to_db_.pop(data);
+
+        std::visit([this](const auto &type)
+                   { this->insert(type); },
+                   data);
+    }
 };
