@@ -15,6 +15,8 @@ errno_map = {
     "EINVAL": "Abort",
     "EACCES": "Abort",
     "ENOSPC": "Abort",
+    "EPERM": "Abort",
+    "ESRCH": "Abort"
 }
 
 ERROR_NAME = ["InvalidIP"]
@@ -58,7 +60,7 @@ with open("../include/GeneratedErrorMap.h", "w") as f:
     # Index 0-255 için strateji ataması
     for i in range(aligned_size):
         if i in errno_values:
-            f.write(f"    ErrorStrategy::{errno_values[i]}, // {i}: {os.strerror(i)}\n")
+            f.write(f"    ErrorStrategy::{errno_values[i]}, // {i}: {os.strerror(i)} \n")
         else:    
             f.write(f"    ErrorStrategy::Ignore, // {i}: {os.strerror(i)}\n") 
     f.write(f"}};\n")

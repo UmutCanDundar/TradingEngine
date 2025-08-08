@@ -165,12 +165,12 @@ public:
     }
 
     template <typename T>
-    inline void dispatch_update_order(const MessageWithVenue<T> &msg) noexcept
+    inline void store(const MessageWithVenue<T> &msg) noexcept
     {
         this->update_order(msg);
     }
 
-    void dispatch_update_order(const MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> &msgWithVenue) noexcept;
+    void store() noexcept;
 
 private:
     Order *add_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;

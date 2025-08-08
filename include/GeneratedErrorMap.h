@@ -17,19 +17,19 @@ enum class ErrorName : uint8_t {
 
  alignas(64) inline constexpr std::array<ErrorStrategy, 128> errno_strategies = {
     ErrorStrategy::Ignore, // 0: Success
-    ErrorStrategy::Ignore, // 1: Operation not permitted
+    ErrorStrategy::Abort, // 1: Operation not permitted 
     ErrorStrategy::Ignore, // 2: No such file or directory
-    ErrorStrategy::Ignore, // 3: No such process
-    ErrorStrategy::Retry, // 4: Interrupted system call
-    ErrorStrategy::Abort, // 5: Input/output error
+    ErrorStrategy::Abort, // 3: No such process 
+    ErrorStrategy::Retry, // 4: Interrupted system call 
+    ErrorStrategy::Abort, // 5: Input/output error 
     ErrorStrategy::Ignore, // 6: No such device or address
     ErrorStrategy::Ignore, // 7: Argument list too long
     ErrorStrategy::Ignore, // 8: Exec format error
     ErrorStrategy::Ignore, // 9: Bad file descriptor
     ErrorStrategy::Ignore, // 10: No child processes
-    ErrorStrategy::Retry, // 11: Resource temporarily unavailable
-    ErrorStrategy::Abort, // 12: Cannot allocate memory
-    ErrorStrategy::Abort, // 13: Permission denied
+    ErrorStrategy::Retry, // 11: Resource temporarily unavailable 
+    ErrorStrategy::Abort, // 12: Cannot allocate memory 
+    ErrorStrategy::Abort, // 13: Permission denied 
     ErrorStrategy::Ignore, // 14: Bad address
     ErrorStrategy::Ignore, // 15: Block device required
     ErrorStrategy::Ignore, // 16: Device or resource busy
@@ -38,17 +38,17 @@ enum class ErrorName : uint8_t {
     ErrorStrategy::Ignore, // 19: No such device
     ErrorStrategy::Ignore, // 20: Not a directory
     ErrorStrategy::Ignore, // 21: Is a directory
-    ErrorStrategy::Abort, // 22: Invalid argument
+    ErrorStrategy::Abort, // 22: Invalid argument 
     ErrorStrategy::Ignore, // 23: Too many open files in system
     ErrorStrategy::Ignore, // 24: Too many open files
     ErrorStrategy::Ignore, // 25: Inappropriate ioctl for device
     ErrorStrategy::Ignore, // 26: Text file busy
     ErrorStrategy::Ignore, // 27: File too large
-    ErrorStrategy::Abort, // 28: No space left on device
+    ErrorStrategy::Abort, // 28: No space left on device 
     ErrorStrategy::Ignore, // 29: Illegal seek
     ErrorStrategy::Ignore, // 30: Read-only file system
     ErrorStrategy::Ignore, // 31: Too many links
-    ErrorStrategy::Abort, // 32: Broken pipe
+    ErrorStrategy::Abort, // 32: Broken pipe 
     ErrorStrategy::Ignore, // 33: Numerical argument out of domain
     ErrorStrategy::Ignore, // 34: Numerical result out of range
     ErrorStrategy::Ignore, // 35: Resource deadlock avoided
@@ -120,7 +120,7 @@ enum class ErrorName : uint8_t {
     ErrorStrategy::Ignore, // 101: Network is unreachable
     ErrorStrategy::Ignore, // 102: Network dropped connection on reset
     ErrorStrategy::Ignore, // 103: Software caused connection abort
-    ErrorStrategy::Retry, // 104: Connection reset by peer
+    ErrorStrategy::Retry, // 104: Connection reset by peer 
     ErrorStrategy::Ignore, // 105: No buffer space available
     ErrorStrategy::Ignore, // 106: Transport endpoint is already connected
     ErrorStrategy::Ignore, // 107: Transport endpoint is not connected

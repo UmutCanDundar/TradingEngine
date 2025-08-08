@@ -18,12 +18,16 @@ void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessag
    instrument_cache_[msg->instrumentId] = meta;
 }
 
-void Store_RAM::dispatch_update_order(const MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> &msgWithVenue) noexcept
+void Store_RAM::store() noexcept
 {
+
+   MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> msgWithVenue;
+   parser_to_store_.pop(msgWithVenue);
+
    std::visit([this, &msgWithVenue](const auto &inner_msg)
               {
             using MsgType = std::decay_t<decltype(inner_msg)>;
-            this->dispatch_update_order(MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue}); }, msgWithVenue.msg);
+            this->store(MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue}); }, msgWithVenue.msg);
 }
 
 Order *Store_RAM::add_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept

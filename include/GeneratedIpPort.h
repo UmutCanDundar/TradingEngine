@@ -15,7 +15,7 @@ inline constexpr std::array<uint16_t, 1> Ports {
 };
 
 inline const std::array<std::vector<uint32_t>, PORTS_COUNT> IPs {
-    std::vector<uint32_t>{0x0B0B057A, 0x0C0C007B}, // Port1304: {'122.05.11.11', '123.0.12.12'}
+    std::vector<uint32_t>{0x0B0B057A, 0x0C0C007B}, // Port1304: {'123.0.12.12', '122.05.11.11'}
 };
 
 inline constexpr std::array<Protocol, PORTS_COUNT> PortProtocol {

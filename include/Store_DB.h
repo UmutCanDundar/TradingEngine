@@ -102,7 +102,7 @@ private:
 public:
     Store_DB(spscDbQueue_t &store_to_db, const std::string &host = "127.0.0.1", const int &port = 9000);
 
-    void dispatch_insert() noexcept
+    void store() noexcept
     {
         std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<ITCHMessage>, MessageWithVenue<SBEMessage>> data;
         store_to_db_.pop(data);

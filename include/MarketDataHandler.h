@@ -1,11 +1,10 @@
-/* #pragma once
+#pragma once
 
 #include "Receiver.h"
 #include "Parser_Dispatch.h"
 #include "Store_RAM.h"
 #include "Store_DB.h"
 
-#include <thread>
 #include <atomic>
 
 class MarketDataHandler final
@@ -19,7 +18,7 @@ public:
 private:
     // Lock-free Queue'lar
     spscPacketQueue_t receiver_to_parser_;
-    spscMessageQueue_t parsed_to_store_;
+    spscMessageQueue_t parser_to_store_;
     spscOrderQueue_t store_to_strategy_;
     spscDbQueue_t store_to_db_;
 
@@ -43,10 +42,4 @@ private:
     void parse_loop() noexcept;
     void store_ram_loop() noexcept;
     void store_db_loop() noexcept;
-
-    // Performans optimizasyonları
-    void configure_affinity();
-    void configure_realtime();
-    void lock_memory();
 };
- */
