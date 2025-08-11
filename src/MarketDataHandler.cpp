@@ -7,7 +7,7 @@
 MarketDataHandler::MarketDataHandler()
     : receiver_(receiver_to_parser_),
       parser_(receiver_to_parser_, parser_to_store_),
-      store_ram_(parser_to_store_, store_to_strategy_, store_to_db_),
+      store_ram_(parser_to_store_, store_to_strategy_, store_to_strategy_free_slot_, store_to_db_),
       store_db_(store_to_db_) {}
 
 MarketDataHandler::~MarketDataHandler()

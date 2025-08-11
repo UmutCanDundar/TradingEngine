@@ -2,9 +2,9 @@
 
 Parser_FIX::Parser_FIX() noexcept
 {
-   fixMsg_pool_.set_next_size(FIX_QUEUE_CAPACITY);
-   for (size_t i = 0; i <= FIX_QUEUE_CAPACITY; i++)
-      free_fixMsg_list_.push(fixMsg_pool_.construct());
+   fixMsg_pool_.resize(FIX_QUEUE_CAPACITY);
+   for (size_t i = 0; i < FIX_QUEUE_CAPACITY; i++)
+      free_fixMsg_list_.push(&fixMsg_pool_[i]);
 }
 
 std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::makeTagHandlersLookup() noexcept

@@ -7,7 +7,6 @@
 
 #include <variant>
 #include <boost/lockfree/spsc_queue.hpp>
-#include <boost/pool/object_pool.hpp>
 
 template <typename T>
 struct MessageWithVenue

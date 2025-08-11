@@ -1,7 +1,7 @@
 #pragma once
 
 #include <tuple>
-#include <boost/pool/object_pool.hpp>
+#include <vector>
 #include <boost/lockfree/spsc_queue.hpp>
 
 // Her mesaj türü için kullanılacak havuz yapısı
@@ -9,15 +9,16 @@ template <typename T>
 struct PoolAndFreeList
 {
     // Capacity sabit olsun
-    static constexpr size_t FREELIST_CAPACITY = 1024;
+    static constexpr size_t pool_ = 1024;
 
-    boost::object_pool<T> pool_;
-    boost::lockfree::spsc_queue<T *> free_list_{FREELIST_CAPACITY};
+    std::vector<T> pool_;
+    boost::lockfree::spsc_queue<T *> free_list_{POOL_CAPACITY};
 
     void initialize()
     {
-        for (size_t i = 0; i < FREELIST_CAPACITY; ++i)
-            free_list_.push(pool_.construct());
+        pool_.resize(POOL_CAPACITY);
+        for (size_t i = 0; i < POOL_CAPACITY; ++i)
+            free_list_.push(&pool_[i]);
     }
 
     void acquire(T *&obj) noexcept

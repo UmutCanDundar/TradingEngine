@@ -8,17 +8,20 @@
 #include <cstdint>
 #include <array>
 #include <absl/container/flat_hash_map.h>
+// #include <absl/container/flat_hash_set.h>
 #include <absl/hash/hash.h>
 #include <boost/lockfree/spsc_queue.hpp>
 #include <vector>
 #include <cstring>
 #include <immintrin.h>
 #include <bit>
+#include <tuple>
 
 enum class Side : uint8_t
 {
-    Buy = 0,
-    Sell = 1
+    Unknown = 0,
+    Buy = 1,
+    Sell = 2
 };
 enum class Status : uint8_t
 {
@@ -62,12 +65,13 @@ struct alignas(64) Order
     uint32_t quantity = 0;        // Original order quantity
     uint32_t filled_quantity = 0; // Cumulative filled quantity
     uint32_t cancelled_quantity = 0;
-    std::array<char, 8> symbol{}; // Fixed-size symbol for low-latency lookup
-    Side side = Side::Buy;        // Buy/Sell
-    Status status = Status::New;  // New/Partial/Filled/Cancelled
+    std::array<char, 8> symbol{};    // Fixed-size symbol for low-latency lookup
+    Side side = Side::Unknown;       // Buy/Sell
+    Status status = Status::Unknown; // New/Partial/Filled/Cancelled
+    bool isOurOrder = false;
 
     // 🟠 LOOKUP & ROUTING
-    uint8_t pad1[2];               // 64-byte alignment
+    uint8_t pad1[1];               // 64-byte alignment
     uint64_t order_id = 0;         // Exchange-assigned unique order ID
     uint64_t client_order_id = 0;  // Strategy-assigned client order ID
     uint64_t timestamp = 0;        // Order creation time (ns epoch)
@@ -124,36 +128,26 @@ class Store_RAM
 {
 private:
     static constexpr size_t ORDER_POOL_CAPACITY = 65536; // 8MB @128B each
+    static constexpr size_t MARKETORDER_LAST_INDEX = 32768;
+    static constexpr size_t ORDER_MAP_CAPACITY = 32768;
 
-    alignas(64) std::vector<Order> order_pool_;
-    size_t next_slot = 0;
+    std::vector<Order> order_pool_;
+    size_t market_next_slot = 0;
+    size_t our_next_slot = MARKETORDER_LAST_INDEX;
 
-    absl::flat_hash_map<OrderKey, Order *, OrderKeyHash> order_map_;
+    absl::flat_hash_map<OrderKey, Order *, OrderKeyHash> market_order_map_;
+    absl::flat_hash_map<OrderKey, Order *, OrderKeyHash> our_order_map_;
     absl::flat_hash_map<uint64_t, SymbolMeta> instrument_cache_;
 
     spscMessageQueue_t &parser_to_store_;
     spscOrderQueue_t &store_to_strategy_;
+    spscOrderQueue_t &store_to_strategy_free_slot_;
     spscDbQueue_t &store_to_db_;
-
-    [[gnu::always_inline]] static inline void copy_symbol(std::array<char, 8> &dest, std::string_view src) noexcept
-    {
-        std::memcpy(dest.data(), src.data(), 8);
-
-        for (size_t i = 0; i < 8; ++i)
-        {
-            if (dest[i] == ' ' || dest[i] == '\0')
-            {
-                std::memset(dest.data() + i, 0, 8 - i);
-                break;
-            }
-        }
-    }
-
-    void handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg) noexcept;
 
 public:
     Store_RAM(spscMessageQueue_t &parser_to_store,
               spscOrderQueue_t &store_to_strategy,
+              spscOrderQueue_t &store_to_strategy_free_slot,
               spscDbQueue_t &store_to_db) noexcept;
 
     inline Order *poll_update() noexcept
@@ -169,16 +163,39 @@ public:
     {
         this->update_order(msg);
     }
-
     void store() noexcept;
 
+    Order *add_our_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
+
 private:
-    Order *add_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
+    Order *add_market_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
     Order *get_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
 
     void update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept;
     void update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept;
+
+    void handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg) noexcept;
+
+    inline void ReleaseOrder(OrderKey &&orderkey)
+    {
+        store_to_strategy_free_slot_.push(our_order_map_[orderkey]);
+        our_order_map_.erase(orderkey);
+    }
+
+    static inline void copy_symbol(std::array<char, 8> &dest, std::string_view src) noexcept
+    {
+        std::memcpy(dest.data(), src.data(), 8);
+
+        for (size_t i = 0; i < 8; ++i)
+        {
+            if (dest[i] == ' ' || dest[i] == '\0')
+            {
+                std::memset(dest.data() + i, 0, 8 - i);
+                break;
+            }
+        }
+    }
 
     // ===== FIX fillers =====
     inline void fill_fix_new(Order &order, const FIXMessage *msg) noexcept

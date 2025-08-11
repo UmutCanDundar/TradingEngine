@@ -1,10 +1,14 @@
 #include "Store_RAM.h"
 
-Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscDbQueue_t &store_to_db) noexcept
-    : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_db_(store_to_db)
+Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscDbQueue_t &store_to_db) noexcept
+    : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_db_(store_to_db)
 {
    order_pool_.resize(ORDER_POOL_CAPACITY);
-   order_map_.reserve(ORDER_POOL_CAPACITY);
+   market_order_map_.reserve(ORDER_POOL_CAPACITY);
+   our_order_map_.reserve(ORDER_POOL_CAPACITY);
+
+   for (size_t i = MARKETORDER_LAST_INDEX; i < ORDER_POOL_CAPACITY; i++)
+      store_to_strategy_free_slot_.push(&order_pool_[i]);
 }
 
 void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg) noexcept
@@ -30,20 +34,55 @@ void Store_RAM::store() noexcept
             this->store(MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue}); }, msgWithVenue.msg);
 }
 
-Order *Store_RAM::add_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept
+Order *Store_RAM::add_our_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept
 {
-   if (UNLIKELY(next_slot >= ORDER_POOL_CAPACITY))
-      return nullptr;
+   bool map_full = false;
+   if (UNLIKELY(our_next_slot >= ORDER_POOL_CAPACITY))
+   {
+      our_next_slot = MARKETORDER_LAST_INDEX;
+      map_full = true;
+   }
+   if (map_full)
+      our_order_map_.erase(OrderKey{order_pool_[our_next_slot].order_id, order_pool_[our_next_slot].protocol, order_pool_[our_next_slot].venue});
 
-   Order *order = &order_pool_[next_slot++];
-   order_map_[OrderKey{order_id, protocol, venue}] = order;
+   Order *order = &order_pool_[our_next_slot];
+   our_order_map_[OrderKey{order_id, protocol, venue}] = order;
+   our_next_slot++;
+   return order;
+}
+
+Order *Store_RAM::add_market_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept
+{
+   bool map_full = false;
+   if (UNLIKELY(market_next_slot >= MARKETORDER_LAST_INDEX))
+   {
+      market_next_slot = 0;
+      map_full = true;
+   }
+   if (map_full)
+      market_order_map_.erase(OrderKey{order_pool_[market_next_slot].order_id, order_pool_[market_next_slot].protocol, order_pool_[market_next_slot].venue});
+
+   Order *order = &order_pool_[market_next_slot];
+   market_order_map_[OrderKey{order_id, protocol, venue}] = order;
+   market_next_slot++;
    return order;
 }
 
 Order *Store_RAM::get_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept
 {
-   auto it = order_map_.find(OrderKey{order_id, protocol, venue});
-   return (it != order_map_.end()) ? it->second : nullptr;
+   auto it = our_order_map_.find(OrderKey{order_id, protocol, venue});
+   if (it != our_order_map_.end())
+   {
+      return it->second;
+   }
+
+   it = market_order_map_.find(OrderKey{order_id, protocol, venue});
+   if (it != market_order_map_.end())
+   {
+      return it->second;
+   }
+
+   return nullptr;
 }
 
 void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept
@@ -69,7 +108,7 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
    Order *order = get_order(order_id, Protocol::FIX, fixMsg.venue);
    if (!order)
    {
-      order = add_order(order_id, Protocol::FIX, fixMsg.venue);
+      order = add_market_order(order_id, Protocol::FIX, fixMsg.venue);
       if (UNLIKELY(!order))
          return;
    }
@@ -96,9 +135,13 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
       break;
    }
 
-   store_to_strategy_.push(order);
    store_to_db_.push(fixMsg);
    store_to_db_.push(order);
+
+   if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
+      ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
+   else
+      store_to_strategy_.push(order);
 }
 
 // ================= ITCH Handler ===================
@@ -112,7 +155,7 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                 Order *order = this->get_order(order_id, Protocol::ITCH, itchMsg.venue);
                 if (!order)
                 {
-                    order = this->add_order(order_id, Protocol::ITCH, itchMsg.venue);
+                    order = this->add_market_order(order_id, Protocol::ITCH, itchMsg.venue);
                     if (UNLIKELY(!order))
                         return;
                 }
@@ -142,9 +185,14 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                     this->fill_itch_trade(*order, msg);
                 }
 
-                this->store_to_strategy_.push(order);
                 this->store_to_db_.push(itchMsg);
                 this->store_to_db_.push(order);
+
+                if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
+                   this->ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
+                else
+                   this->store_to_strategy_.push(order);
+
             } }, itchMsg.msg);
 }
 
@@ -165,7 +213,7 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                 Order *order = this->get_order(order_id, Protocol::SBE, sbeMsg.venue);
                 if (!order)
                 {
-                    order = this->add_order(order_id, Protocol::SBE, sbeMsg.venue);
+                    order = this->add_market_order(order_id, Protocol::SBE, sbeMsg.venue);
                     if (UNLIKELY(!order))
                         return;
                 }
@@ -186,10 +234,14 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                 {
                     this->fill_sbe_trade(*order, msg);
                 }
-
-                this->store_to_strategy_.push(order);
+                
                 this->store_to_db_.push(sbeMsg);
                 this->store_to_db_.push(order);
+
+                if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
+                   this->ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
+                else
+                   this->store_to_strategy_.push(order);
             }
             else if constexpr (std::is_same_v<MsgType, SBEInstrumentDefinitionMessage>)
             {

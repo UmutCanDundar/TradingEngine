@@ -121,9 +121,9 @@ Receiver::Receiver(spscPacketQueue_t &receiver_to_parser) noexcept
 {
    makeSocketNonBlocking();
 
-   packet_pool_.set_next_size(PACKET_QUEUE_CAPACITY);
-   for (size_t i = 0; i <= PACKET_QUEUE_CAPACITY; i++)
-      free_pkt_list_.push(packet_pool_.construct());
+   packet_pool_.resize(PACKET_QUEUE_CAPACITY);
+   for (size_t i = 0; i < PACKET_QUEUE_CAPACITY; i++)
+      free_pkt_list_.push(&packet_pool_[i]);
 }
 
 void Receiver::receive() noexcept

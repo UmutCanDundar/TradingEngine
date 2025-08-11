@@ -13,11 +13,10 @@
 #include <unistd.h>
 #include <cerrno>
 #include <boost/lockfree/spsc_queue.hpp>
-#include <boost/pool/object_pool.hpp>
 #include <array>
 #include <vector>
 
-struct Packet
+struct alignas(64) Packet
 {
   static constexpr size_t DATA_SIZE = 2048;
 
@@ -29,7 +28,7 @@ struct Packet
 inline constexpr size_t PACKET_QUEUE_CAPACITY = 1024;
 
 using spscPacketQueue_t = boost::lockfree::spsc_queue<Packet *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
-using PacketPool = boost::object_pool<Packet>;
+using PacketPool = std::vector<Packet>;
 
 class Receiver
 {
