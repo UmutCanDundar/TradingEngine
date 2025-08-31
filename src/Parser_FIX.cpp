@@ -1,8 +1,7 @@
 #include "Parser_FIX.h"
 
-Parser_FIX::Parser_FIX() noexcept
+Parser_FIX::Parser_FIX() noexcept : fixMsg_pool_(FIX_QUEUE_CAPACITY)
 {
-   fixMsg_pool_.resize(FIX_QUEUE_CAPACITY);
    for (size_t i = 0; i < FIX_QUEUE_CAPACITY; i++)
       free_fixMsg_list_.push(&fixMsg_pool_[i]);
 }
@@ -16,7 +15,8 @@ std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::makeTagH
         handlers[44] = [](std::string_view val, FIXMessage *msg) noexcept { msg->price = parseFixedPoint(val); };
         handlers[38] = [](std::string_view val, FIXMessage *msg) noexcept { msg->quantity = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[151] = [](std::string_view val, FIXMessage *msg) noexcept { msg->leaves_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
-        handlers[32] = [](std::string_view val, FIXMessage *msg) noexcept { msg->filled_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
+        handlers[32] = [](std::string_view val, FIXMessage *msg) noexcept { msg->last_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
+        handlers[14] = [](std::string_view val, FIXMessage *msg) noexcept { msg->filled_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[60] = [](std::string_view val, FIXMessage *msg) noexcept { msg->transact_time = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[54] = [](std::string_view val, FIXMessage *msg) noexcept { msg->side = val[0]; };
         handlers[40] = [](std::string_view val, FIXMessage *msg) noexcept { msg->ord_type = val[0]; };

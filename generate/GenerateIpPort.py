@@ -4,9 +4,17 @@ import struct
 PORTS = {1304}
 PORTS_COUNT = len(PORTS)
 
+PortProtocol = {
+     1304: "FIX"
+}
+
+PortVenue = {
+     1304: "BIST"
+}
+
 IPs = {
     1304: {"123.0.12.12", "122.05.11.11"},
-    }
+}
 IPs_COUNT = sum(len(ips) for ips in IPs.values())
 
 IPs_to_int32_and_nl = {}
@@ -18,14 +26,6 @@ for port, ips in IPs.items():
       ip_nl=socket.htonl(ip_int32)
       int32_nl_ips.add(ip_nl)
     IPs_to_int32_and_nl[port] = int32_nl_ips
-
-PortProtocol = {
-     1304: "FIX"
-     }
-
-PortVenue = {
-     1304: "BIST"
-}
 
 with open("../include/GeneratedIpPort.h", "w") as f:
     f.write("// Generated automatically. DO NOT EDIT!\n\n")

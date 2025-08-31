@@ -28,11 +28,12 @@ struct alignas(64) Packet
 inline constexpr size_t PACKET_QUEUE_CAPACITY = 1024;
 
 using spscPacketQueue_t = boost::lockfree::spsc_queue<Packet *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
-using PacketPool = std::vector<Packet>;
 
 class Receiver
 {
 private:
+  using PacketPool = std::vector<Packet>;
+
   std::vector<uint32_t> joined_ips{};
   std::array<int, PORTS_COUNT> socks_{};
   int epoll_fd_{0};

@@ -20,22 +20,23 @@ struct alignas(64) FIXMessage
     char ord_type = '\0';      // 1 byte, FIX Tag 40: Emir tipi (Limit, Market, vb.)
     char time_in_force = '\0'; // 1 byte, FIX Tag 59: Geçerlilik süresi
 
-    char pad1[2]; // 2 byte padding (8-byte hizalamayı sağlamak için)
+    uint8_t pad1[2]; // 2 byte padding (8-byte hizalamayı sağlamak için)
 
     int64_t price = -1;         // 8 byte, FIX Tag 44: Fiyat (fixed-point encoding)
     uint32_t quantity = 0;      // 4 byte, FIX Tag 38: Miktar (Order Qty)
     uint32_t leaves_qty = 0;    // 4 byte, FIX Tag 151: Kalan miktar (Remaining Qty)
-    uint32_t filled_qty = 0;    // 4 byte, FIX Tag 32: Doldurulan miktar (Filled Qty)
+    uint32_t last_qty = 0;      // 4 byte, FIX Tag 14: Doldurulan miktar (Exec Qty)
+    uint32_t filled_qty = 0;    // 4 byte, FIX Tag 32: Doldurulan miktar (Filled Qty (cum))
     uint32_t transact_time = 0; // 4 byte, FIX Tag 60: İşlem zamanı (UTC timestamp saniye cinsinden)
 
-    std::string_view symbol;   // 16 byte, FIX Tag 55: İşlem gören varlık (Symbol)
-    std::string_view order_id; // 16 byte, FIX Tag 37: Broker tarafından atanan emir ID'si (Order ID)
+    std::string_view symbol; // 16 byte, FIX Tag 55: İşlem gören varlık (Symbol)
 
+    uint8_t pad2[12];
+
+    std::string_view order_id;  // 16 byte, FIX Tag 37: Broker tarafından atanan emir ID'si (Order ID)
     std::string_view cl_ord_id; // 16 byte, FIX Tag 11: Müşteri emir ID'si (Client Order ID)
     std::string_view exec_id;   // 16 byte, FIX Tag 17: Gerçekleşme ID'si (Execution ID)
     std::string_view fix_version;
-
-    char pad2[16]; // 16 byte padding
 };
 
 inline constexpr size_t FIX_QUEUE_CAPACITY = 1024;
@@ -46,6 +47,8 @@ using spscFIXQueue_t = boost::lockfree::spsc_queue<FIXMessage *, boost::lockfree
 class Parser_FIX
 {
 private:
+    using FIXMessagePool = std::vector<FIXMessage>;
+
     FIXMessagePool fixMsg_pool_;
     spscFIXQueue_t free_fixMsg_list_;
 

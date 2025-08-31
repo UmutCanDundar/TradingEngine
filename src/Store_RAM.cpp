@@ -1,9 +1,8 @@
 #include "Store_RAM.h"
 
-Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscDbQueue_t &store_to_db) noexcept
-    : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_db_(store_to_db)
+Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscOrderQueue_t &store_to_risk, spscDbQueue_t &store_to_db, MarketBook &marketbook) noexcept
+    : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_risk_(store_to_risk), store_to_db_(store_to_db), marketbook_(marketbook)
 {
-   order_pool_.resize(ORDER_POOL_CAPACITY);
    market_order_map_.reserve(ORDER_POOL_CAPACITY);
    our_order_map_.reserve(ORDER_POOL_CAPACITY);
 
@@ -24,9 +23,19 @@ void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessag
 
 void Store_RAM::store() noexcept
 {
-
    MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> msgWithVenue;
-   parser_to_store_.pop(msgWithVenue);
+
+   if (!pending_to_strategy_.empty() && ((pending_to_strategy_.front().order->canModify.load(std::memory_order_relaxed)) == (STRATEGY_DONE | RISK_DONE)))
+   {
+      PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>> PendingMessage;
+      pending_to_strategy_.pop(PendingMessage);
+      PendingMessage.order->canModify = 0x00;
+      msgWithVenue = PendingMessage.msgWithVenue;
+   }
+   else
+   {
+      parser_to_store_.pop(msgWithVenue);
+   }
 
    std::visit([this, &msgWithVenue](const auto &inner_msg)
               {
@@ -53,7 +62,7 @@ Order *Store_RAM::add_our_order(uint64_t order_id, Protocol protocol, Venue venu
 
 Order *Store_RAM::add_market_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept
 {
-   bool map_full = false;
+
    if (UNLIKELY(market_next_slot >= MARKETORDER_LAST_INDEX))
    {
       market_next_slot = 0;
@@ -112,6 +121,12 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
       if (UNLIKELY(!order))
          return;
    }
+   else if (UNLIKELY(order->canModify == 0x00))
+   {
+      MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> resetMsg(fixMsg.msg, fixMsg.venue);
+      pending_to_strategy_.push(PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>(resetMsg, order));
+      return;
+   }
 
    switch (msg->msg_type)
    {
@@ -139,9 +154,17 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
    store_to_db_.push(order);
 
    if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
-      ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
+   {
+      if (order->canModify == RISK_DONE)
+         ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
+      else
+         store_to_risk_.push(order);
+   }
    else
+   {
       store_to_strategy_.push(order);
+      store_to_risk_.push(order);
+   }
 }
 
 // ================= ITCH Handler ===================
@@ -149,51 +172,68 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
 {
    std::visit([this, &itchMsg](const auto *msg)
               {
-            if constexpr (requires { msg->order_ref; }) 
-            {
-                uint64_t order_id = msg->order_ref;
-                Order *order = this->get_order(order_id, Protocol::ITCH, itchMsg.venue);
-                if (!order)
-                {
-                    order = this->add_market_order(order_id, Protocol::ITCH, itchMsg.venue);
-                    if (UNLIKELY(!order))
+               if constexpr (requires { msg->order_ref; })
+               {
+                     uint64_t order_id = msg->order_ref;
+                     Order *order = this->get_order(order_id, Protocol::ITCH, itchMsg.venue);
+                     if (!order)
+                     {
+                        order = this->add_market_order(order_id, Protocol::ITCH, itchMsg.venue);
+                        if (UNLIKELY(!order))
+                           return;
+                     }
+                     else if (UNLIKELY(order->canModify == 0x00))
+                     {
+                        MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> resetMsg(itchMsg.msg, itchMsg.venue);
+                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>(resetMsg, order));
                         return;
-                }
+                     }
 
-                using MsgType = std::decay_t<decltype(msg)>;
+                     using MsgType = std::remove_pointer_t<decltype(msg)>;
 
-                if constexpr (std::is_same_v<MsgType, ITCHAddOrderMessage> ||
-                            std::is_same_v<MsgType, ITCHAddOrderMPIDMessage>)
-                {
-                    this->fill_itch_add(*order, msg);
-                }
-                else if constexpr (std::is_same_v<MsgType, ITCHCancelMessage>)
-                {
-                    this->fill_itch_cancel(*order, msg);
-                }
-                else if constexpr (std::is_same_v<MsgType, ITCHExecutedMessage> ||
-                                std::is_same_v<MsgType, ITCHExecutedWithPriceMessage>)
-                {
-                    this->fill_itch_exec_report(*order, msg);
-                }
-                else if constexpr (std::is_same_v<MsgType, ITCHDeleteMessage>)
-                {
-                    this->fill_itch_delete(*order, msg);
-                }
-                else if constexpr (std::is_same_v<MsgType, ITCHTradeMessage>)
-                {
-                    this->fill_itch_trade(*order, msg);
-                }
+                     if constexpr (std::is_same_v<MsgType, ITCHAddOrderMessage> ||
+                                 std::is_same_v<MsgType, ITCHAddOrderMPIDMessage>)
+                     {
+                        this->fill_itch_add(*order, msg);
+                        this->marketbook_.add_order(*order);
+                     }
+                     else if constexpr (std::is_same_v<MsgType, ITCHCancelMessage>)
+                     {
+                        this->fill_itch_cancel(*order, msg);
+                        this->marketbook_.cancel_order(*order);
+                     }
+                     else if constexpr (std::is_same_v<MsgType, ITCHExecutedMessage> ||
+                                       std::is_same_v<MsgType, ITCHExecutedWithPriceMessage>)
+                     {
+                        this->fill_itch_exec_report(*order, msg);
+                     }
+                     else if constexpr (std::is_same_v<MsgType, ITCHDeleteMessage>)
+                     {
+                        this->fill_itch_delete(*order, msg);
+                        this->marketbook_.delete_order(*order);
+                     }
+                     else if constexpr (std::is_same_v<MsgType, ITCHTradeMessage>)
+                     {
+                        this->fill_itch_trade(*order, msg);
+                        this->marketbook_.trade_order(*order);
+                     }
 
-                this->store_to_db_.push(itchMsg);
-                this->store_to_db_.push(order);
+                     this->store_to_db_.push(itchMsg);
+                     this->store_to_db_.push(order);
 
-                if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
-                   this->ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
-                else
-                   this->store_to_strategy_.push(order);
-
-            } }, itchMsg.msg);
+                     if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
+                     {
+                        if (order->canModify == RISK_DONE)
+                           this->ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
+                        else
+                           this->store_to_risk_.push(order);
+                     }
+                     else
+                     {
+                        this->store_to_strategy_.push(order);
+                        this->store_to_risk_.push(order);
+                     }
+               } }, itchMsg.msg);
 }
 
 // ================= SBE Handler ===================
@@ -201,52 +241,70 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
 {
    std::visit([this, &sbeMsg](const auto *msg)
               {
+               using MsgType = std::remove_pointer_t<decltype(msg)>;
 
-            using MsgType = std::remove_pointer_t<decltype(msg)>;
-
-            if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage> ||
-                            std::is_same_v<MsgType, SBEModifyOrderMessage> ||
-                            std::is_same_v<MsgType, SBEDeleteOrderMessage> ||
-                            std::is_same_v<MsgType, SBETradeMessage>)
-            {
-                uint64_t order_id = msg->orderId;
-                Order *order = this->get_order(order_id, Protocol::SBE, sbeMsg.venue);
-                if (!order)
-                {
-                    order = this->add_market_order(order_id, Protocol::SBE, sbeMsg.venue);
-                    if (UNLIKELY(!order))
+               if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage> ||
+                              std::is_same_v<MsgType, SBEModifyOrderMessage> ||
+                              std::is_same_v<MsgType, SBEDeleteOrderMessage> ||
+                              std::is_same_v<MsgType, SBETradeMessage>)
+               {
+                     uint64_t order_id = msg->orderId;
+                     Order *order = this->get_order(order_id, Protocol::SBE, sbeMsg.venue);
+                     if (!order)
+                     {
+                        order = this->add_market_order(order_id, Protocol::SBE, sbeMsg.venue);
+                        if (UNLIKELY(!order))
+                           return;
+                     }
+                     else if (UNLIKELY(order->canModify == 0x00))
+                     {
+                        MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> resetMsg(sbeMsg.msg, sbeMsg.venue);
+                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>(resetMsg, order));
                         return;
-                }
+                     }
 
-                if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage>)
-                {
-                    this->fill_sbe_add(*order, msg);
-                }
-                else if constexpr (std::is_same_v<MsgType, SBEModifyOrderMessage>)
-                {
-                    this->fill_sbe_modify(*order, msg);
-                }
-                else if constexpr (std::is_same_v<MsgType, SBEDeleteOrderMessage>)
-                {
-                    this->fill_sbe_cancel(*order, msg);
-                }
-                else if constexpr (std::is_same_v<MsgType, SBETradeMessage>)
-                {
-                    this->fill_sbe_trade(*order, msg);
-                }
-                
-                this->store_to_db_.push(sbeMsg);
-                this->store_to_db_.push(order);
+                     if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage>)
+                     {
+                        this->fill_sbe_add(*order, msg);
+                        this->marketbook_.add_order(*order);
+                     }
+                     else if constexpr (std::is_same_v<MsgType, SBEModifyOrderMessage>)
+                     {
+                        this->fill_sbe_modify(*order, msg);
+                        this->marketbook_.modify_order(*order, msg->newQuantity);
+                     }
+                     else if constexpr (std::is_same_v<MsgType, SBEDeleteOrderMessage>)
+                     {
+                        this->fill_sbe_delete(*order, msg);
+                        this->marketbook_.delete_order(*order);
+                     }
+                     else if constexpr (std::is_same_v<MsgType, SBETradeMessage>)
+                     {
+                        this->fill_sbe_trade(*order, msg);
+                        this->marketbook_.trade_order(*order);
+                     }
 
-                if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
-                   this->ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
-                else
-                   this->store_to_strategy_.push(order);
-            }
-            else if constexpr (std::is_same_v<MsgType, SBEInstrumentDefinitionMessage>)
-            {
-                this->handle_instrument_definition(msg);
-            } }, sbeMsg.msg);
+                     this->store_to_db_.push(sbeMsg);
+                     this->store_to_db_.push(order);
+
+                     if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
+                     {
+                        if (order->canModify == RISK_DONE)
+                           this->ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
+                        else
+                           this->store_to_risk_.push(order);
+                     }
+                     else
+                     {
+                        this->store_to_strategy_.push(order);
+                        this->store_to_risk_.push(order);
+                     }
+               }
+               else if constexpr (std::is_same_v<MsgType, SBEInstrumentDefinitionMessage>)
+               {
+                  this->handle_instrument_definition(msg);
+               } },
+              sbeMsg.msg);
 }
 
 void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg) noexcept
@@ -288,7 +346,8 @@ void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg) noexce
       break;
    }
 
-   order.filled_quantity = msg->filled_qty;
+   order.filled_quantity += msg->last_qty;
+   order.last_exec_quantity = msg->last_qty;
    order.quantity = msg->leaves_qty + msg->filled_qty;
    order.last_update_time = static_cast<uint64_t>(msg->transact_time);
 }

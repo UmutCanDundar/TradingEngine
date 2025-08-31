@@ -4,11 +4,13 @@
 #include "Protocol-Venue.h"
 #include "Parser_Dispatch.h"
 #include "common.h"
+#include "HashTables.h"
+#include "Order.h"
+#include "MarketBook.h"
 
 #include <cstdint>
 #include <array>
 #include <absl/container/flat_hash_map.h>
-// #include <absl/container/flat_hash_set.h>
 #include <absl/hash/hash.h>
 #include <boost/lockfree/spsc_queue.hpp>
 #include <vector>
@@ -16,79 +18,17 @@
 #include <immintrin.h>
 #include <bit>
 #include <tuple>
+#include <atomic>
 
-enum class Side : uint8_t
+template <typename T>
+struct PendingMessage
 {
-    Unknown = 0,
-    Buy = 1,
-    Sell = 2
-};
-enum class Status : uint8_t
-{
-    // === BASIC STATES ===
-    Unknown = 0,   // İlk state, henüz bilgi yok
-    New = 1,       // Order kabul edildi, market'ta aktif
-    Partial = 2,   // Kısmen doldu, hala aktif
-    Filled = 3,    // Tamamen doldu
-    Cancelled = 4, // İptal edildi
+    T msgWithVenue;
+    Order *order;
 
-    // === PENDING STATES ===
-    PendingNew = 10,     // Order gönderildi, onay bekleniyor
-    PendingCancel = 11,  // Cancel gönderildi, onay bekleniyor
-    PendingReplace = 12, // Modify gönderildi, onay bekleniyor
-
-    // === REJECTION STATES ===
-    Rejected = 20,      // Order reddedildi
-    CancelReject = 21,  // Cancel reddedildi
-    ReplaceReject = 22, // Modify reddedildi
-
-    // === EXCHANGE SPECIFIC ===
-    Suspended = 30,                 // Trading halted
-    Expired = 31,                   // TTL süresi doldu
-    PartiallyFilled_Cancelled = 32, // Kısmen dolup iptal edildi
-
-    // === ERROR STATES ===
-    DoneForDay = 40, // Gün sonu kapandı
-    Calculated = 41, // Hesaplanmış ama henüz aktif değil
-    Stopped = 42,    // Stop order tetiklendi
-
-    // === SYSTEM STATES ===
-    PendingSubmit = 50, // Sistem tarafında bekliyor
-    Accepted = 51,      // Exchange kabul etti
-    Restated = 52       // Order yeniden tanımlandı
-};
-
-struct alignas(64) Order
-{
-    // 🔴 HOT PATH (en sık erişilen alanlar)
-    int64_t price = 0;            // Fixed-point scaled
-    uint32_t quantity = 0;        // Original order quantity
-    uint32_t filled_quantity = 0; // Cumulative filled quantity
-    uint32_t cancelled_quantity = 0;
-    std::array<char, 8> symbol{};    // Fixed-size symbol for low-latency lookup
-    Side side = Side::Unknown;       // Buy/Sell
-    Status status = Status::Unknown; // New/Partial/Filled/Cancelled
-    bool isOurOrder = false;
-
-    // 🟠 LOOKUP & ROUTING
-    uint8_t pad1[1];               // 64-byte alignment
-    uint64_t order_id = 0;         // Exchange-assigned unique order ID
-    uint64_t client_order_id = 0;  // Strategy-assigned client order ID
-    uint64_t timestamp = 0;        // Order creation time (ns epoch)
-    uint64_t last_update_time = 0; // Last modification time (ns epoch)
-
-    // 🟡 PROTOCOL METADATA
-    uint16_t message_type = 0;         // FIX char, ITCH char, SBE templateId
-    Protocol protocol = Protocol::FIX; // Source protocol for reconstruction
-
-    // 🟢 OPTIONAL (protokol bazlı karar & advanced tactics)
-    Venue venue;                // NYSE, NASDAQ, etc.
-    uint32_t instrument_id = 0; // SBE/ITCH
-    uint8_t time_in_force = 0;  // IOC, GTC, etc.
-    uint8_t order_type = 0;     // Limit, Market, Stop
-    uint8_t priority_level = 0; // HFT queue tactics
-
-    uint8_t pad3[53]; // 64-byte alignment
+    PendingMessage() = default;
+    PendingMessage(const T &msgWithVenue, Order *order) noexcept
+        : msgWithVenue(msgWithVenue), order(order) {}
 };
 
 struct SymbolMeta
@@ -120,7 +60,9 @@ struct OrderKeyHash
 };
 
 inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;
+inline constexpr size_t PENDING_QUEUE_CAPACITY = 65536;
 
+using spscPendingQueue_t = boost::lockfree::spsc_queue<PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>, boost::lockfree::capacity<PENDING_QUEUE_CAPACITY>>;
 using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
 using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<ITCHMessage>, MessageWithVenue<SBEMessage>>, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
 
@@ -130,8 +72,11 @@ private:
     static constexpr size_t ORDER_POOL_CAPACITY = 65536; // 8MB @128B each
     static constexpr size_t MARKETORDER_LAST_INDEX = 32768;
     static constexpr size_t ORDER_MAP_CAPACITY = 32768;
+    static inline bool map_full = false;
+    static constexpr uint8_t STRATEGY_DONE = 0x01;
+    static constexpr uint8_t RISK_DONE = 0x02;
 
-    std::vector<Order> order_pool_;
+    std::array<Order, ORDER_POOL_CAPACITY> order_pool_;
     size_t market_next_slot = 0;
     size_t our_next_slot = MARKETORDER_LAST_INDEX;
 
@@ -140,21 +85,29 @@ private:
     absl::flat_hash_map<uint64_t, SymbolMeta> instrument_cache_;
 
     spscMessageQueue_t &parser_to_store_;
+    spscPendingQueue_t pending_to_strategy_;
+    spscOrderQueue_t &store_to_risk_;
     spscOrderQueue_t &store_to_strategy_;
     spscOrderQueue_t &store_to_strategy_free_slot_;
     spscDbQueue_t &store_to_db_;
+
+    MarketBook &marketbook_;
 
 public:
     Store_RAM(spscMessageQueue_t &parser_to_store,
               spscOrderQueue_t &store_to_strategy,
               spscOrderQueue_t &store_to_strategy_free_slot,
-              spscDbQueue_t &store_to_db) noexcept;
+              spscOrderQueue_t &store_to_risk,
+              spscDbQueue_t &store_to_db,
+              MarketBook &marketbook) noexcept;
 
     inline Order *poll_update() noexcept
     {
-        Order *order = nullptr;
+        Order *order;
         if (store_to_strategy_.pop(order))
+        {
             return order;
+        }
         return nullptr;
     }
 
@@ -299,6 +252,7 @@ private:
     inline void fill_itch_exec_report(Order &order, const ITCHExecutedMessage *msg) noexcept
     {
         order.filled_quantity += msg->executed_quantity;
+        order.last_exec_quantity = msg->executed_quantity;
         order.last_update_time = msg->timestamp / 1000000000ULL;
         if (order.filled_quantity < order.quantity)
             order.status = Status::Partial;
@@ -323,7 +277,11 @@ private:
 
     inline void fill_itch_trade(Order &order, const ITCHTradeMessage *msg) noexcept
     {
+        if (UNLIKELY(order.isOurOrder))
+            return;
+
         order.filled_quantity += msg->quantity;
+        order.last_exec_quantity = msg->quantity;
         order.last_update_time = msg->timestamp / 1000000000ULL;
         copy_symbol(order.symbol, msg->stock);
         order.price = static_cast<int64_t>(msg->price);
@@ -360,7 +318,7 @@ private:
         order.last_update_time = msg->header.version / 1'000'000'000ULL;
     }
 
-    inline void fill_sbe_cancel(Order &order, const SBEDeleteOrderMessage *msg) noexcept
+    inline void fill_sbe_delete(Order &order, const SBEDeleteOrderMessage *msg) noexcept
     {
         if (order.filled_quantity > 0)
             order.status = Status::PartiallyFilled_Cancelled;
@@ -372,8 +330,12 @@ private:
 
     inline void fill_sbe_trade(Order &order, const SBETradeMessage *msg) noexcept
     {
+        if (UNLIKELY(order.isOurOrder))
+            return;
+
         order.price = static_cast<int64_t>(msg->price);
         order.filled_quantity += msg->quantity;
+        order.last_exec_quantity = msg->quantity;
         order.instrument_id = msg->header.schemaId;
 
         if (order.filled_quantity < order.quantity)

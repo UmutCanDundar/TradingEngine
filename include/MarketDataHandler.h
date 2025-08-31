@@ -21,6 +21,7 @@ private:
     spscMessageQueue_t parser_to_store_;
     spscOrderQueue_t store_to_strategy_;
     spscOrderQueue_t store_to_strategy_free_slot_;
+    spscOrderQueue_t store_to_risk_;
     spscDbQueue_t store_to_db_;
 
     // Komponentler
