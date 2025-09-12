@@ -54,7 +54,7 @@ void ErrorHandler::handleError(int err) noexcept
 
 void ErrorHandler::handleError(ErrorName err) noexcept
 {
-   switch (error_strategies[static_cast<int>(err)])
+   switch (error_strategies[static_cast<uint8_t>(err)])
    {
    case ErrorStrategy::Retry:
       logRetry();

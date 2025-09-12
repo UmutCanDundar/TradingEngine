@@ -32,7 +32,7 @@ int Receiver::setupEpoll() noexcept
 
 std::array<int, PORTS_COUNT> Receiver::Init_Sockets() noexcept
 {
-   joined_ips.reserve(IPs_COUNT);
+   joined_ips.resize(IPs_COUNT);
 
    std::array<int, PORTS_COUNT> socks{};
    for (uint8_t i = 0; i < PORTS_COUNT; i++)
@@ -200,13 +200,9 @@ Receiver::~Receiver() noexcept
          {
             ip_mreq mreq{{*ip}, {htonl(INADDR_ANY)}};
             if (::setsockopt(socks_[i], IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) < 0)
-            {
                break;
-            }
             else
-            {
                ip++;
-            }
          }
       }
       ::close(socks_[i]);

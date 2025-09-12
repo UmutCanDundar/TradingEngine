@@ -13,6 +13,7 @@ enum class ErrorStrategy : uint8_t {
 
 enum class ErrorName : uint8_t {
     InvalidIP = 0,
+    CouldNotOpenFile = 1,
 };
 
  alignas(64) inline constexpr std::array<ErrorStrategy, 128> errno_strategies = {
@@ -145,5 +146,7 @@ enum class ErrorName : uint8_t {
     ErrorStrategy::Ignore, // 126: Required key not available
     ErrorStrategy::Ignore, // 127: Key has expired
 };
- alignas(64) inline constexpr std::array<ErrorStrategy, 1> error_strategies = {
-    ErrorStrategy::Abort};
+ alignas(64) inline constexpr std::array<ErrorStrategy, 2> error_strategies = {
+    ErrorStrategy::Abort,
+    ErrorStrategy::Abort,
+};

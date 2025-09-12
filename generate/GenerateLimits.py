@@ -1,10 +1,9 @@
 account_limit = {
- "max_position": ["double",0],
- "max_daily_loss": ["double",0],
+ "max_notional": ["__int128",0],
+ "max_position": ["int64_t",0],
+ "max_daily_loss": ["int64_t",0],
  "max_leverage": ["double",0],   
- "max_open_orders": ["uint32_t",0],
- "pad": ["uint8_t",36]
-
+ "max_open_orders": ["uint32_t",0]
 }
 
 venues_limit = {
@@ -17,6 +16,7 @@ def generate_account(account_limit):
      line = [f"\nstruct alignas(64) AccountLimits \n{{ "]
      for limitname, values in account_limit.items():
          line.append(f"       {values[0]} {limitname} = {values[1]};")
+     line.append(f"       uint8_t pad[36];")
      line.append(f"}};")
      return"\n".join(line)
 

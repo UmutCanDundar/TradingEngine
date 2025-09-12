@@ -18,11 +18,10 @@ errno_map = {
     "EPERM": "Abort",
     "ESRCH": "Abort"
 }
-
-ERROR_NAME = ["InvalidIP"]
     
 error_map = {
-    "InvalidIP" : "Abort"
+    "InvalidIP" : "Abort",
+    "CouldNotOpenFile" : "Abort"
     }
 
 errno_values = {}
@@ -51,7 +50,7 @@ with open("../include/GeneratedErrorMap.h", "w") as f:
     f.write("};\n\n")
 
     f.write("enum class ErrorName : uint8_t {\n")
-    for i, strname in enumerate(ERROR_NAME):
+    for i, strname in enumerate(error_map.keys()):
         f.write(f"    {strname} = {i},\n")
     f.write("};\n\n")
 
@@ -65,10 +64,10 @@ with open("../include/GeneratedErrorMap.h", "w") as f:
             f.write(f"    ErrorStrategy::Ignore, // {i}: {os.strerror(i)}\n") 
     f.write(f"}};\n")
 
-    f.write(f" alignas(64) inline constexpr std::array<ErrorStrategy, {len(ERROR_NAME)}> error_strategies = {{\n")
+    f.write(f" alignas(64) inline constexpr std::array<ErrorStrategy, {len(error_map.keys())}> error_strategies = {{\n")
 
     # Index 0-255 için strateji ataması
-    for errname in ERROR_NAME:
+    for errname in error_map.keys():
         errstrategy = error_map.get(errname,"Ignore")
-        f.write(f"    ErrorStrategy::{errstrategy}")
+        f.write(f"    ErrorStrategy::{errstrategy},\n")
     f.write(f"}};\n")
