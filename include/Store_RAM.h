@@ -59,6 +59,24 @@ struct OrderKeyHash
     }
 };
 
+struct OrderHistory
+{
+    std::vector<Order*> orders;
+    size_t write_index;
+
+    OrderHistory() : orders(512), write_index(0) {}
+
+    inline void push(Order* order) noexcept {
+        orders[write_index & (orders.size()-1)] = order;
+        write_index++;
+    }
+
+    inline Order* get_recent(size_t offset = 0) const noexcept {
+        return orders[(write_index - 1 - offset) & (orders.size()-1)];
+    }
+
+};
+
 inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;
 inline constexpr size_t PENDING_QUEUE_CAPACITY = 65536;
 
@@ -72,7 +90,8 @@ private:
     static constexpr size_t ORDER_POOL_CAPACITY = 65536; // 8MB @128B each
     static constexpr size_t MARKETORDER_LAST_INDEX = 32768;
     static constexpr size_t ORDER_MAP_CAPACITY = 32768;
-    static inline bool map_full = false;
+    static inline bool our_map_full = false;
+    static inline bool market_map_full = false;
     static constexpr uint8_t STRATEGY_DONE = 0x01;
     static constexpr uint8_t RISK_DONE = 0x02;
 
@@ -80,9 +99,11 @@ private:
     size_t market_next_slot = 0;
     size_t our_next_slot = MARKETORDER_LAST_INDEX;
 
-    absl::flat_hash_map<OrderKey, Order *, OrderKeyHash> market_order_map_;
-    absl::flat_hash_map<OrderKey, Order *, OrderKeyHash> our_order_map_;
+    absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> market_order_map_;
+    absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> our_order_map_;
     absl::flat_hash_map<uint64_t, SymbolMeta> instrument_cache_;
+
+    std::array<std::vector<OrderHistory>, VENUE_COUNT> our_orders_all_venue_;
 
     spscMessageQueue_t &parser_to_store_;
     spscPendingQueue_t pending_to_strategy_;
@@ -92,6 +113,7 @@ private:
     spscDbQueue_t &store_to_db_;
 
     MarketBook &marketbook_;
+    HashTables &hashtables_;
 
 public:
     Store_RAM(spscMessageQueue_t &parser_to_store,
@@ -99,7 +121,8 @@ public:
               spscOrderQueue_t &store_to_strategy_free_slot,
               spscOrderQueue_t &store_to_risk,
               spscDbQueue_t &store_to_db,
-              MarketBook &marketbook) noexcept;
+              MarketBook &marketbook,
+              HashTables &hashtables) noexcept;
 
     inline Order *poll_update() noexcept
     {
@@ -118,7 +141,7 @@ public:
     }
     void store() noexcept;
 
-    Order *add_our_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
+    Order *add_our_order(Order *order) noexcept;
 
 private:
     Order *add_market_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;

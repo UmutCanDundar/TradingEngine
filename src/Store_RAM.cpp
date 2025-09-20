@@ -1,13 +1,18 @@
 #include "Store_RAM.h"
 
-Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscOrderQueue_t &store_to_risk, spscDbQueue_t &store_to_db, MarketBook &marketbook) noexcept
-    : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_risk_(store_to_risk), store_to_db_(store_to_db), marketbook_(marketbook)
+Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscOrderQueue_t &store_to_risk, spscDbQueue_t &store_to_db, MarketBook &marketbook,HashTables &hashtables) noexcept
+    : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_risk_(store_to_risk), store_to_db_(store_to_db), marketbook_(marketbook), hashtables_(hashtables)
 {
    market_order_map_.reserve(ORDER_POOL_CAPACITY);
    our_order_map_.reserve(ORDER_POOL_CAPACITY);
 
    for (size_t i = MARKETORDER_LAST_INDEX; i < ORDER_POOL_CAPACITY; i++)
       store_to_strategy_free_slot_.push(&order_pool_[i]);
+
+   for (size_t venue = 0; venue < our_orders_all_venue_.size(); venue++) {
+      size_t symbol_count = hashtables_.get_symbol_count(venue);
+      our_orders_all_venue_[venue].resize(symbol_count);   
+   }
 }
 
 void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg) noexcept
@@ -43,20 +48,29 @@ void Store_RAM::store() noexcept
             this->store(MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue}); }, msgWithVenue.msg);
 }
 
-Order *Store_RAM::add_our_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept
+Order *Store_RAM::add_our_order(Order *order) noexcept
 {
-   bool map_full = false;
    if (UNLIKELY(our_next_slot >= ORDER_POOL_CAPACITY))
    {
       our_next_slot = MARKETORDER_LAST_INDEX;
-      map_full = true;
+      our_map_full = true;
    }
-   if (map_full)
+   if (our_map_full)
       our_order_map_.erase(OrderKey{order_pool_[our_next_slot].order_id, order_pool_[our_next_slot].protocol, order_pool_[our_next_slot].venue});
 
-   Order *order = &order_pool_[our_next_slot];
-   our_order_map_[OrderKey{order_id, protocol, venue}] = order;
-   our_next_slot++;
+   our_order_map_[OrderKey{order->client_order_id, order->protocol, order->venue}] = order;
+
+   //order history per symbol
+   auto &orderhistory_for_a_venue = our_orders_all_venue_[static_cast<uint8_t>(order->venue)];
+   auto &orderhistory_for_a_symbol = orderhistory_for_a_venue[hashtables_.getIndex(static_cast<uint8_t>(order->venue),order->symbol)];
+   auto &orders = orderhistory_for_a_symbol.orders;
+   auto &index = orderhistory_for_a_symbol.write_index;
+   
+   if (index >= 512) 
+      index &= (orders.size() - 1);
+   orders[index] = order;
+   index++;
+
    return order;
 }
 
@@ -66,9 +80,9 @@ Order *Store_RAM::add_market_order(uint64_t order_id, Protocol protocol, Venue v
    if (UNLIKELY(market_next_slot >= MARKETORDER_LAST_INDEX))
    {
       market_next_slot = 0;
-      map_full = true;
+      market_map_full = true;
    }
-   if (map_full)
+   if (market_map_full)
       market_order_map_.erase(OrderKey{order_pool_[market_next_slot].order_id, order_pool_[market_next_slot].protocol, order_pool_[market_next_slot].venue});
 
    Order *order = &order_pool_[market_next_slot];

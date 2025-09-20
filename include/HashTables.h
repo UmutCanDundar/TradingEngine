@@ -19,7 +19,8 @@ private:
         bool valid = false;
     };
 
-    std::vector<std::vector<HashEntry>> hash_tables;
+    std::vector<std::vector<HashEntry>> hashtables_;
+    std::vector<size_t> symbols_count_per_venue_;
 
     static inline uint32_t hash_symbol(const char *s, size_t size) noexcept
     {
@@ -35,8 +36,9 @@ private:
     void initialize(const std::span<const SymbolIndex> &symbol_table) noexcept
     {
         size_t size = symbol_table.size();
-        std::vector<HashEntry> hash_table(size);
-
+        symbols_count_per_venue_.push_back(size);
+        std::vector<HashEntry> hashtable(size);
+       
         for (const auto &entry : symbol_table)
         {
             if (entry.symbol[0] == '\0')
@@ -44,17 +46,17 @@ private:
 
             uint32_t hash_val = hash_symbol(entry.symbol, size);
 
-            while (hash_table[hash_val].valid)
+            while (hashtable[hash_val].valid)
             {
                 hash_val = (hash_val + 1) & (size - 1);
             }
 
-            strncpy(hash_table[hash_val].symbol, entry.symbol, 8);
-            hash_table[hash_val].index = entry.index;
-            hash_table[hash_val].valid = true;
+            strncpy(hashtable[hash_val].symbol, entry.symbol, 8);
+            hashtable[hash_val].index = entry.index;
+            hashtable[hash_val].valid = true;
         }
 
-        hash_tables.push_back(hash_table);
+        hashtables_.push_back(hashtable);
     }
 
 public:
@@ -67,21 +69,26 @@ public:
             initialize(symbol_table);
     }
 
-    inline uint32_t getIndex(size_t hashtable_index, const std::array<char, 8> &symbol) const noexcept
+    inline uint32_t getIndex(size_t venue_index, const std::array<char, 8> &symbol) const noexcept
     {
-        size_t size = hash_tables[hashtable_index].size();
+        size_t size = hashtables_[venue_index].size();
         uint32_t hash_val = hash_symbol(symbol.data(), size);
 
-        while (hash_tables[hashtable_index][hash_val].valid)
+        while (hashtables_[venue_index][hash_val].valid)
         {
-            if (*reinterpret_cast<const uint64_t *>(hash_tables[hashtable_index][hash_val].symbol) ==
+            if (*reinterpret_cast<const uint64_t *>(hashtables_[venue_index][hash_val].symbol) ==
                 *reinterpret_cast<const uint64_t *>(symbol.data()))
             {
-                return hash_tables[hashtable_index][hash_val].index;
+                return hashtables_[venue_index][hash_val].index;
             }
             hash_val = (hash_val + 1) & (size - 1);
         }
 
         return UINT32_MAX;
+    }
+
+    inline const size_t get_symbol_count(const uint8_t venue_index) const noexcept
+    {
+        return symbols_count_per_venue_[venue_index];
     }
 };

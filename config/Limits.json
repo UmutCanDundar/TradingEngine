@@ -1,0 +1,71 @@
+{
+  
+  "symbol_limit_order": ["max_position", "tick_size_scaled", "max_notional_scaled", "max_price_deviation", "min_qty", "max_order_qty", "price_scale_factor", "qty_scale_factor", "max_orders_per_interval", "order_rate_interval_ns", "max_cancels_per_sec"],
+
+  "symbol_limits": {
+    "BIST": {
+      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    "NYSE": {
+      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    "NASDAQ": {
+      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    }
+  },
+
+  "account_limits": {
+    "BIST": {
+       "max_notional": 0,
+       "max_position": 0,
+       "max_daily_loss": 0,
+       "max_unrealized_loss": 0,
+       "max_leverage": 0,   
+       "max_open_orders": 0
+    },
+    "NYSE": {
+       "max_notional": 0,
+       "max_position": 0,
+       "max_daily_loss": 0,
+       "max_unrealized_loss": 0,
+       "max_leverage": 0,   
+       "max_open_orders": 0
+    },
+    "NASDAQ": {
+       "max_notional": 0,
+       "max_position": 0,
+       "max_daily_loss": 0,
+       "max_unrealized_loss": 0,
+       "max_leverage": 0,   
+       "max_open_orders": 0
+    }
+  },
+
+  "venue_limits": {
+     "BIST": {
+       "max_order_rate_per_interval": 0,
+       "order_rate_interval_ns": 0,
+       "max_cancels_per_sec": 0,
+       "maker_fee_rate": 0,
+       "taker_fee_rate": 0
+    },
+    "NYSE": {
+       "max_order_rate_per_interval": 0,
+       "order_rate_interval_ns": 0,
+       "max_cancels_per_sec": 0,
+       "maker_fee_rate": 0,
+       "taker_fee_rate": 0
+    },
+    "NASDAQ": {
+       "max_orders_per_interval": 0,
+       "order_rate_interval_ns": 0,
+       "max_cancels_per_sec": 0,
+       "maker_fee_rate": 0,
+       "taker_fee_rate": 0
+    }
+  }
+
+}

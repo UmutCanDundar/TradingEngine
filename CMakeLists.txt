@@ -44,11 +44,6 @@ add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateSymbolTables.py
 )
 
-add_custom_command(
-    OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedLimits.h
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateLimits.py
-    DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateLimits.py
-)
 
 add_custom_target(GeneratedFiles ALL
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedErrorMap.h
@@ -56,7 +51,6 @@ add_custom_target(GeneratedFiles ALL
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSBEMessages.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSymbolTables.h
-    DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedLimits.h
 )
 
 set(MARKER_FILE "${CMAKE_BINARY_DIR}/setup_sql.done")
