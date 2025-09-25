@@ -5,6 +5,11 @@
 #include <atomic>
 #include <array>
 
+enum class SyncState : uint8_t {
+    WaitingNew = 0,   // NEW henüz gelmedi
+    NewSeen = 1,      // NEW (veya ACCEPT) görüldü
+};
+
 enum class Side : uint8_t
 {
    Buy = 0,
@@ -57,27 +62,31 @@ struct alignas(64) Order
    std::array<char, 8> symbol{};    // Fixed-size symbol for low-latency lookup
    Side side = Side::Unknown;       // Buy/Sell
    Status status = Status::Unknown; // New/Partial/Filled/Cancelled
-
-   // 🟠 LOOKUP & ROUTING
-   Venue venue; // NYSE, NASDAQ, etc.
+   Venue venue;                     // NYSE, NASDAQ, etc.
    bool isOurOrder = false;
    std::atomic<uint8_t> canModify = 0x00;
-   uint8_t pad1[3];
-   uint64_t order_id = 0;        // Exchange-assigned unique order ID
-   uint64_t client_order_id = 0; // Strategy-assigned client order ID
-   uint64_t timestamp = 0;       // Order creation time (ns epoch)
-   // Cache-Line
-   uint64_t last_update_time = 0; // Last modification time (ns epoch)
-
-   // 🟡 PROTOCOL METADATA
-   uint16_t message_type = 0;             // FIX char, ITCH char, SBE templateId
+   SyncState syncState = SyncState::WaitingNew;
    Protocol protocol = Protocol::Unknown; // Source protocol for reconstruction
 
+   // 🟠 LOOKUP & ROUTING
+   uint8_t pad1[1];
+   uint64_t order_id = 0;        // Exchange-assigned unique order ID
+   uint64_t client_order_id = 0; // Strategy-assigned client order ID
+   uint64_t last_update_time = 0; // Last modification time
+   // Cache-Line
+   uint64_t timestamp = 0;       // Order creation time 
+
+   // 🟡 PROTOCOL METADATA
+   uint16_t message_type = 0;             // Message type within the protocol            
+   
    // 🟢 OPTIONAL (protokol bazlı karar & advanced tactics)
    uint8_t time_in_force = 0;  // IOC, GTC, etc.
    uint32_t instrument_id = 0; // SBE/ITCH
    uint8_t order_type = 0;     // Limit, Market, Stop
    uint8_t priority_level = 0; // HFT queue tactics
 
-   uint8_t pad2[46]; // 64-byte alignment
+   std::vector<Status> StatusesPreNew;
+   uint8_t pad2[44]; // 64-byte alignment
+
+   Order() {StatusesPreNew.resize(2);}
 };

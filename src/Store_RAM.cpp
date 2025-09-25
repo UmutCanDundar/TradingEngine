@@ -66,9 +66,7 @@ Order *Store_RAM::add_our_order(Order *order) noexcept
    auto &orders = orderhistory_for_a_symbol.orders;
    auto &index = orderhistory_for_a_symbol.write_index;
    
-   if (index >= 512) 
-      index &= (orders.size() - 1);
-   orders[index] = order;
+   orders[index & (orders.size() - 1)] = order;
    index++;
 
    return order;
@@ -144,15 +142,6 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
 
    switch (msg->msg_type)
    {
-   case 'D': // NewOrderSingle
-      fill_fix_new(*order, msg);
-      break;
-   case 'F': // CancelRequest
-      fill_fix_cancel(*order, msg);
-      break;
-   case 'G': // ModifyRequest
-      fill_fix_modify(*order, msg);
-      break;
    case '8': // ExecutionReport
       if (allowed_exec_type[static_cast<uint8_t>(msg->exec_type)])
          fill_fix_exec_report(*order, msg);
@@ -326,42 +315,31 @@ void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg) noexce
    switch (msg->ord_status)
    {
    case '0': // New
-      order.status = Status::New;
+      fill_fix_new(order, msg);
       break;
    case '1': // Partially Filled
-      order.status = Status::Partial;
+      fill_fix_partial(order, msg);
       break;
    case '2': // Filled
-      order.status = Status::Filled;
+      fill_fix_filled(order, msg);
       break;
    case '4': // Cancelled
-      if (order.filled_quantity > 0)
-         order.status = Status::PartiallyFilled_Cancelled;
-      else
-         order.status = Status::Cancelled;
+      fill_fix_cancel(order, msg);
       break;
    case '8': // Rejected
-      order.status = Status::Rejected;
+      fill_fix_rejected(order, msg);
       break;
    case '6': // Pending Cancel
-      order.status = Status::PendingCancel;
+      fill_fix_pendingcancel(order, msg);
       break;
-   case '5':                      // Replaced
-      order.status = Status::New; // Active again after modification
+   case '5': // Replaced
+      fill_fix_new(order, msg);
       break;
    case 'E': // Pending Replace
-      order.status = Status::PendingReplace;
+      fill_fix_pendingreplace(order, msg);
       break;
    case 'C': // Expired
-      if (order.filled_quantity > 0)
-         order.status = Status::PartiallyFilled_Cancelled;
-      else
-         order.status = Status::Expired;
+      fill_fix_expired(order, msg);
       break;
    }
-
-   order.filled_quantity += msg->last_qty;
-   order.last_exec_quantity = msg->last_qty;
-   order.quantity = msg->leaves_qty + msg->filled_qty;
-   order.last_update_time = static_cast<uint64_t>(msg->transact_time);
 }

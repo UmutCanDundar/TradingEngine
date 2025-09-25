@@ -4,6 +4,9 @@ MarketBook::MarketBook(HashTables &hashtables) noexcept : hashtables_(hashtables
 
 void MarketBook::add_order(const Order &order) noexcept
 {
+   if (UNLIKELY(order.isOurOrder))
+        return;
+        
    auto &symBook = get_symBook(order);
    auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
 
@@ -16,6 +19,9 @@ void MarketBook::add_order(const Order &order) noexcept
 
 void MarketBook::modify_order(const Order &order, uint32_t newQuantity) noexcept
 {
+   if (UNLIKELY(order.isOurOrder))
+        return;
+
    auto &symBook = get_symBook(order);
    auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
 
@@ -37,6 +43,9 @@ void MarketBook::modify_order(const Order &order, uint32_t newQuantity) noexcept
 
 void MarketBook::cancel_order(const Order &order) noexcept
 {
+   if (UNLIKELY(order.isOurOrder))
+        return;
+
    auto &symBook = get_symBook(order);
    auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
 
@@ -52,6 +61,9 @@ void MarketBook::cancel_order(const Order &order) noexcept
 
 void MarketBook::delete_order(const Order &order) noexcept
 {
+   if (UNLIKELY(order.isOurOrder))
+        return;
+
    auto &symBook = get_symBook(order);
    auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
 
@@ -69,7 +81,9 @@ void MarketBook::delete_order(const Order &order) noexcept
 
 void MarketBook::trade_order(const Order &order) noexcept
 {
-   // Partial fill -> filled qty kadar azalt
+   if (UNLIKELY(order.isOurOrder))
+        return;
+        
    auto &symBook = get_symBook(order);
    auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
 

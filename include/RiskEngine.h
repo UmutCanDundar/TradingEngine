@@ -175,11 +175,14 @@ private:
 public:
     RiskEngine(spscOrderQueue_t &store_to_risk, spscOrderQueue_t &strategy_to_risk, spscRejectOrderQueue_t &risk_to_strategy, spscOrderQueue_t &risk_to_builder, HashTables &hashtables, MarketBook &marketbook, Limits &limits) noexcept;
 
-    inline void update_risk() noexcept
+    void update_risk() noexcept
     {
         Order *order;
         while (store_to_risk_.pop(order))
         {
+            if (update_risk_for_protocol_fix(*order))
+                continue;
+
             const uint8_t venue_index = static_cast<uint8_t>(order->venue);
 
             update_symbol_risk(*order, venue_index);
@@ -191,13 +194,39 @@ public:
         }    
     }
 
-    inline uint32_t check_risk() noexcept
+    uint32_t check_risk() noexcept
         {
 
             return 0;
         }
 
 private:
+    inline bool update_risk_for_protocol_fix(Order &order) noexcept
+    {
+        if (order.protocol == Protocol::FIX) {
+            if(UNLIKELY(order.syncState == SyncState::WaitingNew))
+            {
+                return true;
+            }
+            else 
+            {
+                const uint8_t venue_index = static_cast<uint8_t>(order.venue);
+                for(size_t i = 0; i <= order.StatusesPreNew.size(); i++)
+                {
+                    if(order.status != Status::Unknown){
+                        update_symbol_risk(order, venue_index);
+                        update_order_risk(order, venue_index);
+                        update_account_risk(order, venue_index);
+                    }
+                    order.status = order.StatusesPreNew[i & 1UL];
+                }
+                order.status = Status::New;
+                return true;
+            }
+        }
+        return false;
+    }
+
     inline void update_unrealized_pnl(SymbolRisk &symRisk) noexcept
     {
         if (symRisk.net_position_scaled == 0)
@@ -269,17 +298,17 @@ private:
             case Status::DoneForDay:
             case Status::Stopped:
             case Status::Suspended:
-            case Status::PartiallyFilled_Cancelled:
-            case Status::Rejected:
-            case Status::CancelReject:
-            case Status::ReplaceReject:
                 symRisk.open_orders_count--;
                 symRisk.pending_notional_scaled = 0;
                 break;
 
-            case Status::PendingReplace:
+            case Status::Rejected:          // Order hiç yaşamadı
+            case Status::CancelReject:      // Cancel reddedildi, order hala aktif
+            case Status::ReplaceReject:     // Replace reddedildi, order hala aktif
+            case Status::PendingCancel:     // Ara durum
+            case Status::PendingReplace:    // Ara durum
+            case Status::Unknown:           // Belirsiz
             case Status::Restated:
-            case Status::Unknown:
             default:
                 break;
             }
@@ -322,7 +351,7 @@ private:
             | (1ULL << static_cast<uint64_t>(Status::ReplaceReject))
             | (1ULL << static_cast<uint64_t>(Status::PartiallyFilled_Cancelled));
 
-        if (o.remaining_qty == 0 || (terminal_mask & (1 << static_cast<uint64_t>(order.status)))) {        
+        if (o.remaining_qty == 0 || (terminal_mask & (1ULL << static_cast<uint64_t>(order.status)))) {        
             orderrisks_[venue_index].erase(it);
             return;
         }
