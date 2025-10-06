@@ -11,7 +11,7 @@ void Parser_Dispatch::dispatch() noexcept
    {
    case Protocol::FIX:
    {
-      FIXMessage *fixMsg{fixparser_.parse(pkt->data.data())};
+      FIXMessage *fixMsg{fixparser_.parse(pkt->data.data(), pkt->data.size())};
       parser_to_store_.push(MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>(fixMsg, pkt->venue));
       fixparser_.releaseFIX(fixMsg);
       break;

@@ -175,6 +175,9 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
 {
    std::visit([this, &itchMsg](const auto *msg)
               {
+
+               using MsgType = std::remove_pointer_t<decltype(msg)>;
+
                if constexpr (requires { msg->order_ref; })
                {
                      uint64_t order_id = msg->order_ref;
@@ -191,8 +194,6 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                         pending_to_strategy_.push(PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>(resetMsg, order));
                         return;
                      }
-
-                     using MsgType = std::remove_pointer_t<decltype(msg)>;
 
                      if constexpr (std::is_same_v<MsgType, ITCHAddOrderMessage> ||
                                  std::is_same_v<MsgType, ITCHAddOrderMPIDMessage>)
@@ -220,8 +221,7 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                         this->fill_itch_trade(*order, msg);
                         this->marketbook_.trade_order(*order);
                      }
-
-                     this->store_to_db_.push(itchMsg);
+                    
                      this->store_to_db_.push(order);
 
                      if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
@@ -236,14 +236,33 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                         this->store_to_strategy_.push(order);
                         this->store_to_risk_.push(order);
                      }
-               } }, itchMsg.msg);
+               } 
+               else if constexpr (std::is_same_v<MsgType, ITCHSystemEventMessage>)
+               {
+                  static constexpr std::array<std::pair<bool,bool>, 128> event_map = [] {
+                  std::array<std::pair<bool,bool>, 128> arr{};
+                  arr['Q'] = {false, false}; // market start
+                  arr['R'] = {false, false}; // resume
+                  arr['H'] = {true, false};  // halt
+                  arr['M'] = {true, false};  // market close
+                  arr['A'] = {true, true};   // circuit breaker
+                  return arr;
+                  } ();
+
+                  const auto &st = event_map[msg->event_code];
+                  this->update_venue_halt_status(itchMsg.venue, st.halted, st.cb);
+               }
+
+               this->store_to_db_.push(itchMsg);
+
+            }, itchMsg.msg);
 }
 
 // ================= SBE Handler ===================
 void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept
 {
    std::visit([this, &sbeMsg](const auto *msg)
-              {
+            {
                using MsgType = std::remove_pointer_t<decltype(msg)>;
 
                if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage> ||
@@ -287,7 +306,6 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                         this->marketbook_.trade_order(*order);
                      }
 
-                     this->store_to_db_.push(sbeMsg);
                      this->store_to_db_.push(order);
 
                      if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
@@ -303,11 +321,32 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                         this->store_to_risk_.push(order);
                      }
                }
+
                else if constexpr (std::is_same_v<MsgType, SBEInstrumentDefinitionMessage>)
                {
                   this->handle_instrument_definition(msg);
-               } },
-              sbeMsg.msg);
+               }
+
+               else if constexpr (std::is_same_v<MsgType, SBEMarketStatusMessage>)
+               {
+               
+               static constexpr std::array<std::pair<bool,bool>, 4> sbe_state_map = [] {
+                  std::array<std::pair<bool,bool>, 4> arr{};
+                  arr[0] = {true, false};   // 0 = market halted
+                  arr[1] = {false, false};  // 1 = market open
+                  arr[2] = {true, true};    // 2 = circuit breaker
+                  arr[3] = {false, false};  // 3 = reserved / future states
+                  return arr;
+               } ();
+
+               const auto &st = sbe_state_map[msg->marketState];
+
+               this->update_venue_halt_status(sbeMsg.venue, st.first, st.second);
+               } 
+
+               this->store_to_db_.push(sbeMsg);
+
+            },sbeMsg.msg);
 }
 
 void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg) noexcept

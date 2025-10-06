@@ -466,7 +466,7 @@ void Store_DB::insert(const Order *order)
    block.AppendColumn("time_in_force", col_time_in_force);
 
    auto col_order_type = std::make_shared<ColumnUInt8>();
-   col_order_type->Append(order->order_type);
+   col_order_type->Append(static_cast<uint8_t>(order->order_type));
    block.AppendColumn("order_type", col_order_type);
 
    auto col_priority_level = std::make_shared<ColumnUInt8>();

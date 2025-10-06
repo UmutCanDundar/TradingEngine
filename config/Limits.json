@@ -1,19 +1,19 @@
 {
   
-  "symbol_limit_order": ["max_position", "tick_size_scaled", "max_notional_scaled", "max_price_deviation", "min_qty", "max_order_qty", "price_scale_factor", "qty_scale_factor", "max_orders_per_interval", "order_rate_interval_ns", "max_cancels_per_sec"],
+  "symbol_limit_order": ["max_position", "tick_size_scaled", "max_notional_scaled", "max_price_deviation", "fat_finger_ratio", "min_qty", "max_qty", "price_scale_factor", "qty_scale_factor", "max_open_orders", "fat_finger_qty_threshold", "max_orders_per_interval", "order_rate_interval_ns", "max_cancels_per_sec"],
 
   "symbol_limits": {
     "BIST": {
-      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     },
     "NYSE": {
-      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     },
     "NASDAQ": {
-      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     }
   },
 

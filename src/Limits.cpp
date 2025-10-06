@@ -40,7 +40,7 @@ std::array<std::vector<SymbolLimit>, VENUE_COUNT> Limits::initialize_symbollimit
             sl.tick_size_scaled = limits_array[1].get<int64_t>();
             sl.max_notional_scaled = limits_array[2].get<int64_t>();
             sl.min_qty = limits_array[3].get<uint32_t>();
-            sl.max_order_qty = limits_array[4].get<uint32_t>();
+            sl.max_qty = limits_array[4].get<uint32_t>();
             sl.price_scale_factor = limits_array[5].get<uint32_t>();
             sl.qty_scale_factor = limits_array[6].get<uint32_t>();
 
@@ -68,22 +68,27 @@ std::array<AccountLimit, VENUE_COUNT> Limits::initialize_accountlimits() noexcep
     file >> j;
 
     const auto &account_limits = j["account_limits"];
-    auto venue = 0;
+    const auto &venue_limits = j["venue_limits"];
+    auto venue_index = 0;
 
-    for (const auto &it : account_limits.items())
+    for (auto &[venue_name, account] : account_limits.items())
     {
-        const auto &account = it.value();
-
         AccountLimit al{};
+
+        const auto &venue = venue_limits[venue_name]; 
+
         al.max_notional = account["max_notional"].get<int64_t>();
         al.max_position = account["max_position"].get<int64_t>();
         al.max_daily_loss = account["max_daily_loss"].get<int64_t>();
         al.max_unrealized_loss = account["max_unrealized_loss"].get<int64_t>();
-        al.max_leverage = account["max_leverage"].get<double>();
-        al.max_open_orders = account["max_open_orders"].get<uint32_t>();       
+        al.max_leverage = account["max_leverage"].get<int64_t>();
+        al.max_open_orders = account["max_open_orders"].get<uint32_t>();     
 
-        AccountLimits[venue] = al;
-        venue++;
+        al.maker_fee_rate = venue["maker_fee"].get<int64_t>();
+        al.taker_fee_rate = venue["taker_fee"].get<int64_t>();
+
+        AccountLimits[venue_index] = al;
+        venue_index++;
     }
     
     return AccountLimits;

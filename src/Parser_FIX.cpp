@@ -11,18 +11,18 @@ std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::makeTagH
    std::array<TagHandlerFunc, MAX_TAG> handlers{};
    // clang-format off
         handlers[8]  = [](std::string_view val, FIXMessage *msg) noexcept { msg->fix_version = val; };
-        handlers[35] = [](std::string_view val, FIXMessage *msg) noexcept { msg->msg_type = val[0]; };
+        handlers[35] = [](std::string_view val, FIXMessage *msg) noexcept { msg->msg_type = parseNumber(val.data(), val.size()); };
         handlers[44] = [](std::string_view val, FIXMessage *msg) noexcept { msg->price = parseFixedPoint(val); };
         handlers[38] = [](std::string_view val, FIXMessage *msg) noexcept { msg->quantity = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[151] = [](std::string_view val, FIXMessage *msg) noexcept { msg->leaves_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[32] = [](std::string_view val, FIXMessage *msg) noexcept { msg->last_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[14] = [](std::string_view val, FIXMessage *msg) noexcept { msg->filled_qty = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[60] = [](std::string_view val, FIXMessage *msg) noexcept { msg->transact_time = static_cast<uint32_t>(parseFixedPoint(val)); };
-        handlers[54] = [](std::string_view val, FIXMessage *msg) noexcept { msg->side = val[0]; };
-        handlers[40] = [](std::string_view val, FIXMessage *msg) noexcept { msg->ord_type = val[0]; };
-        handlers[59] = [](std::string_view val, FIXMessage *msg) noexcept { msg->time_in_force = val[0]; };
-        handlers[39] = [](std::string_view val, FIXMessage *msg) noexcept { msg->ord_status = val[0]; };
-        handlers[150] = [](std::string_view val, FIXMessage *msg) noexcept { msg->exec_type = val[0]; };
+        handlers[54] = [](std::string_view val, FIXMessage *msg) noexcept { msg->side = parseNumber(val.data(), val.size()); };
+        handlers[40] = [](std::string_view val, FIXMessage *msg) noexcept { msg->ord_type = parseNumber(val.data(), val.size()); };
+        handlers[59] = [](std::string_view val, FIXMessage *msg) noexcept { msg->time_in_force = parseNumber(val.data(), val.size()); };
+        handlers[39] = [](std::string_view val, FIXMessage *msg) noexcept { msg->ord_status = parseNumber(val.data(), val.size()); };
+        handlers[150] = [](std::string_view val, FIXMessage *msg) noexcept { msg->exec_type = parseNumber(val.data(), val.size()); };
         handlers[55] = [](std::string_view val, FIXMessage *msg) noexcept { msg->symbol = val; };
         handlers[11] = [](std::string_view val, FIXMessage *msg) noexcept { msg->cl_ord_id = val; };
         handlers[37] = [](std::string_view val, FIXMessage *msg) noexcept { msg->order_id = val; };
@@ -31,13 +31,14 @@ std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::makeTagH
         return handlers;
     }
 
-FIXMessage* Parser_FIX::parse(const char *data) noexcept
+std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::tagHandlers = makeTagHandlersLookup();
+   
+FIXMessage* Parser_FIX::parse(const char *data, size_t len) noexcept
 {
    FIXMessage* fixMsg_ {nullptr};
    free_fixMsg_list_.pop(fixMsg_);
 
    size_t pos = 0;
-   size_t len = strlen(data);
 
    const __m256i eq_mask = _mm256_set1_epi8('=');
    const __m256i soh_mask = _mm256_set1_epi8('\x01');
@@ -112,4 +113,3 @@ FIXMessage* Parser_FIX::parse(const char *data) noexcept
    return fixMsg_;
 }
 
-std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::tagHandlers = makeTagHandlersLookup();

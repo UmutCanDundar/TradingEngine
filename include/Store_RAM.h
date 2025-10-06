@@ -31,6 +31,12 @@ struct PendingMessage
         : msgWithVenue(msgWithVenue), order(order) {}
 };
 
+struct alignas(64) VenueFlags {
+    std::atomic<bool> halted;
+    std::atomic<bool> circuit_breaker;
+    uint8_t pad[62];
+};
+
 struct SymbolMeta
 {
     std::array<char, 8> symbol;
@@ -44,18 +50,18 @@ struct OrderKey
     Protocol protocol;
     Venue venue;
 
-    bool operator==(const OrderKey &other) const
+    bool operator==(const OrderKey &other) const noexcept 
     {
-        return order_id == other.order_id && protocol == other.protocol && venue == other.venue;
+        return (order_id == other.order_id) & (protocol == other.protocol) & (venue == other.venue);
     }
+    
 };
 
 struct OrderKeyHash
 {
     size_t operator()(const OrderKey &k) const noexcept
     {
-        return absl::Hash<std::tuple<Venue, Protocol, uint64_t>>{}(
-            std::make_tuple(k.venue, k.protocol, k.order_id));
+        return absl::Hash<std::tuple<Venue, Protocol, uint64_t>>{}(std::make_tuple(k.venue, k.protocol, k.order_id));
     }
 };
 
@@ -79,6 +85,10 @@ struct OrderHistory
 
 inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;
 inline constexpr size_t PENDING_QUEUE_CAPACITY = 65536;
+inline constexpr size_t ORDER_POOL_CAPACITY = 65536; // 8MB @128B each
+
+inline constexpr uint8_t STRATEGY_DONE = 0x01;
+inline constexpr uint8_t RISK_DONE = 0x02;
 
 using spscPendingQueue_t = boost::lockfree::spsc_queue<PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>, boost::lockfree::capacity<PENDING_QUEUE_CAPACITY>>;
 using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
@@ -87,14 +97,12 @@ using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageW
 class Store_RAM
 {
 private:
-    static constexpr size_t ORDER_POOL_CAPACITY = 65536; // 8MB @128B each
+  
     static constexpr size_t MARKETORDER_LAST_INDEX = 32768;
     static constexpr size_t ORDER_MAP_CAPACITY = 32768;
     static inline bool our_map_full = false;
     static inline bool market_map_full = false;
-    static constexpr uint8_t STRATEGY_DONE = 0x01;
-    static constexpr uint8_t RISK_DONE = 0x02;
-
+   
     std::array<Order, ORDER_POOL_CAPACITY> order_pool_;
     size_t market_next_slot = 0;
     size_t our_next_slot = MARKETORDER_LAST_INDEX;
@@ -104,6 +112,7 @@ private:
     absl::flat_hash_map<uint64_t, SymbolMeta> instrument_cache_;
 
     std::array<std::vector<OrderHistory>, VENUE_COUNT> our_orders_all_venue_;
+    std::array<VenueFlags, VENUE_COUNT> venue_flags_;
 
     spscMessageQueue_t &parser_to_store_;
     spscPendingQueue_t pending_to_strategy_;
@@ -142,6 +151,7 @@ public:
     void store() noexcept;
 
     Order *add_our_order(Order *order) noexcept;
+    inline auto const &get_venue_flags(Venue venue) const noexcept { return venue_flags_[static_cast<std::underlying_type_t<Venue>>(venue)]; }
 
 private:
     Order *add_market_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
@@ -194,9 +204,9 @@ private:
         order.protocol = Protocol::FIX;
 
         order.time_in_force = static_cast<uint8_t>(msg->time_in_force);
-        order.order_type = static_cast<uint8_t>(msg->ord_type);
+        order.order_type = static_cast<OrderType>(msg->ord_type - '0');
         
-        order.StatusesPreNew.clear();
+        order.StatusesPreNew.fill(Status::Unknown);
         // order.timestamp_ns = static_cast<uint64_t>(msg->transact_time) * 1'000'000'000ULL;
         // Diğer opsiyonel alanlar sıfır kalabilir
     }
@@ -413,5 +423,11 @@ private:
         order.last_update_time = msg->header.version / 1'000'000'000ULL;
         order.message_type = msg->header.templateId;
         order.protocol = Protocol::SBE;
+    }
+
+    inline void update_venue_halt_status(Venue venue, bool halted, bool circuit_breaker) noexcept
+    {
+        venue_flags_[static_cast<std::underlying_type_t<Venue>>(venue)].halted.store(halted, std::memory_order_release);
+        venue_flags_[static_cast<std::underlying_type_t<Venue>>(venue)].circuit_breaker.store(circuit_breaker, std::memory_order_release);
     }
 };
