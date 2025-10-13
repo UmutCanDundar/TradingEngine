@@ -32,16 +32,23 @@ struct PendingMessage
 };
 
 struct alignas(64) VenueFlags {
-    std::atomic<bool> halted;
-    std::atomic<bool> circuit_breaker;
+    std::atomic<bool> halted{false};
+    std::atomic<bool> circuit_breaker{false};
     uint8_t pad[62];
 };
 
-struct SymbolMeta
+struct alignas(64) SymbolMeta
 {
-    std::array<char, 8> symbol;
-    uint32_t lot_size = 0;
-    uint32_t tick_size = 0;
+    uint64_t instrument_id;
+    std::array<char, 8> symbol = {};
+    std::atomic<bool> halted{false};
+    uint8_t pad[47];
+
+    SymbolMeta(uint64_t id = 0, std::array<char, 8> sym = {}, bool halt = false) noexcept {instrument_id = id; symbol = sym; halted.store(halt, std::memory_order_relaxed);}
+    SymbolMeta(const SymbolMeta&) = delete;
+    SymbolMeta& operator=(const SymbolMeta&) = delete;
+    SymbolMeta(SymbolMeta&& other) noexcept {}
+    SymbolMeta& operator=(SymbolMeta&& other) noexcept { return *this; }
 };
 
 struct OrderKey
@@ -109,7 +116,7 @@ private:
 
     absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> market_order_map_;
     absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> our_order_map_;
-    absl::flat_hash_map<uint64_t, SymbolMeta> instrument_cache_;
+    std::array<absl::flat_hash_map<uint64_t, SymbolMeta>,VENUE_COUNT> instrument_cache_;
 
     std::array<std::vector<OrderHistory>, VENUE_COUNT> our_orders_all_venue_;
     std::array<VenueFlags, VENUE_COUNT> venue_flags_;
@@ -152,6 +159,7 @@ public:
 
     Order *add_our_order(Order *order) noexcept;
     inline auto const &get_venue_flags(Venue venue) const noexcept { return venue_flags_[static_cast<std::underlying_type_t<Venue>>(venue)]; }
+    inline auto const &get_symbolmeta(Venue venue, uint32_t instrument_id) const noexcept { return instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].find(instrument_id)->second; }
 
 private:
     Order *add_market_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
@@ -161,7 +169,9 @@ private:
     void update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept;
 
-    void handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg) noexcept;
+    void handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg, Venue venue) noexcept;
+    void handle_instrument_definition(const ITCHStockDirectoryMessage *msg, Venue venue) noexcept;
+
 
     inline void ReleaseOrder(OrderKey &&orderkey)
     {
@@ -171,7 +181,14 @@ private:
 
     static inline void copy_symbol(std::array<char, 8> &dest, std::string_view src) noexcept
     {
-        std::memcpy(dest.data(), src.data(), 8);
+        size_t len = src.size() < 8 ? src.size() : 8;
+        std::memcpy(dest.data(), src.data(), len);
+        if (len < 8) std::memset(dest.data() + len, 0, 8 - len);
+    }
+
+    static inline void copy_symbol(std::array<char, 8> &dest, const char* src) noexcept
+    {
+        std::memcpy(dest.data(), src, 8);
 
         for (size_t i = 0; i < 8; ++i)
         {
@@ -184,15 +201,17 @@ private:
     }
 
     // ===== FIX fillers =====
-    inline void fill_fix_new(Order &order, const FIXMessage *msg) noexcept
+    inline void fill_fix_new(Order &order, const FIXMessage *msg, Venue venue) noexcept
     {
         order.price = msg->price;
         order.quantity = msg->quantity;
         order.filled_quantity = 0; // Yeni emir, henüz doldurulmamış
         copy_symbol(order.symbol, msg->symbol);
+        order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
         order.side = (msg->side == '1') ? Side::Buy : Side::Sell; // FIX: '1'=Buy, '2'=Sell
         order.status = Status::New;
         order.syncState = SyncState::NewSeen;
+        order.venue = venue;
 
         order.order_id = absl::Hash<std::string_view>{}(msg->order_id);
         order.client_order_id = absl::Hash<std::string_view>{}(msg->cl_ord_id);
@@ -276,15 +295,25 @@ private:
         order.last_update_time = static_cast<uint64_t>(msg->transact_time);
     }
 
-    void fill_fix_exec_report(Order &order, const FIXMessage *msg) noexcept;
+    void fill_fix_exec_report(Order &order, const FIXMessage *msg, Venue venue) noexcept;
 
     // ===== ITCH fillers =====
-    inline void fill_itch_add(Order &order, const ITCHAddOrderMessage *msg) noexcept
+    inline void fill_itch_add(Order &order, const ITCHAddOrderMessage *msg, Venue venue) noexcept
     {
+        auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
+        
         order.price = static_cast<int64_t>(msg->price);
         order.quantity = msg->quantity;
         order.filled_quantity = 0;
-        copy_symbol(order.symbol, msg->stock);
+        order.instrument_id = msg->stock_locate;
+
+        auto it = instrument_map.find(order.instrument_id);
+        if (LIKELY(it != instrument_map.end()))
+        {
+            order.symbol = it->second.symbol;
+            order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
+        }
+
         order.side = (msg->side == 'B') ? Side::Buy : Side::Sell;
         order.status = Status::New;
 
@@ -298,12 +327,22 @@ private:
         // order.timestamp_ns = msg->timestamp;
     }
 
-    inline void fill_itch_add(Order &order, const ITCHAddOrderMPIDMessage *msg) noexcept
+    inline void fill_itch_add(Order &order, const ITCHAddOrderMPIDMessage *msg, Venue venue) noexcept
     {
+        auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
+
         order.price = static_cast<int64_t>(msg->price);
         order.quantity = msg->quantity;
         order.filled_quantity = 0;
-        copy_symbol(order.symbol, msg->stock);
+        order.instrument_id = msg->stock_locate;
+        
+        auto it = instrument_map.find(order.instrument_id);
+        if (LIKELY(it != instrument_map.end()))
+        {
+            order.symbol = it->second.symbol;
+            order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
+        }
+       
         order.side = (msg->side == 'B') ? Side::Buy : Side::Sell;
         order.status = Status::New;
 
@@ -349,32 +388,45 @@ private:
         order.last_update_time = msg->timestamp / 1000000000ULL;
     }
 
-    inline void fill_itch_trade(Order &order, const ITCHTradeMessage *msg) noexcept
+    inline void fill_itch_trade(Order &order, const ITCHTradeMessage *msg, Venue venue) noexcept
     {
         if (UNLIKELY(order.isOurOrder))
             return;
+        
+        auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
 
         order.filled_quantity += msg->quantity;
         order.last_exec_quantity = msg->quantity;
         order.last_update_time = msg->timestamp / 1000000000ULL;
-        copy_symbol(order.symbol, msg->stock);
+        order.instrument_id = msg->stock_locate;
+
+        auto it = instrument_map.find(order.instrument_id);
+        if (LIKELY(it != instrument_map.end()))
+        {
+            order.symbol = it->second.symbol;
+            order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
+        }
+
         order.price = static_cast<int64_t>(msg->price);
         // Genelde trade mesajları yeni emir yaratmaz, sadece execution bilgisi verir
     }
 
     // ===== SBE fillers =====
-    inline void fill_sbe_add(Order &order, const SBEAddOrderMessage *msg) noexcept
+    inline void fill_sbe_add(Order &order, const SBEAddOrderMessage *msg, Venue venue) noexcept
     {
+        auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
+
         order.price = static_cast<int64_t>(msg->price);
         order.quantity = msg->quantity;
         order.side = (msg->side == 0) ? Side::Buy : Side::Sell;
         order.status = Status::New;
-
         order.instrument_id = msg->header.schemaId; // veya header.version kullanılabilir
-        auto it = instrument_cache_.find(order.instrument_id);
-        if (it != instrument_cache_.end())
+
+        auto it = instrument_map.find(order.instrument_id);
+        if (LIKELY(it != instrument_map.end()))
         {
             order.symbol = it->second.symbol;
+            order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
         }
 
         order.timestamp = msg->header.version / 1'000'000'000ULL;
@@ -399,10 +451,12 @@ private:
         order.last_update_time = msg->header.version / 1'000'000'000ULL;
     }
 
-    inline void fill_sbe_trade(Order &order, const SBETradeMessage *msg) noexcept
+    inline void fill_sbe_trade(Order &order, const SBETradeMessage *msg, Venue venue) noexcept
     {
         if (UNLIKELY(order.isOurOrder))
             return;
+       
+        auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
 
         order.price = static_cast<int64_t>(msg->price);
         order.filled_quantity += msg->quantity;
@@ -414,10 +468,11 @@ private:
         else
             order.status = Status::Filled;
 
-        auto it = instrument_cache_.find(order.instrument_id);
-        if (it != instrument_cache_.end())
+        auto it = instrument_map.find(order.instrument_id);
+        if (LIKELY(it != instrument_map.end()))
         {
             order.symbol = it->second.symbol;
+            order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
         }
 
         order.last_update_time = msg->header.version / 1'000'000'000ULL;
@@ -427,7 +482,14 @@ private:
 
     inline void update_venue_halt_status(Venue venue, bool halted, bool circuit_breaker) noexcept
     {
-        venue_flags_[static_cast<std::underlying_type_t<Venue>>(venue)].halted.store(halted, std::memory_order_release);
-        venue_flags_[static_cast<std::underlying_type_t<Venue>>(venue)].circuit_breaker.store(circuit_breaker, std::memory_order_release);
+        auto venue_index = static_cast<std::underlying_type_t<Venue>>(venue);
+
+        venue_flags_[venue_index].halted.store(halted, std::memory_order_release);
+        venue_flags_[venue_index].circuit_breaker.store(circuit_breaker, std::memory_order_release);
+    }
+
+    inline void update_symbol_halt_status(uint64_t instrument_id, Venue venue, bool halted) noexcept
+    {
+        instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)][instrument_id].halted.store(halted, std::memory_order_release);
     }
 };

@@ -70,9 +70,9 @@ messages = [
         "fields": [
             ("SBEHeader header", None, "mesaj başlığı"),
             ("uint64_t instrumentId", "0", "ürün ID"),
-            ("uint32_t lotSize", "0", "lot büyüklüğü"),
+            ("char symbol[8]", "{}", "hisse adı"),
             ("uint8_t currencyCode[3]", "{'T','R','Y'}", "para birimi kodu"),
-            ("uint8_t pad[41]", None, "padding (64 byte hizalama için)"),
+            ("uint8_t pad[37]", None, "padding (64 byte hizalama için)"),
         ],
     },
     {

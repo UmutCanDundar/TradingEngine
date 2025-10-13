@@ -4,30 +4,30 @@
 #include <cstdint>
 
 struct alignas(64) ITCHAddOrderMessage {
-    char message_type = 'A';        // Mesaj Türü (A = Yeni Emir Ekle)
-    char pad1[7];                   // Doldurma (Padding)
-    uint64_t timestamp = 0;         // Mesaj zamanı (nanosanise cinsinden)
-    uint64_t order_ref = 0;         // Emir referans numarası (benzersiz)
-    char side = '\0';               // Emir yönü ('B' = Alış, 'S' = Satış)
-    char pad2[3];                   // Doldurma (Padding)
-    uint32_t quantity = 0;          // Emir miktarı
-    char stock[8] = "";             // Hisse senedi sembolü (8 karakter)
-    uint32_t price = 0;             // Fiyat (birim fiyat cinsinden)
-    char pad3[20];                  // Doldurma (64 byte hizalama için)
+    char message_type = 'A';          // Mesaj Türü (A = Yeni Emir Ekle)
+    char pad1[7];                     // Doldurma (Padding)
+    uint64_t timestamp = 0;           // Mesaj zamanı (nanosanise cinsinden)
+    uint64_t order_ref = 0;           // Emir referans numarası (benzersiz)
+    uint64_t stock_locate = 0;        // Hisse senedi id
+    char side = '\0';                 // Emir yönü ('B' = Alış, 'S' = Satış)
+    char pad2[3];                     // Doldurma (Padding)
+    uint32_t quantity = 0;            // Emir miktarı
+    uint32_t price = 0;               // Fiyat (birim fiyat cinsinden)
+    char pad3[20];                    // Doldurma (64 byte hizalama için)
 };
 
 struct alignas(64) ITCHAddOrderMPIDMessage {
-    char message_type = 'F';        // Mesaj Türü (F = MPID ile Yeni Emir Ekle)
-    char pad1[7];                   // Doldurma (Padding)
-    uint64_t timestamp = 0;         // Mesaj zamanı (nanosanise)
-    uint64_t order_ref = 0;         // Emir referans numarası
-    char side = '\0';               // Emir yönü ('B' = Alış, 'S' = Satış)
-    char pad2[3];                   // Doldurma (Padding)
-    uint32_t quantity = 0;          // Emir miktarı
-    char stock[8] = "";             // Hisse senedi sembolü
-    uint32_t price = 0;             // Fiyat
-    char mpid[4] = "";              // Market Katılımcı ID'si (MPID)
-    char pad3[16];                  // Doldurma (64 byte hizalama için)
+    char message_type = 'F';          // Mesaj Türü (F = MPID ile Yeni Emir Ekle)
+    char pad1[7];                     // Doldurma (Padding)
+    uint64_t timestamp = 0;           // Mesaj zamanı (nanosanise)
+    uint64_t order_ref = 0;           // Emir referans numarası
+    uint64_t stock_locate = 0;        // Hisse senedi id
+    char side = '\0';                 // Emir yönü ('B' = Alış, 'S' = Satış)
+    char pad2[3];                     // Doldurma (Padding)
+    uint32_t quantity = 0;            // Emir miktarı
+    uint32_t price = 0;               // Fiyat
+    char mpid[4] = {};                // Market Katılımcı ID'si (MPID)
+    char pad3[16];                    // Doldurma (64 byte hizalama için)
 };
 
 struct alignas(64) ITCHCancelMessage {
@@ -67,15 +67,15 @@ struct alignas(64) ITCHDeleteMessage {
 };
 
 struct alignas(64) ITCHTradeMessage {
-    char message_type = 'P';        // Mesaj Türü (P = İşlem)
-    char pad1[7];                   // Doldurma (Padding)
-    uint64_t timestamp = 0;         // İşlem zamanı
-    uint64_t order_ref = 0;         // İlgili emir referansı
-    char stock[8] = "";             // Hisse senedi sembolü
-    uint32_t quantity = 0;          // İşlem miktarı
-    uint32_t price = 0;             // İşlem fiyatı
-    char match_id[4] = "";          // İşlem eşleşme ID'si
-    char pad2[28];                  // Doldurma (64 byte hizalama için)
+    char message_type = 'P';          // Mesaj Türü (P = İşlem)
+    char pad1[7];                     // Doldurma (Padding)
+    uint64_t timestamp = 0;           // İşlem zamanı
+    uint64_t order_ref = 0;           // İlgili emir referansı
+    uint64_t stock_locate = 0;        // Hisse senedi id
+    uint32_t quantity = 0;            // İşlem miktarı
+    uint32_t price = 0;               // İşlem fiyatı
+    char match_id[4] = {};            // İşlem eşleşme ID'si
+    char pad2[28];                    // Doldurma (64 byte hizalama için)
 };
 
 struct alignas(64) ITCHSystemEventMessage {
@@ -86,7 +86,25 @@ struct alignas(64) ITCHSystemEventMessage {
     char pad2[47];                  // Doldurma (64 byte hizalama için)
 };
 
-enum ITCHTypes : uint8_t {   A = 0,  F = 1,  X = 2,  E = 3,  C = 4,  D = 5,  P = 6,  S = 7,  unknownITCHtype = 99 };
+struct alignas(64) ITCHStockDirectoryMessage {
+    char message_type = 'R';          // Mesaj Türü (R = Stock Directory) | offset: 0, len: 1
+    uint16_t stock_locate = 0;        // Hisse senedi ID | offset: 1, len: 2
+    char pad1[5];                     // Padding | offset: 3, len: 5
+    uint64_t timestamp = 0;           // Olay zamanı | offset: 8, len: 8
+    char stock[8] = {};               // Hisse senedi sembolü | offset: 16, len: 8
+    char pad2[40];                    // Padding | offset: 24, len: 40
+};
+
+struct alignas(64) ITCHTradingStateMessage {
+    char message_type = 'H';          // Mesaj Türü (H = Trading State) | offset: 0, len: 1
+    uint16_t stock_locate = 0;        // Hisse senedi ID | offset: 1, len: 2
+    char pad1[5];                     // Padding | offset: 3, len: 5
+    uint64_t timestamp = 0;           // Olay zamanı | offset: 8, len: 8
+    char trading_state = 'T';         // T=Trading, H=Halted, P=Paused, Q=Quotation | offset: 24, len: 1
+    char pad2[39];                    // Padding | offset: 25, len: 39
+};
+
+enum ITCHTypes : uint8_t {   A = 0,  F = 1,  X = 2,  E = 3,  C = 4,  D = 5,  P = 6,  S = 7,  R = 8,  H = 9,  unknownITCHtype = 99 };
 
 inline constexpr ITCHTypes MessageIndex(char type) {
 
@@ -99,6 +117,8 @@ inline constexpr ITCHTypes MessageIndex(char type) {
       case 'D': return ITCHTypes::D;
       case 'P': return ITCHTypes::P;
       case 'S': return ITCHTypes::S;
+      case 'R': return ITCHTypes::R;
+      case 'H': return ITCHTypes::H;
       default: return ITCHTypes::unknownITCHtype;
    }
 }

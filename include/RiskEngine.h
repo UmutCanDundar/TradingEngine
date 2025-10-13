@@ -180,6 +180,7 @@ enum class RiskRejectReason : uint32_t
     // Market state
     VenueTradingHalted = 1 << 19,      // Venue/sembol işlem durduruldu (halt)
     CircuitBreakerTriggered = 1 << 20, // İç devre kesici tetiklendi
+    SymbolTradingHalted = 1 << 28,
 
     // Technical
     MarketDataUnavailable = 1 << 21,  // Market verisi yok (price check yapılamıyor)
@@ -462,7 +463,6 @@ private:  // Helper functions associated with the public functions
     inline bool check_venue_halt_and_circuit(Order &order) noexcept
     {
         bool venue_halted = store_ram_.get_venue_flags(order.venue).halted.load(std::memory_order_acquire);
-
         if (UNLIKELY(venue_halted)) 
         {
                 OrderWithRejectReason rej{order, static_cast<uint32_t>(RiskRejectReason::VenueTradingHalted)};
@@ -471,13 +471,21 @@ private:  // Helper functions associated with the public functions
         }
         
         bool circuit_breaker = store_ram_.get_venue_flags(order.venue).circuit_breaker.load(std::memory_order_acquire);
-
         if (UNLIKELY(circuit_breaker))
         {
                 OrderWithRejectReason rej{order, static_cast<uint32_t>(RiskRejectReason::CircuitBreakerTriggered)};
                 risk_to_strategy_.push(rej);
                 return true;
         }
+
+        bool symbol_halted = store_ram_.get_symbolmeta(order.venue, order.instrument_id).halted.load(std::memory_order_acquire);
+        if (UNLIKELY(symbol_halted))
+        {
+                OrderWithRejectReason rej{order, static_cast<uint32_t>(RiskRejectReason::SymbolTradingHalted)};
+                risk_to_strategy_.push(rej);
+                return true;
+        }
+
         return false;
     }
 

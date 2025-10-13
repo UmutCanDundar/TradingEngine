@@ -21,7 +21,7 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       std::memcpy(&m->order_ref, data + 9, 8);
       std::memcpy(&m->side, data + 17, 1);
       std::memcpy(&m->quantity, data + 18, 4);
-      std::memcpy(&m->stock, data + 22, 8);
+     // std::memcpy(&m->stock, data + 22, 8);
       std::memcpy(&m->price, data + 30, 4);
       msg = m;
    };
@@ -36,7 +36,7 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       std::memcpy(&m->order_ref, data + 9, 8);
       std::memcpy(&m->side, data + 17, 1);
       std::memcpy(&m->quantity, data + 18, 4);
-      std::memcpy(&m->stock, data + 22, 8);
+      //std::memcpy(&m->stock, data + 22, 8);
       std::memcpy(&m->price, data + 30, 4);
       std::memcpy(&m->mpid, data + 34, 4);
       msg = m;
@@ -98,7 +98,7 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       std::memcpy(&m->message_type, data, 1);
       std::memcpy(&m->timestamp, data + 1, 8);
       std::memcpy(&m->order_ref, data + 9, 8);
-      std::memcpy(&m->stock, data + 17, 8);
+     // std::memcpy(&m->stock, data + 17, 8);
       std::memcpy(&m->quantity, data + 25, 4);
       std::memcpy(&m->price, data + 29, 4);
       std::memcpy(&m->match_id, data + 33, 4);

@@ -21,14 +21,14 @@ void ErrorHandler::BackoffRetry() noexcept
 void ErrorHandler::logRetry(const char *msg) noexcept
 {
    char buffer[LOG_BUF_SIZE];
-   snprintf(buffer, sizeof(buffer), "%s => RETRIED", msg);
+   snprintf(buffer, LOG_BUF_SIZE, "%s => RETRIED", msg);
    LOG_ERROR(std::string(buffer));
 }
 
 void ErrorHandler::logAbort(const char *msg) noexcept
 {
    char buffer[LOG_BUF_SIZE];
-   snprintf(buffer, sizeof(buffer), "%s => ABORTED", msg);
+   snprintf(buffer, LOG_BUF_SIZE, "%s => ABORTED", msg);
    LOG_ERROR(std::string(buffer));
 }
 

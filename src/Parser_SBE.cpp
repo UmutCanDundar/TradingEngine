@@ -87,7 +87,7 @@ std::array<Parser_SBE::MessageHandlerFunc, Parser_SBE::MAX_MESSAGES> Parser_SBE:
 
         std::memcpy(&m->header, data, sizeof(SBEHeader));
         std::memcpy(&m->instrumentId, data + 8, 8);
-        std::memcpy(&m->lotSize, data + 16, 4);
+        //std::memcpy(&m->lotSize, data + 16, 4);
         std::memcpy(&m->currencyCode, data + 20, 3);
         msg = m;
     };

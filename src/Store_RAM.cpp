@@ -15,15 +15,16 @@ Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &stor
    }
 }
 
-void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg) noexcept
+void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg, Venue venue) noexcept
 {
-   SymbolMeta meta;
-   std::string_view symbol_src(reinterpret_cast<const char *>(msg->currencyCode), 3);
-   copy_symbol(meta.symbol, symbol_src);
-   meta.lot_size = msg->lotSize;
-   meta.tick_size = 1; // Eğer feed veriyorsa gerçek tick_size kullanılır
+   auto [it, inserted] = instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].emplace(msg->instrumentId, SymbolMeta{msg->instrumentId});
+   copy_symbol(it->second.symbol, msg->symbol);
+}
 
-   instrument_cache_[msg->instrumentId] = meta;
+void Store_RAM::handle_instrument_definition(const ITCHStockDirectoryMessage *msg, Venue venue) noexcept
+{
+   auto [it, inserted] = instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].emplace(msg->stock_locate, SymbolMeta{msg->stock_locate});
+   copy_symbol(it->second.symbol, msg->stock);
 }
 
 void Store_RAM::store() noexcept
@@ -144,7 +145,7 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
    {
    case '8': // ExecutionReport
       if (allowed_exec_type[static_cast<uint8_t>(msg->exec_type)])
-         fill_fix_exec_report(*order, msg);
+         fill_fix_exec_report(*order, msg, fixMsg.venue);
       else
          return;
       break;
@@ -198,7 +199,7 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                      if constexpr (std::is_same_v<MsgType, ITCHAddOrderMessage> ||
                                  std::is_same_v<MsgType, ITCHAddOrderMPIDMessage>)
                      {
-                        this->fill_itch_add(*order, msg);
+                        this->fill_itch_add(*order, msg, itchMsg.venue);
                         this->marketbook_.add_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, ITCHCancelMessage>)
@@ -218,7 +219,7 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                      }
                      else if constexpr (std::is_same_v<MsgType, ITCHTradeMessage>)
                      {
-                        this->fill_itch_trade(*order, msg);
+                        this->fill_itch_trade(*order, msg, itchMsg.venue);
                         this->marketbook_.trade_order(*order);
                      }
                     
@@ -236,7 +237,16 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                         this->store_to_strategy_.push(order);
                         this->store_to_risk_.push(order);
                      }
-               } 
+               }
+               else if constexpr (std::is_same_v<MsgType, ITCHStockDirectoryMessage>)
+               {
+                  this->handle_instrument_definition(msg, itchMsg.venue);
+               }
+               else if constexpr (std::is_same_v<MsgType, ITCHTradingStateMessage>)
+               {
+                  bool halted = msg->trading_state != 'T';
+                  this->update_symbol_halt_status(msg->stock_locate, itchMsg.venue, halted);
+               }
                else if constexpr (std::is_same_v<MsgType, ITCHSystemEventMessage>)
                {
                   static constexpr std::array<std::pair<bool,bool>, 128> event_map = [] {
@@ -287,7 +297,7 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
 
                      if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage>)
                      {
-                        this->fill_sbe_add(*order, msg);
+                        this->fill_sbe_add(*order, msg, sbeMsg.venue);
                         this->marketbook_.add_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, SBEModifyOrderMessage>)
@@ -302,7 +312,7 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                      }
                      else if constexpr (std::is_same_v<MsgType, SBETradeMessage>)
                      {
-                        this->fill_sbe_trade(*order, msg);
+                        this->fill_sbe_trade(*order, msg, sbeMsg.venue);
                         this->marketbook_.trade_order(*order);
                      }
 
@@ -324,7 +334,7 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
 
                else if constexpr (std::is_same_v<MsgType, SBEInstrumentDefinitionMessage>)
                {
-                  this->handle_instrument_definition(msg);
+                  this->handle_instrument_definition(msg, sbeMsg.venue);
                }
 
                else if constexpr (std::is_same_v<MsgType, SBEMarketStatusMessage>)
@@ -349,12 +359,12 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
             },sbeMsg.msg);
 }
 
-void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg) noexcept
+void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg, Venue venue) noexcept
 {
    switch (msg->ord_status)
    {
    case '0': // New
-      fill_fix_new(order, msg);
+      fill_fix_new(order, msg, venue);
       break;
    case '1': // Partially Filled
       fill_fix_partial(order, msg);
@@ -372,7 +382,7 @@ void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg) noexce
       fill_fix_pendingcancel(order, msg);
       break;
    case '5': // Replaced
-      fill_fix_new(order, msg);
+      fill_fix_new(order, msg, venue);
       break;
    case 'E': // Pending Replace
       fill_fix_pendingreplace(order, msg);
