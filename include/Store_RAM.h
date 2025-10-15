@@ -179,7 +179,7 @@ private:
         our_order_map_.erase(orderkey);
     }
 
-    static inline void copy_symbol(std::array<char, 8> &dest, std::string_view src) noexcept
+    static inline void copy_symbol(std::array<char, 8> &dest, const std::string_view src) noexcept
     {
         size_t len = src.size() < 8 ? src.size() : 8;
         std::memcpy(dest.data(), src.data(), len);
@@ -219,10 +219,10 @@ private:
         order.timestamp = static_cast<uint64_t>(msg->transact_time);
         order.last_update_time = order.timestamp;
 
-        order.message_type = static_cast<uint16_t>(msg->msg_type);
+        order.message_type = msg->msg_type;
         order.protocol = Protocol::FIX;
 
-        order.time_in_force = static_cast<uint8_t>(msg->time_in_force);
+        order.time_in_force = msg->time_in_force;
         order.order_type = static_cast<OrderType>(msg->ord_type - '0');
         
         order.StatusesPreNew.fill(Status::Unknown);
@@ -303,7 +303,7 @@ private:
         auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
         
         order.price = static_cast<int64_t>(msg->price);
-        order.quantity = msg->quantity;
+        order.quantity = msg->shares;
         order.filled_quantity = 0;
         order.instrument_id = msg->stock_locate;
 
@@ -318,10 +318,10 @@ private:
         order.status = Status::New;
 
         order.order_id = msg->order_ref;
-        order.timestamp = msg->timestamp / 1000000000ULL; // nanosaniyeyi saniyeye çevir
+        order.timestamp = msg->timestamp; // nanosaniyeyi saniyeye çevir
         order.last_update_time = order.timestamp;
 
-        order.message_type = static_cast<uint16_t>(msg->message_type);
+        order.message_type = msg->message_type;
         order.protocol = Protocol::ITCH;
 
         // order.timestamp_ns = msg->timestamp;
@@ -332,7 +332,7 @@ private:
         auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
 
         order.price = static_cast<int64_t>(msg->price);
-        order.quantity = msg->quantity;
+        order.quantity = msg->shares;
         order.filled_quantity = 0;
         order.instrument_id = msg->stock_locate;
         
@@ -347,10 +347,10 @@ private:
         order.status = Status::New;
 
         order.order_id = msg->order_ref;
-        order.timestamp = msg->timestamp / 1000000000ULL;
+        order.timestamp = msg->timestamp;
         order.last_update_time = order.timestamp;
 
-        order.message_type = static_cast<uint16_t>(msg->message_type);
+        order.message_type = msg->message_type;
         order.protocol = Protocol::ITCH;
 
         // order.timestamp_ns = msg->timestamp;
@@ -360,15 +360,15 @@ private:
     inline void fill_itch_cancel(Order &order, const ITCHCancelMessage *msg) noexcept
     {
         order.status = Status::Cancelled;
-        order.last_update_time = msg->timestamp / 1000000000ULL;
-        order.cancelled_quantity = msg->cancelled_quantity;
+        order.last_update_time = msg->timestamp;
+        order.cancelled_quantity = msg->cancelled_shares;
     }
 
     inline void fill_itch_exec_report(Order &order, const ITCHExecutedMessage *msg) noexcept
     {
-        order.filled_quantity += msg->executed_quantity;
-        order.last_exec_quantity = msg->executed_quantity;
-        order.last_update_time = msg->timestamp / 1000000000ULL;
+        order.filled_quantity += msg->executed_shares;
+        order.last_exec_quantity = msg->executed_shares;
+        order.last_update_time = msg->timestamp;
         if (order.filled_quantity < order.quantity)
             order.status = Status::Partial;
         else
@@ -385,7 +385,27 @@ private:
     {
         order.status = Status::Cancelled;
         order.cancelled_quantity = order.quantity - order.filled_quantity;
-        order.last_update_time = msg->timestamp / 1000000000ULL;
+        order.last_update_time = msg->timestamp;
+    }
+
+    inline void fill_itch_replace(Order &order, const ITCHReplaceMessage *msg, Venue venue) noexcept 
+    {
+        auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
+
+        order.order_id = msg->new_order_ref;
+        order.price = msg->price;
+        order.quantity = msg->shares;
+        order.instrument_id = msg->stock_locate;
+
+        auto it = instrument_map.find(order.instrument_id);
+        if (LIKELY(it != instrument_map.end()))
+        {
+            order.symbol = it->second.symbol;
+            order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue), order.symbol);
+        }
+
+        order.message_type = msg->message_type;
+        order.status = Status::New;
     }
 
     inline void fill_itch_trade(Order &order, const ITCHTradeMessage *msg, Venue venue) noexcept
@@ -395,9 +415,9 @@ private:
         
         auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
 
-        order.filled_quantity += msg->quantity;
-        order.last_exec_quantity = msg->quantity;
-        order.last_update_time = msg->timestamp / 1000000000ULL;
+        order.filled_quantity += msg->shares;
+        order.last_exec_quantity = msg->shares;
+        order.last_update_time = msg->timestamp;
         order.instrument_id = msg->stock_locate;
 
         auto it = instrument_map.find(order.instrument_id);
@@ -429,10 +449,10 @@ private:
             order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
         }
 
-        order.timestamp = msg->header.version / 1'000'000'000ULL;
+        order.timestamp = msg->header.version;
         order.last_update_time = order.timestamp;
 
-        order.message_type = msg->header.templateId;
+        order.message_type = static_cast<uint8_t>(msg->header.templateId);
         order.protocol = Protocol::SBE;
 
         // order.timestamp_ns = msg->header.version;
@@ -441,14 +461,14 @@ private:
     inline void fill_sbe_modify(Order &order, const SBEModifyOrderMessage *msg) noexcept
     {
         order.quantity = msg->newQuantity;
-        order.last_update_time = msg->header.version / 1'000'000'000ULL;
+        order.last_update_time = msg->header.version;
     }
 
     inline void fill_sbe_delete(Order &order, const SBEDeleteOrderMessage *msg) noexcept
     {
         order.status = Status::Cancelled;
         order.cancelled_quantity = order.quantity - order.filled_quantity;
-        order.last_update_time = msg->header.version / 1'000'000'000ULL;
+        order.last_update_time = msg->header.version;
     }
 
     inline void fill_sbe_trade(Order &order, const SBETradeMessage *msg, Venue venue) noexcept
@@ -475,8 +495,8 @@ private:
             order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
         }
 
-        order.last_update_time = msg->header.version / 1'000'000'000ULL;
-        order.message_type = msg->header.templateId;
+        order.last_update_time = msg->header.version;
+        order.message_type = static_cast<uint8_t>(msg->header.templateId);
         order.protocol = Protocol::SBE;
     }
 

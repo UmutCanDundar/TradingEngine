@@ -217,6 +217,12 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                         this->fill_itch_delete(*order, msg);
                         this->marketbook_.delete_order(*order);
                      }
+                     else if constexpr (std::is_same_v<MsgType, ITCHReplaceMessage>)
+                     {
+                        this->marketbook_.delete_order(*order);
+                        this->fill_itch_replace(*order, msg, itchMsg.venue);
+                        this->marketbook_.add_order(*order);
+                     }
                      else if constexpr (std::is_same_v<MsgType, ITCHTradeMessage>)
                      {
                         this->fill_itch_trade(*order, msg, itchMsg.venue);

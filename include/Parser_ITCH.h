@@ -17,8 +17,11 @@ using ITCHMessageTypes = std::tuple<
     ITCHExecutedMessage,
     ITCHExecutedWithPriceMessage,
     ITCHDeleteMessage,
+    ITCHReplaceMessage,
     ITCHTradeMessage,
-    ITCHSystemEventMessage>;
+    ITCHSystemEventMessage,
+    ITCHStockDirectoryMessage,
+    ITCHTradingStateMessage>;
 
 using ITCHMessage = std::variant<
     ITCHAddOrderMessage *,
@@ -27,8 +30,11 @@ using ITCHMessage = std::variant<
     ITCHExecutedMessage *,
     ITCHExecutedWithPriceMessage *,
     ITCHDeleteMessage *,
+    ITCHReplaceMessage *,
     ITCHTradeMessage *,
-    ITCHSystemEventMessage *>;
+    ITCHSystemEventMessage *,
+    ITCHStockDirectoryMessage *,
+    ITCHTradingStateMessage *>;
 
 class Parser_ITCH
 {

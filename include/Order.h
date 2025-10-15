@@ -67,12 +67,12 @@ enum class Status : uint8_t
 struct alignas(64) Order
 {
    // 🔴 HOT PATH (en sık erişilen alanlar)
-   int64_t price = 0;            // Fixed-point scaled
-   uint32_t quantity = 0;        // Original order quantity
-   uint32_t filled_quantity = 0; // Cumulative filled quantity
+   int64_t price = 0;               // Fixed-point scaled
+   uint32_t quantity = 0;           // Original order quantity
+   uint32_t filled_quantity = 0;    // Cumulative filled quantity
    uint32_t cancelled_quantity = 0;
    uint32_t last_exec_quantity = 0;
-   uint32_t symbol_index = 0;   // From Hashtable 
+   uint32_t symbol_index = 0;       // From Hashtable 
    Side side = Side::Unknown;       // Buy/Sell
    Status status = Status::Unknown; // New/Partial/Filled/Cancelled
    Venue venue;                     // NYSE, NASDAQ, etc.
@@ -82,23 +82,24 @@ struct alignas(64) Order
    OrderType order_type = OrderType::Unknown;   // Limit, Market, Stop
    SyncState syncState = SyncState::WaitingNew;
    std::array<Status,2> StatusesPreNew;
+   uint16_t instrument_id = 0; // SBE/ITCH
    uint8_t time_in_force = 0;  // IOC, GTC, etc.
-   uint8_t pad1[1]; // 64-byte alignment          
+  
+   uint8_t pad1[7]; // 64-byte alignment
 
    // 🟠 LOOKUP & ROUTING
-   uint64_t order_id = 0;        // Exchange-assigned unique order ID
    uint64_t client_order_id = 0; // Strategy-assigned client order ID
    uint64_t last_update_time = 0; // Last modification time
    // Cache-Line
+   uint64_t order_id = 0;        // Exchange-assigned unique order ID
    uint64_t timestamp = 0;       // Order creation time 
 
-   // 🟡 PROTOCOL - SYMBOL METADATA
+   // 🟡 PROTOCOL - SYMBOL DATA
    std::array<char, 8> symbol{};  // Fixed-size symbol for low-latency lookup
-   uint32_t instrument_id = 0; // SBE/ITCH
    uint8_t message_type = 0;     // Message type within the protocol      
    
    // 🟢 OPTIONAL (protokol bazlı karar & advanced tactics)
    uint8_t priority_level = 0; // HFT queue tactics
-   
-   uint8_t pad2[42]; // 64-byte alignment
+ 
+   uint8_t pad2[38]; // 64-byte alignment
 };
