@@ -3,8 +3,8 @@
 Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscOrderQueue_t &store_to_risk, spscDbQueue_t &store_to_db, MarketBook &marketbook,HashTables &hashtables) noexcept
     : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_risk_(store_to_risk), store_to_db_(store_to_db), marketbook_(marketbook), hashtables_(hashtables)
 {
-   market_order_map_.reserve(ORDER_POOL_CAPACITY);
-   our_order_map_.reserve(ORDER_POOL_CAPACITY);
+   market_order_map_.reserve(ORDER_MAP_CAPACITY);
+   our_order_map_.reserve(ORDER_MAP_CAPACITY);
 
    for (size_t i = MARKETORDER_LAST_INDEX; i < ORDER_POOL_CAPACITY; i++)
       store_to_strategy_free_slot_.push(&order_pool_[i]);
@@ -35,7 +35,6 @@ void Store_RAM::store() noexcept
    {
       PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>> PendingMessage;
       pending_to_strategy_.pop(PendingMessage);
-      PendingMessage.order->canModify = 0x00;
       msgWithVenue = PendingMessage.msgWithVenue;
    }
    else
@@ -51,24 +50,26 @@ void Store_RAM::store() noexcept
 
 Order *Store_RAM::add_our_order(Order *order) noexcept
 {
-   if (UNLIKELY(our_next_slot >= ORDER_POOL_CAPACITY))
-   {
-      our_next_slot = MARKETORDER_LAST_INDEX;
-      our_map_full = true;
-   }
-   if (our_map_full)
-      our_order_map_.erase(OrderKey{order_pool_[our_next_slot].order_id, order_pool_[our_next_slot].protocol, order_pool_[our_next_slot].venue});
-
-   our_order_map_[OrderKey{order->client_order_id, order->protocol, order->venue}] = order;
-
-   //order history per symbol
-   auto &orderhistory_for_a_venue = our_orders_all_venue_[static_cast<uint8_t>(order->venue)];
-   auto &orderhistory_for_a_symbol = orderhistory_for_a_venue[hashtables_.getIndex(static_cast<uint8_t>(order->venue),order->symbol)];
-   auto &orders = orderhistory_for_a_symbol.orders;
-   auto &index = orderhistory_for_a_symbol.write_index;
    
-   orders[index & (orders.size() - 1)] = order;
-   index++;
+   if (static uint64_t triggered = 0; UNLIKELY(our_order_map_.size() >= OUR_ORDER_MAP_THRESHOLD))
+   {
+      if(!(triggered++ & (ORDER_MAP_CAPACITY -1))) 
+         our_next_slot = MARKETORDER_LAST_INDEX;
+
+      Order* order_to_release = &order_pool_[our_next_slot];
+      OrderKey orderkey = OrderKey{order_to_release->client_order_id, order_to_release->protocol, order_to_release->venue};
+      auto &orderhistory_for_a_venue = our_orders_all_venue_[static_cast<uint8_t>(order_to_release->venue)];
+      auto &orderhistory_for_a_symbol = orderhistory_for_a_venue[hashtables_.getIndex(static_cast<uint8_t>(order_to_release->venue), order_to_release->symbol)];
+
+      ReleaseOrder(orderkey, orderhistory_for_a_symbol, order_to_release);
+   }
+   
+   our_order_map_[OrderKey{order->client_order_id, order->protocol, order->venue}] = order;
+   our_next_slot++;
+
+   auto &orderhistory_for_a_venue = our_orders_all_venue_[static_cast<uint8_t>(order->venue)];
+   auto &orderhistory_for_a_symbol = orderhistory_for_a_venue[hashtables_.getIndex(static_cast<uint8_t>(order->venue), order->symbol)];
+   orderhistory_for_a_symbol.push(order);
 
    return order;
 }
@@ -82,7 +83,7 @@ Order *Store_RAM::add_market_order(uint64_t order_id, Protocol protocol, Venue v
       market_map_full = true;
    }
    if (market_map_full)
-      market_order_map_.erase(OrderKey{order_pool_[market_next_slot].order_id, order_pool_[market_next_slot].protocol, order_pool_[market_next_slot].venue});
+      market_order_map_.erase(OrderKey{order_pool_[market_next_slot].client_order_id, order_pool_[market_next_slot].protocol, order_pool_[market_next_slot].venue});
 
    Order *order = &order_pool_[market_next_slot];
    market_order_map_[OrderKey{order_id, protocol, venue}] = order;
@@ -154,21 +155,13 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
       break;
    }
 
+   order->canModify = 0x00;
+
    store_to_db_.push(fixMsg);
    store_to_db_.push(order);
-
-   if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
-   {
-      if (order->canModify == RISK_DONE)
-         ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
-      else
-         store_to_risk_.push(order);
-   }
-   else
-   {
-      store_to_strategy_.push(order);
-      store_to_risk_.push(order);
-   }
+   store_to_strategy_.push(order);
+   store_to_risk_.push(order);
+   
 }
 
 // ================= ITCH Handler ===================
@@ -211,6 +204,7 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                                        std::is_same_v<MsgType, ITCHExecutedWithPriceMessage>)
                      {
                         this->fill_itch_exec_report(*order, msg);
+                        this->marketbook_.exec_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, ITCHDeleteMessage>)
                      {
@@ -226,23 +220,14 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                      else if constexpr (std::is_same_v<MsgType, ITCHTradeMessage>)
                      {
                         this->fill_itch_trade(*order, msg, itchMsg.venue);
-                        this->marketbook_.trade_order(*order);
                      }
-                    
-                     this->store_to_db_.push(order);
 
-                     if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
-                     {
-                        if (order->canModify == RISK_DONE)
-                           this->ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
-                        else
-                           this->store_to_risk_.push(order);
-                     }
-                     else
-                     {
-                        this->store_to_strategy_.push(order);
-                        this->store_to_risk_.push(order);
-                     }
+                     order->canModify = 0x00;
+
+                     this->store_to_db_.push(order);
+                     this->store_to_strategy_.push(order);
+                     this->store_to_risk_.push(order);
+                     
                }
                else if constexpr (std::is_same_v<MsgType, ITCHStockDirectoryMessage>)
                {
@@ -319,23 +304,15 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                      else if constexpr (std::is_same_v<MsgType, SBETradeMessage>)
                      {
                         this->fill_sbe_trade(*order, msg, sbeMsg.venue);
-                        this->marketbook_.trade_order(*order);
+                        this->marketbook_.exec_order(*order);
                      }
 
+                     order->canModify = 0x00;
+                     
                      this->store_to_db_.push(order);
-
-                     if (UNLIKELY(order->isOurOrder && order->status == Status::Filled))
-                     {
-                        if (order->canModify == RISK_DONE)
-                           this->ReleaseOrder(OrderKey{order->order_id, order->protocol, order->venue});
-                        else
-                           this->store_to_risk_.push(order);
-                     }
-                     else
-                     {
-                        this->store_to_strategy_.push(order);
-                        this->store_to_risk_.push(order);
-                     }
+                     this->store_to_strategy_.push(order);
+                     this->store_to_risk_.push(order);
+                     
                }
 
                else if constexpr (std::is_same_v<MsgType, SBEInstrumentDefinitionMessage>)

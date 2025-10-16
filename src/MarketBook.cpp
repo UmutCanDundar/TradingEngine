@@ -79,7 +79,7 @@ void MarketBook::delete_order(const Order &order) noexcept
    }
 }
 
-void MarketBook::trade_order(const Order &order) noexcept
+void MarketBook::exec_order(const Order &order) noexcept
 {
    if (UNLIKELY(order.isOurOrder))
         return;

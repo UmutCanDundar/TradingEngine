@@ -30,7 +30,7 @@ public:
     void modify_order(const Order &order, uint32_t newQuantity) noexcept;
     void cancel_order(const Order &order) noexcept;
     void delete_order(const Order &order) noexcept;
-    void trade_order(const Order &order) noexcept;
+    void exec_order(const Order &order) noexcept;
 
     inline SymbolBook &get_symBook(const Order &order) noexcept
     {
