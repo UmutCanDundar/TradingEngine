@@ -8,6 +8,7 @@ enum class Protocol : uint8_t
 
    FIX,
    ITCH,
+   OUCH,
    SBE,
    Unknown,
 };
@@ -21,3 +22,4 @@ enum class Venue : uint8_t
 };
 
 inline constexpr size_t VENUE_COUNT = 3;
+inline constexpr size_t PROTOCOL_COUNT = 4;

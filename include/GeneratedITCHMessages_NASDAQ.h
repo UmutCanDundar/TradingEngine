@@ -1,7 +1,10 @@
 // Generated automatically. DO NOT EDIT!
+// NASDAQ ITCH Messages Struct Definitions
 #pragma once
 
 #include <cstdint>
+
+namespace NASDAQ {
 
 struct alignas(64) ITCHAddOrderMessage {
     uint64_t timestamp = 0;              // Mesaj zamanı (nanosecond)  offset: 5 | len: 6
@@ -160,4 +163,6 @@ inline constexpr ITCHTypes MessageIndex(char type) {
       case 'H': return ITCHTypes::H;
       default: return ITCHTypes::unknownITCHtype;
    }
+}
+
 }

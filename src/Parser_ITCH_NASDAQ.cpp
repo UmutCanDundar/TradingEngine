@@ -1,21 +1,21 @@
-#include "Parser_ITCH.h"
+#include "Parser_ITCH_NASDAQ.h"
 #include "Endian.h"
 
-MessagePools<ITCHMessageTypes> Parser_ITCH::itch_pools_;
+MessagePools<NASDAQ::ITCHMessageTypes> Parser_ITCH_NASDAQ::itch_pools_;
 
-Parser_ITCH::Parser_ITCH() noexcept
+Parser_ITCH_NASDAQ::Parser_ITCH_NASDAQ() noexcept
 {
    itch_pools_.initialize_all();
 }
 
-std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_ITCH::makeMessageHandlersLookup() noexcept
+std::array<Parser_ITCH_NASDAQ::MessageHandlerFunc, Parser_ITCH_NASDAQ::MAX_MESSAGES> Parser_ITCH_NASDAQ::makeMessageHandlersLookup() noexcept
 {
    alignas(64) std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
 
-   handlers[0] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[0] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHAddOrderMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHAddOrderMessage>().acquire(m);
+      NASDAQ::ITCHAddOrderMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHAddOrderMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->order_ref = Endian::read_u64_be(data + 11);
@@ -30,10 +30,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[1] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[1] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHAddOrderMPIDMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHAddOrderMPIDMessage>().acquire(m);
+      NASDAQ::ITCHAddOrderMPIDMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHAddOrderMPIDMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->order_ref = Endian::read_u64_be(data + 11);
@@ -48,10 +48,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[2] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[2] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHCancelMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHCancelMessage>().acquire(m);
+      NASDAQ::ITCHCancelMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHCancelMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->order_ref = Endian::read_u64_be(data + 11);
@@ -63,10 +63,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[3] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[3] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHExecutedMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHExecutedMessage>().acquire(m);
+      NASDAQ::ITCHExecutedMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHExecutedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->order_ref = Endian::read_u64_be(data + 11);
@@ -79,10 +79,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[4] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[4] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHExecutedWithPriceMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHExecutedWithPriceMessage>().acquire(m);
+      NASDAQ::ITCHExecutedWithPriceMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHExecutedWithPriceMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->order_ref = Endian::read_u64_be(data + 11);
@@ -97,10 +97,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[5] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[5] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHDeleteMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHDeleteMessage>().acquire(m);
+      NASDAQ::ITCHDeleteMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHDeleteMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->order_ref = Endian::read_u64_be(data + 11);
@@ -111,10 +111,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[6] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[6] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHReplaceMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHReplaceMessage>().acquire(m);
+      NASDAQ::ITCHReplaceMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHReplaceMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->order_ref = Endian::read_u64_be(data + 11);
@@ -128,10 +128,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[7] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[7] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHTradeMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHTradeMessage>().acquire(m);
+      NASDAQ::ITCHTradeMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHTradeMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->order_ref = Endian::read_u64_be(data + 11);
@@ -147,10 +147,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[8] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[8] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHSystemEventMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHSystemEventMessage>().acquire(m);
+      NASDAQ::ITCHSystemEventMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHSystemEventMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->stock_locate = Endian::read_u16_be(data + 1);
@@ -161,10 +161,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[9] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[9] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHStockDirectoryMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHStockDirectoryMessage>().acquire(m);
+      NASDAQ::ITCHStockDirectoryMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHStockDirectoryMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->round_lot_size = Endian::read_u32_be(data + 21);
@@ -188,10 +188,10 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
       msg = m;
    };
 
-   handlers[10] = [](const char *data, ITCHMessage &msg) noexcept
+   handlers[10] = [](const char *data, NASDAQ::ITCHMessage &msg) noexcept
    {
-      ITCHTradingStateMessage *m = nullptr;
-      itch_pools_.get_pool<ITCHTradingStateMessage>().acquire(m);
+      NASDAQ::ITCHTradingStateMessage *m = nullptr;
+      itch_pools_.get_pool<NASDAQ::ITCHTradingStateMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 5);
       m->stock_locate = Endian::read_u16_be(data + 1);
@@ -208,4 +208,4 @@ std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_IT
    return handlers;
 }
 
-std::array<Parser_ITCH::MessageHandlerFunc, Parser_ITCH::MAX_MESSAGES> Parser_ITCH::MessageHandlers = makeMessageHandlersLookup();
+std::array<Parser_ITCH_NASDAQ::MessageHandlerFunc, Parser_ITCH_NASDAQ::MAX_MESSAGES> Parser_ITCH_NASDAQ::MessageHandlers = makeMessageHandlersLookup();

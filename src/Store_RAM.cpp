@@ -21,7 +21,7 @@ void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessag
    copy_symbol(it->second.symbol, msg->symbol);
 }
 
-void Store_RAM::handle_instrument_definition(const ITCHStockDirectoryMessage *msg, Venue venue) noexcept
+void Store_RAM::handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage *msg, Venue venue) noexcept
 {
    auto [it, inserted] = instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].emplace(msg->stock_locate, SymbolMeta{msg->stock_locate});
    copy_symbol(it->second.symbol, msg->stock);
@@ -29,11 +29,11 @@ void Store_RAM::handle_instrument_definition(const ITCHStockDirectoryMessage *ms
 
 void Store_RAM::store() noexcept
 {
-   MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> msgWithVenue;
+   MessageWithVenue<MessageTypes_t> msgWithVenue;
 
    if (!pending_to_strategy_.empty() && ((pending_to_strategy_.front().order->canModify.load(std::memory_order_relaxed)) == (STRATEGY_DONE | RISK_DONE)))
    {
-      PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>> PendingMessage;
+      PendingMessage<MessageWithVenue<MessageTypes_t>> PendingMessage;
       pending_to_strategy_.pop(PendingMessage);
       msgWithVenue = PendingMessage.msgWithVenue;
    }
@@ -43,9 +43,10 @@ void Store_RAM::store() noexcept
    }
 
    std::visit([this, &msgWithVenue](const auto &inner_msg)
-              {
-            using MsgType = std::decay_t<decltype(inner_msg)>;
-            this->store(MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue}); }, msgWithVenue.msg);
+   {  
+      using MsgType = std::decay_t<decltype(inner_msg)>;
+      this->store(MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue}); 
+   }, msgWithVenue.msg);
 }
 
 Order *Store_RAM::add_our_order(Order *order) noexcept
@@ -137,8 +138,8 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
    }
    else if (UNLIKELY(order->canModify == 0x00))
    {
-      MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> resetMsg(fixMsg.msg, fixMsg.venue);
-      pending_to_strategy_.push(PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>(resetMsg, order));
+      MessageWithVenue<MessageTypes_t> resetMsg(fixMsg.msg, fixMsg.venue);
+      pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
       return;
    }
 
@@ -164,8 +165,11 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
    
 }
 
-// ================= ITCH Handler ===================
-void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexcept
+// ================= BIST ITCH Handler ===================
+void Store_RAM::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg) noexcept {}
+
+// ================= NASDAQ ITCH Handler ===================
+void Store_RAM::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept
 {
    std::visit([this, &itchMsg](const auto *msg)
               {
@@ -184,40 +188,40 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                      }
                      else if (UNLIKELY(order->canModify == 0x00))
                      {
-                        MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> resetMsg(itchMsg.msg, itchMsg.venue);
-                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>(resetMsg, order));
+                        MessageWithVenue<MessageTypes_t> resetMsg(itchMsg.msg, itchMsg.venue);
+                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
                         return;
                      }
 
-                     if constexpr (std::is_same_v<MsgType, ITCHAddOrderMessage> ||
-                                 std::is_same_v<MsgType, ITCHAddOrderMPIDMessage>)
+                     if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMessage> ||
+                                 std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMPIDMessage>)
                      {
                         this->fill_itch_add(*order, msg, itchMsg.venue);
                         this->marketbook_.add_order(*order);
                      }
-                     else if constexpr (std::is_same_v<MsgType, ITCHCancelMessage>)
+                     else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHCancelMessage>)
                      {
                         this->fill_itch_cancel(*order, msg);
                         this->marketbook_.cancel_order(*order);
                      }
-                     else if constexpr (std::is_same_v<MsgType, ITCHExecutedMessage> ||
-                                       std::is_same_v<MsgType, ITCHExecutedWithPriceMessage>)
+                     else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHExecutedMessage> ||
+                                       std::is_same_v<MsgType, NASDAQ::ITCHExecutedWithPriceMessage>)
                      {
                         this->fill_itch_exec_report(*order, msg);
                         this->marketbook_.exec_order(*order);
                      }
-                     else if constexpr (std::is_same_v<MsgType, ITCHDeleteMessage>)
+                     else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHDeleteMessage>)
                      {
                         this->fill_itch_delete(*order, msg);
                         this->marketbook_.delete_order(*order);
                      }
-                     else if constexpr (std::is_same_v<MsgType, ITCHReplaceMessage>)
+                     else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHReplaceMessage>)
                      {
                         this->marketbook_.delete_order(*order);
                         this->fill_itch_replace(*order, msg, itchMsg.venue);
                         this->marketbook_.add_order(*order);
                      }
-                     else if constexpr (std::is_same_v<MsgType, ITCHTradeMessage>)
+                     else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHTradeMessage>)
                      {
                         this->fill_itch_trade(*order, msg, itchMsg.venue);
                      }
@@ -229,16 +233,16 @@ void Store_RAM::update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexc
                      this->store_to_risk_.push(order);
                      
                }
-               else if constexpr (std::is_same_v<MsgType, ITCHStockDirectoryMessage>)
+               else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHStockDirectoryMessage>)
                {
                   this->handle_instrument_definition(msg, itchMsg.venue);
                }
-               else if constexpr (std::is_same_v<MsgType, ITCHTradingStateMessage>)
+               else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHTradingStateMessage>)
                {
                   bool halted = msg->trading_state != 'T';
                   this->update_symbol_halt_status(msg->stock_locate, itchMsg.venue, halted);
                }
-               else if constexpr (std::is_same_v<MsgType, ITCHSystemEventMessage>)
+               else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHSystemEventMessage>)
                {
                   static constexpr std::array<std::pair<bool,bool>, 128> event_map = [] {
                   std::array<std::pair<bool,bool>, 128> arr{};
@@ -281,8 +285,8 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                      }
                      else if (UNLIKELY(order->canModify == 0x00))
                      {
-                        MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>> resetMsg(sbeMsg.msg, sbeMsg.venue);
-                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>(resetMsg, order));
+                        MessageWithVenue<MessageTypes_t> resetMsg(sbeMsg.msg, sbeMsg.venue);
+                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
                         return;
                      }
 
@@ -308,7 +312,7 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                      }
 
                      order->canModify = 0x00;
-                     
+
                      this->store_to_db_.push(order);
                      this->store_to_strategy_.push(order);
                      this->store_to_risk_.push(order);

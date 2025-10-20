@@ -95,7 +95,8 @@ private:
     }
 
     void insert(const MessageWithVenue<SBEMessage> &sbeMsg);
-    void insert(const MessageWithVenue<ITCHMessage> &itchMsg);
+    void insert(const MessageWithVenue<BIST::ITCHMessage> &itchMsg);
+    void insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg);
     void insert(const MessageWithVenue<FIXMessage *> &fixMsg);
     void insert(const Order *order);
 
@@ -104,7 +105,7 @@ public:
 
     void store() noexcept
     {
-        std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<ITCHMessage>, MessageWithVenue<SBEMessage>> data;
+        std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<SBEMessage>> data;
         store_to_db_.pop(data);
 
         std::visit([this](const auto &type)

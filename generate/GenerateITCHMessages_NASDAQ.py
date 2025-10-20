@@ -191,10 +191,12 @@ def generate_struct(msg):
 def generate_file(messages):
     lines = [
         "// Generated automatically. DO NOT EDIT!",
+        "// NASDAQ ITCH Messages Struct Definitions",
         "#pragma once",
         "",
         "#include <cstdint>",
         "",
+        "namespace NASDAQ {\n",
     ]
     for msg in messages:
         lines.append(generate_struct(msg))
@@ -229,11 +231,12 @@ def generate_func(messages):
     return "\n".join(line) 
 
 file = generate_file(messages)
-with open("../include/GeneratedITCHMessages.h", "w") as f:
+with open("../include/GeneratedITCHMessages_NASDAQ.h", "w") as f:
     f.write(file)
     f.write(generate_enum(messages))
     f.write(generate_func(messages))
-
+    f.write("\n\n}\n")  
+   
 
 
 

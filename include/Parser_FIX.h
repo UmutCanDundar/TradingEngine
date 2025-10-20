@@ -45,8 +45,6 @@ using spscFIXQueue_t = boost::lockfree::spsc_queue<FIXMessage *, boost::lockfree
 class Parser_FIX
 {
 private:
-    using FIXMessagePool = std::vector<FIXMessage>;
-
     FIXMessagePool fixMsg_pool_;
     spscFIXQueue_t free_fixMsg_list_;
 

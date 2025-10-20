@@ -77,36 +77,62 @@ struct OrderHistory
     std::vector<Order*> orders;
     size_t write_index;
 
-    OrderHistory() : orders(512), write_index(0) {}
+    OrderHistory() : orders(64), write_index(0) {}
 
     inline void push(Order* order) noexcept {
         orders[write_index & (orders.size()-1)] = order;
         write_index++;
     }
 
-    inline Order* get_recent(size_t offset = 0) const noexcept {
-        return orders[(write_index - 1 - offset) & (orders.size()-1)];
+    inline void pop(Order *order) noexcept
+    {
+        for (auto &ptr : orders) {
+            if (ptr == order) 
+            {
+                ptr = nullptr;
+                return;
+            }
+        }
     }
 
+    inline Order *get_recent(size_t offset = 0) const noexcept
+    {
+        size_t idx = write_index;
+        size_t found = 0;
+
+        for (size_t i = 0; i < orders.size(); ++i)
+        {
+            idx = (idx - 1) & (orders.size() - 1); 
+            Order *candidate = orders[idx];
+            if (LIKELY(candidate != nullptr))
+            {
+                if (found == offset)
+                    return candidate;
+                ++found;
+            }
+        }
+        return nullptr; 
+    }
 };
 
 inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;
 inline constexpr size_t PENDING_QUEUE_CAPACITY = 65536;
 inline constexpr size_t ORDER_POOL_CAPACITY = 65536; // 8MB @128B each
+inline constexpr size_t ORDER_MAP_CAPACITY = 32768;
+inline constexpr size_t OUR_ORDER_MAP_THRESHOLD = 16384;
 
 inline constexpr uint8_t STRATEGY_DONE = 0x01;
 inline constexpr uint8_t RISK_DONE = 0x02;
 
-using spscPendingQueue_t = boost::lockfree::spsc_queue<PendingMessage<MessageWithVenue<std::variant<FIXMessage *, ITCHMessage, SBEMessage>>>, boost::lockfree::capacity<PENDING_QUEUE_CAPACITY>>;
+using spscPendingQueue_t = boost::lockfree::spsc_queue<PendingMessage<MessageWithVenue<MessageTypes_t>>, boost::lockfree::capacity<PENDING_QUEUE_CAPACITY>>;
 using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
-using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<ITCHMessage>, MessageWithVenue<SBEMessage>>, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
+using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<SBEMessage>>, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
 
 class Store_RAM
 {
 private:
   
     static constexpr size_t MARKETORDER_LAST_INDEX = 32768;
-    static constexpr size_t ORDER_MAP_CAPACITY = 32768;
     static inline bool our_map_full = false;
     static inline bool market_map_full = false;
    
@@ -166,17 +192,19 @@ private:
     Order *get_order(uint64_t order_id, Protocol protocol, Venue venue) noexcept;
 
     void update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept;
-    void update_order(const MessageWithVenue<ITCHMessage> &itchMsg) noexcept;
+    void update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg) noexcept;
+    void update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept;
 
     void handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg, Venue venue) noexcept;
-    void handle_instrument_definition(const ITCHStockDirectoryMessage *msg, Venue venue) noexcept;
+    void handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage *msg, Venue venue) noexcept;
 
 
-    inline void ReleaseOrder(OrderKey &&orderkey)
+    inline void ReleaseOrder(OrderKey &orderkey, OrderHistory &orderhistory, Order *order)
     {
-        store_to_strategy_free_slot_.push(our_order_map_[orderkey]);
+        store_to_strategy_free_slot_.push(order);
         our_order_map_.erase(orderkey);
+        orderhistory.pop(order);
     }
 
     static inline void copy_symbol(std::array<char, 8> &dest, const std::string_view src) noexcept
@@ -200,7 +228,22 @@ private:
         }
     }
 
-    // ===== FIX fillers =====
+    inline void update_venue_halt_status(Venue venue, bool halted, bool circuit_breaker) noexcept
+    {
+        auto venue_index = static_cast<std::underlying_type_t<Venue>>(venue);
+
+        venue_flags_[venue_index].halted.store(halted, std::memory_order_release);
+        venue_flags_[venue_index].circuit_breaker.store(circuit_breaker, std::memory_order_release);
+    }
+
+    inline void update_symbol_halt_status(uint64_t instrument_id, Venue venue, bool halted) noexcept
+    {
+        instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)][instrument_id].halted.store(halted, std::memory_order_release);
+    }
+
+    //===========================================================
+    //====================== FIX fillers ========================
+    //===========================================================
     inline void fill_fix_new(Order &order, const FIXMessage *msg, Venue venue) noexcept
     {
         order.price = msg->price;
@@ -296,9 +339,12 @@ private:
     }
 
     void fill_fix_exec_report(Order &order, const FIXMessage *msg, Venue venue) noexcept;
+    
 
-    // ===== ITCH fillers =====
-    inline void fill_itch_add(Order &order, const ITCHAddOrderMessage *msg, Venue venue) noexcept
+    //===========================================================
+    //=================== NASDAQ ITCH fillers ===================
+    //=========================================================== 
+    inline void fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMessage *msg, Venue venue) noexcept
     {
         auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
         
@@ -317,7 +363,7 @@ private:
         order.side = (msg->side == 'B') ? Side::Buy : Side::Sell;
         order.status = Status::New;
 
-        order.order_id = msg->order_ref;
+        order.client_order_id = msg->order_ref;
         order.timestamp = msg->timestamp; // nanosaniyeyi saniyeye çevir
         order.last_update_time = order.timestamp;
 
@@ -327,7 +373,7 @@ private:
         // order.timestamp_ns = msg->timestamp;
     }
 
-    inline void fill_itch_add(Order &order, const ITCHAddOrderMPIDMessage *msg, Venue venue) noexcept
+    inline void fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMPIDMessage *msg, Venue venue) noexcept
     {
         auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
 
@@ -335,18 +381,13 @@ private:
         order.quantity = msg->shares;
         order.filled_quantity = 0;
         order.instrument_id = msg->stock_locate;
+        copy_symbol(order.symbol, msg->stock);
+        order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
         
-        auto it = instrument_map.find(order.instrument_id);
-        if (LIKELY(it != instrument_map.end()))
-        {
-            order.symbol = it->second.symbol;
-            order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
-        }
-       
         order.side = (msg->side == 'B') ? Side::Buy : Side::Sell;
         order.status = Status::New;
 
-        order.order_id = msg->order_ref;
+        order.client_order_id = msg->order_ref;
         order.timestamp = msg->timestamp;
         order.last_update_time = order.timestamp;
 
@@ -357,14 +398,14 @@ private:
         // MPID alanı order struct'ta yok, gerekirse eklenebilir
     }
 
-    inline void fill_itch_cancel(Order &order, const ITCHCancelMessage *msg) noexcept
+    inline void fill_itch_cancel(Order &order, const NASDAQ::ITCHCancelMessage *msg) noexcept
     {
         order.status = Status::Cancelled;
         order.last_update_time = msg->timestamp;
         order.cancelled_quantity = msg->cancelled_shares;
     }
 
-    inline void fill_itch_exec_report(Order &order, const ITCHExecutedMessage *msg) noexcept
+    inline void fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedMessage *msg) noexcept
     {
         order.filled_quantity += msg->executed_shares;
         order.last_exec_quantity = msg->executed_shares;
@@ -375,24 +416,24 @@ private:
             order.status = Status::Filled;
     }
 
-    inline void fill_itch_exec_report(Order &order, const ITCHExecutedWithPriceMessage *msg) noexcept
+    inline void fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedWithPriceMessage *msg) noexcept
     {
-        fill_itch_exec_report(order, reinterpret_cast<const ITCHExecutedMessage *>(msg));
+        fill_itch_exec_report(order, reinterpret_cast<const NASDAQ::ITCHExecutedMessage *>(msg));
         order.price = static_cast<int64_t>(msg->execution_price);
     }
 
-    inline void fill_itch_delete(Order &order, const ITCHDeleteMessage *msg) noexcept
+    inline void fill_itch_delete(Order &order, const NASDAQ::ITCHDeleteMessage *msg) noexcept
     {
         order.status = Status::Cancelled;
         order.cancelled_quantity = order.quantity - order.filled_quantity;
         order.last_update_time = msg->timestamp;
     }
 
-    inline void fill_itch_replace(Order &order, const ITCHReplaceMessage *msg, Venue venue) noexcept 
+    inline void fill_itch_replace(Order &order, const NASDAQ::ITCHReplaceMessage *msg, Venue venue) noexcept 
     {
         auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
 
-        order.order_id = msg->new_order_ref;
+        order.client_order_id = msg->new_order_ref;
         order.price = msg->price;
         order.quantity = msg->shares;
         order.instrument_id = msg->stock_locate;
@@ -408,7 +449,7 @@ private:
         order.status = Status::New;
     }
 
-    inline void fill_itch_trade(Order &order, const ITCHTradeMessage *msg, Venue venue) noexcept
+    inline void fill_itch_trade(Order &order, const NASDAQ::ITCHTradeMessage *msg, Venue venue) noexcept
     {
         if (UNLIKELY(order.isOurOrder))
             return;
@@ -430,8 +471,10 @@ private:
         order.price = static_cast<int64_t>(msg->price);
         // Genelde trade mesajları yeni emir yaratmaz, sadece execution bilgisi verir
     }
-
-    // ===== SBE fillers =====
+    
+    //===========================================================
+    //======================= SBE fillers =======================
+    //===========================================================
     inline void fill_sbe_add(Order &order, const SBEAddOrderMessage *msg, Venue venue) noexcept
     {
         auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
@@ -475,7 +518,7 @@ private:
     {
         if (UNLIKELY(order.isOurOrder))
             return;
-       
+    
         auto &instrument_map = instrument_cache_[std::underlying_type_t<Venue>(venue)];
 
         order.price = static_cast<int64_t>(msg->price);
@@ -498,18 +541,5 @@ private:
         order.last_update_time = msg->header.version;
         order.message_type = static_cast<uint8_t>(msg->header.templateId);
         order.protocol = Protocol::SBE;
-    }
-
-    inline void update_venue_halt_status(Venue venue, bool halted, bool circuit_breaker) noexcept
-    {
-        auto venue_index = static_cast<std::underlying_type_t<Venue>>(venue);
-
-        venue_flags_[venue_index].halted.store(halted, std::memory_order_release);
-        venue_flags_[venue_index].circuit_breaker.store(circuit_breaker, std::memory_order_release);
-    }
-
-    inline void update_symbol_halt_status(uint64_t instrument_id, Venue venue, bool halted) noexcept
-    {
-        instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)][instrument_id].halted.store(halted, std::memory_order_release);
-    }
+    }         
 };

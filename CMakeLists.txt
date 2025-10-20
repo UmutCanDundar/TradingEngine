@@ -29,10 +29,17 @@ add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateIpPort.py
 )
 add_custom_command(
-    OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages.h
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateITCHMessages.py
-    DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateITCHMessages.py
+    OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages_BIST.h
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateITCHMessages_BIST.py
+    DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateITCHMessages_BIST.py
 )
+
+add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages_NASDAQ.h
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateITCHMessages_NASDAQ.py
+    DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateITCHMessages_NASDAQ.py
+)
+
 add_custom_command(
     OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedSBEMessages.h
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateSBEMessages.py
@@ -48,7 +55,8 @@ add_custom_command(
 add_custom_target(GeneratedFiles ALL
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedErrorMap.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedIpPort.h
-    DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages_BIST.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages_NASDAQ.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSBEMessages.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSymbolTables.h
 )
