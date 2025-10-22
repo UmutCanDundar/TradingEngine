@@ -11,7 +11,6 @@ class HashTables;
 struct alignas(64) SymbolLimit
 {
     int64_t max_position_scaled; // done
-    int64_t tick_size_scaled;    // done
     int64_t max_notional_scaled; // done
     int64_t max_price_deviation; // done
     int64_t fat_finger_ratio = 0; // done
@@ -22,7 +21,7 @@ struct alignas(64) SymbolLimit
     uint32_t max_open_orders = 0; // done
     uint32_t fat_finger_qty_threshold = 0; // done
    
-    uint8_t pad[8]; // alignment
+    uint8_t pad[16]; // alignment
 };
 
 struct alignas(64) AccountLimit

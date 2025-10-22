@@ -37,14 +37,13 @@ std::array<std::vector<SymbolLimit>, VENUE_COUNT> Limits::initialize_symbollimit
 
             SymbolLimit sl{};
             sl.max_position_scaled = limits_array[0].get<int64_t>();
-            sl.tick_size_scaled = limits_array[1].get<int64_t>();
-            sl.max_notional_scaled = limits_array[2].get<int64_t>();
-            sl.min_qty = limits_array[3].get<uint32_t>();
-            sl.max_qty = limits_array[4].get<uint32_t>();
-            sl.price_scale_factor = limits_array[5].get<uint32_t>();
-            sl.qty_scale_factor = limits_array[6].get<uint32_t>();
+            sl.max_notional_scaled = limits_array[1].get<int64_t>();
+            sl.min_qty = limits_array[2].get<uint32_t>();
+            sl.max_qty = limits_array[3].get<uint32_t>();
+            sl.price_scale_factor = limits_array[4].get<uint32_t>();
+            sl.qty_scale_factor = limits_array[5].get<uint32_t>();
 
-            std::array<char, 8> symbol{};
+            std::array<char, 32> symbol{};
             std::memcpy(symbol.data(), symbol_string.data(), symbol_string.size());
             size_t index = hashtables_.getIndex(venue, symbol);
 

@@ -6,6 +6,7 @@
 #include <array>
 #include <vector>
 #include <string_view>
+#include <cstddef>
 
 enum class SyncState : uint8_t 
 {
@@ -64,6 +65,8 @@ enum class Status : uint8_t
    Restated = 52       // Order yeniden tanımlandı
 };
 
+inline constexpr size_t SYMBOL_SIZE = 32; 
+
 struct alignas(64) Order
 {
    // 🔴 HOT PATH (en sık erişilen alanlar)
@@ -73,6 +76,7 @@ struct alignas(64) Order
    uint32_t cancelled_quantity = 0;
    uint32_t last_exec_quantity = 0;
    uint32_t symbol_index = 0;       // From Hashtable 
+   uint32_t instrument_id = 0; // SBE/ITCH instrument identifier
    Side side = Side::Unknown;       // Buy/Sell
    Status status = Status::Unknown; // New/Partial/Filled/Cancelled
    Venue venue;                     // NYSE, NASDAQ, etc.
@@ -82,10 +86,9 @@ struct alignas(64) Order
    OrderType order_type = OrderType::Unknown;   // Limit, Market, Stop
    SyncState syncState = SyncState::WaitingNew;
    std::array<Status,2> StatusesPreNew;
-   uint16_t instrument_id = 0; // SBE/ITCH
    uint8_t time_in_force = 0;  // IOC, GTC, etc.
   
-   uint8_t pad1[7]; // 64-byte alignment
+   uint8_t pad1[5]; // 64-byte alignment
 
    // 🟠 LOOKUP & ROUTING
    uint64_t client_order_id = 0; // Strategy-assigned client order ID
@@ -95,11 +98,11 @@ struct alignas(64) Order
    uint64_t timestamp = 0;       // Order creation time 
 
    // 🟡 PROTOCOL - SYMBOL DATA
-   std::array<char, 8> symbol{};  // Fixed-size symbol for low-latency lookup
+   std::array<char, SYMBOL_SIZE> symbol{};  // Fixed-size symbol for low-latency lookup
    uint8_t message_type = 0;     // Message type within the protocol      
    
    // 🟢 OPTIONAL (protokol bazlı karar & advanced tactics)
    uint8_t priority_level = 0; // HFT queue tactics
  
-   uint8_t pad2[38]; // 64-byte alignment
+   uint8_t pad2[14]; // 64-byte alignment
 };

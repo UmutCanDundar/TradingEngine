@@ -9,12 +9,14 @@
 #include <span>
 #include <vector>
 
+
+
 class HashTables
 {
 private:
     struct HashEntry
     {
-        char symbol[8] = {};
+        char symbol[32] = {};
         uint32_t index;
         bool valid = false;
     };
@@ -69,7 +71,7 @@ public:
             initialize(symbol_table);
     }
 
-    inline uint32_t getIndex(size_t venue_index, const std::array<char, 8> &symbol) const noexcept
+    inline uint32_t getIndex(size_t venue_index, const std::array<char, 32> &symbol) const noexcept
     {
         size_t size = hashtables_[venue_index].size();
         uint32_t hash_val = hash_symbol(symbol.data(), size);
