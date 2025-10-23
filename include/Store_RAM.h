@@ -395,6 +395,7 @@ private:
 
         order.message_type = msg->message_type;
         order.protocol = Protocol::ITCH;
+        order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
     }
 
     inline void fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedMessage *msg) noexcept
@@ -478,6 +479,7 @@ private:
 
         order.message_type = msg->message_type;
         order.protocol = Protocol::ITCH;
+        order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
 
         // order.timestamp_ns = msg->timestamp;
     }
@@ -502,6 +504,7 @@ private:
 
         order.message_type = msg->message_type;
         order.protocol = Protocol::ITCH;
+        order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
 
         // order.timestamp_ns = msg->timestamp;
         // MPID alanı order struct'ta yok, gerekirse eklenebilir
@@ -556,6 +559,9 @@ private:
 
         order.message_type = msg->message_type;
         order.status = Status::New;
+        order.protocol = Protocol::ITCH;
+        order.last_update_time = msg->timestamp;
+        order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
     }
 
     inline void fill_itch_trade(Order &order, const NASDAQ::ITCHTradeMessage *msg, Venue venue) noexcept
@@ -608,6 +614,7 @@ private:
 
         order.message_type = static_cast<uint8_t>(msg->header.templateId);
         order.protocol = Protocol::SBE;
+        order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
 
         // order.timestamp_ns = msg->header.version;
     }

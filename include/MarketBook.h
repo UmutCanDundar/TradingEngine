@@ -40,11 +40,20 @@ public:
 
     inline int64_t best_bid(const SymbolBook &symBook) const noexcept
     {
-        return symBook.bid_ask_trees_[0].empty() ? 0 : symBook.bid_ask_trees_[0].rbegin()->first;
+        return symBook.bid_ask_trees_[0].empty() ? 0LL : symBook.bid_ask_trees_[0].rbegin()->first;
     }
 
     inline int64_t best_ask(const SymbolBook &symBook) const noexcept
     {
-        return symBook.bid_ask_trees_[1].empty() ? 0 : symBook.bid_ask_trees_[1].begin()->first;
+        return symBook.bid_ask_trees_[1].empty() ? 0LL : symBook.bid_ask_trees_[1].begin()->first;
+    }
+
+    inline void flush(const uint8_t venue_index, const std::array<char, SYMBOL_SIZE> &symbol) noexcept
+    {
+        const auto symbol_index = hashtables_.getIndex(venue_index, symbol);
+        auto &symbolbook = symbolbooks_[venue_index][symbol_index];
+        auto &bid_ask_trees = symbolbook.bid_ask_trees_;
+        bid_ask_trees[0].clear();
+        bid_ask_trees[1].clear();
     }
 };

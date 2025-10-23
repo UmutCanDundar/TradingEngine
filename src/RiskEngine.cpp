@@ -56,9 +56,9 @@ void RiskEngine::initialize_symbolrisks() noexcept
         {
             const std::string &symbol_string = sym_it.key();
            
-            std::array<char, 8> symbol{};
+            std::array<char, SYMBOL_SIZE> symbol{};
             std::memcpy(symbol.data(), symbol_string.data(), symbol_string.size());
-            size_t index = hashtables_.getIndex(venue, static_cast<std::array<char, 8>>(symbol));
+            size_t index = hashtables_.getIndex(venue, symbol);
 
             uint64_t token_capacity = it.value()["max_orders_per_interval"].get<uint64_t>();
             uint64_t interval_ns = it.value()["order_rate_interval_ns"].get<uint64_t>();
@@ -172,55 +172,52 @@ void RiskEngine::update_risk() noexcept
     void RiskEngine::check_risk() noexcept
     {
         Order *order;
-        uint32_t RejectReason = 0;
         
         while (strategy_to_risk_.pop(order))
         {
+            uint32_t RejectReason = 0;
+
             uint8_t venue_index = static_cast<std::underlying_type_t<Venue>>(order->venue);
             auto &accRisk = accountrisks_[venue_index];
             auto &symRisk = symbolrisks_[venue_index][hashtables_.getIndex(venue_index, order->symbol)];
             const auto &accLim = limits_.getAccountLimit(venue_index);
             const auto &symLim = limits_.getSymbolLimit(venue_index, hashtables_.getIndex(venue_index, order->symbol));
-            
-            // ===== PRE-RISK CHECKS =====
-            if(check_venue_halt_and_circuit(*order) ||
-               check_order_rate_limit(accRisk,symRisk, *order, venue_index) || 
-               check_cancel_rate_limit(accRisk, symRisk, *order, venue_index))     // check_duplicate_order_id(this->order_ids, *order, venue_index))
-                continue;
-            
-            // ===== MAIN RISK CHECKS =====
-            RejectReason |=
-            check_quantity_bounds(order->quantity, symLim.min_qty, symLim.max_qty) |
-            check_price_tick_valid(order->price, symLim.tick_size_scaled) |
-            check_max_open_orders_account(accRisk.open_orders_count.load(std::memory_order_acquire), accLim.max_open_orders) |
-            check_max_open_orders_symbol(symRisk.open_orders_count.load(std::memory_order_acquire), symLim.max_open_orders) | 
-            check_self_trade_order(this->orderrisks_, *order, venue_index) |
-            check_notional_value(order->price, order->quantity, symLim.max_notional_scaled) |
-            check_max_position_limit(symRisk.net_position_scaled.load(std::memory_order_acquire), symLim.max_position_scaled) |
-            check_account_risk(accRisk, accLim, order->price, order->quantity) |
-            check_fat_finger_quantity(order->quantity, symLim.fat_finger_qty_threshold);
+            const auto &symmeta = store_ram_.get_symbolmeta(order->venue, order->instrument_id);
 
-            if (RejectReason != 0)
-            {  
-                risk_to_strategy_.push(OrderWithRejectReason{*order, RejectReason});
-                continue;  
-            } 
-          
-            // ===== POST-RISK CHECKS =====
-            if(order->order_type == OrderType::Limit) { // limit order ise
+                // ===== PRE-RISK CHECKS =====
+                if (check_venue_halt_and_circuit(*order, symmeta) ||
+                    check_order_rate_limit(accRisk, symRisk, *order, venue_index) ||
+                    check_cancel_rate_limit(accRisk, symRisk, *order, venue_index)) // check_duplicate_order_id(this->order_ids, *order, venue_index))
+                continue;
+
+                // ===== LIMIT-RISK CHECKS =====
+                if (order->order_type == OrderType::Limit)
+                { 
+                    RejectReason |=
+                        check_price_tick_valid(order->price, symmeta) |
+                        check_notional_value(order->price, order->quantity, symLim.max_notional_scaled) |
+                        check_market_data_and_price_band_helper(symRisk.best_bid, symRisk.best_ask, order->price, symLim.max_price_deviation) |
+                        check_fat_finger_price_ratio(order->price, symRisk.best_bid, symRisk.best_ask, symLim.fat_finger_ratio);
+                }
+
+                // ===== MAIN RISK CHECKS =====
                 RejectReason |=
-                check_market_data_and_price_band_helper(symRisk.best_bid, symRisk.best_ask, order->price, symLim.max_price_deviation) |
-                check_fat_finger_price_ratio(order->price, symRisk.best_bid, symRisk.best_ask, symLim.fat_finger_ratio);
-                
+                    check_quantity_bounds(order->quantity, symLim.min_qty, symLim.max_qty) |
+                    check_max_open_orders_account(accRisk.open_orders_count.load(std::memory_order_acquire), accLim.max_open_orders) |
+                    check_max_open_orders_symbol(symRisk.open_orders_count.load(std::memory_order_acquire), symLim.max_open_orders) |
+                    check_self_trade_order(this->orderrisks_, *order, venue_index) |
+                    check_max_position_limit(symRisk.net_position_scaled.load(std::memory_order_acquire), symLim.max_position_scaled) |
+                    check_account_risk(*order, accRisk, accLim, order->price, order->quantity) |
+                    check_fat_finger_quantity(order->quantity, symLim.fat_finger_qty_threshold);
+
                 if (RejectReason != 0)
-                {  
+                {
                     risk_to_strategy_.push(OrderWithRejectReason{*order, RejectReason});
-                    continue;  
-                } 
-            }
-          
+                    continue;
+                }
+                
+
             order->canModify.store(order->canModify | RISK_DONE, std::memory_order_relaxed);    // order_ids[venue_index].insert(order->client_order_id);
             risk_to_builder_.push(order);
-            RejectReason = 0;
         }
     }

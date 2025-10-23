@@ -59,7 +59,7 @@ struct alignas(64) AccountRisk
     std::atomic<int64_t> current_exposure{0}; 
     std::atomic<int64_t> balance{0};           
     std::atomic<int64_t> used_margin{0};       
-    std::atomic<int64_t> current_leverage{0};   
+    std::atomic<int64_t> current_leverage{1};   
     std::atomic<int64_t> daily_realized_pnl{0};
     std::atomic<int64_t> total_unrealized_pnl{0};
     std::atomic<uint32_t> open_orders_count{0};
@@ -230,7 +230,7 @@ public:
    
 private: // Helper functions associated with the other private functions
 
-    inline void update_unrealized_pnl(SymbolRisk &symRisk) noexcept
+    inline void update_unrealized_pnl(SymbolRisk &symRisk, int64_t best_bid, int64_t best_ask) noexcept
     {
         const int64_t net_pos = symRisk.net_position_scaled.load(std::memory_order_relaxed);
         
@@ -240,19 +240,19 @@ private: // Helper functions associated with the other private functions
             return;
         }
 
-        const int64_t avg_entry_price = symRisk.cost_basis_scaled.load(std::memory_order_relaxed) / symRisk.net_position_scaled.load(std::memory_order_relaxed);
-        const int64_t position_abs = std::abs(symRisk.net_position_scaled.load(std::memory_order_relaxed));
+        const int64_t avg_entry_price = symRisk.cost_basis_scaled.load(std::memory_order_relaxed) / net_pos;
+        const int64_t position_abs = std::abs(net_pos);
 
         if (net_pos > 0)
         {
             // Long pozisyon → çıkış bid üzerinden
-            const int64_t pnl = (symRisk.best_bid.load(std::memory_order_relaxed) - avg_entry_price) * position_abs;
+            const int64_t pnl = (best_bid - avg_entry_price) * position_abs;
             symRisk.unrealized_pnl.store(pnl, std::memory_order_release);
         }
         else
         {
             // Short pozisyon → çıkış ask üzerinden
-            const int64_t pnl = (avg_entry_price - symRisk.best_ask.load(std::memory_order_relaxed)) * position_abs;
+            const int64_t pnl = (avg_entry_price - best_ask) * position_abs;
             symRisk.unrealized_pnl.store(pnl, std::memory_order_release);
         }
     }
@@ -387,9 +387,14 @@ private:  // Helper functions associated with the public functions
         {
             symRisk.best_bid.store(marketbook_.best_bid(marketbook_.get_symBook(order)), std::memory_order_release);
             symRisk.best_ask.store(marketbook_.best_ask(marketbook_.get_symBook(order)), std::memory_order_release);
-            accRisk.total_unrealized_pnl.fetch_sub(symRisk.unrealized_pnl.load(std::memory_order_relaxed),std::memory_order_release);
-            update_unrealized_pnl(symRisk);
-            accRisk.total_unrealized_pnl.fetch_add(symRisk.unrealized_pnl.load(std::memory_order_relaxed), std::memory_order_release);
+            const int64_t best_bid = symRisk.best_bid.load(std::memory_order_relaxed);
+            const int64_t best_ask = symRisk.best_ask.load(std::memory_order_relaxed);
+            if(!(best_bid <= 0 || best_ask <= 0)) 
+            {
+                accRisk.total_unrealized_pnl.fetch_sub(symRisk.unrealized_pnl.load(std::memory_order_relaxed), std::memory_order_release);
+                update_unrealized_pnl(symRisk, best_bid, best_ask);
+                accRisk.total_unrealized_pnl.fetch_add(symRisk.unrealized_pnl.load(std::memory_order_relaxed), std::memory_order_release);
+            }
         }
 
         // Güvenlik: negatif değerleri engelle
@@ -460,7 +465,7 @@ private:  // Helper functions associated with the public functions
     }
 
     // --------------------------------------CHECK FUNCTIONS-----------------------------------------------
-    inline bool check_venue_halt_and_circuit(Order &order) noexcept
+    inline bool check_venue_halt_and_circuit(Order &order, const SymbolMeta &symbolmeta) noexcept
     {
         bool venue_halted = store_ram_.get_venue_flags(order.venue).halted.load(std::memory_order_acquire);
         if (UNLIKELY(venue_halted)) 
@@ -478,7 +483,7 @@ private:  // Helper functions associated with the public functions
                 return true;
         }
 
-        bool symbol_halted = store_ram_.get_symbolmeta(order.venue, order.instrument_id).halted.load(std::memory_order_acquire);
+        bool symbol_halted = symbolmeta.halted.load(std::memory_order_acquire);
         if (UNLIKELY(symbol_halted))
         {
                 OrderWithRejectReason rej{order, static_cast<uint32_t>(RiskRejectReason::SymbolTradingHalted)};
@@ -611,12 +616,28 @@ private:  // Helper functions associated with the public functions
         return 0;
     }
     
-    inline uint32_t check_price_tick_valid(int64_t price_scaled, int64_t tick_size_scaled) noexcept
+    inline uint32_t check_price_tick_valid(int64_t price_scaled, const SymbolMeta &symbolmeta) noexcept
     {
-        if (UNLIKELY(tick_size_scaled <= 0))
-            return static_cast<uint32_t>(RiskRejectReason::RiskEngineInternalError);
-        if (UNLIKELY((price_scaled % tick_size_scaled) != 0))
-            return static_cast<uint32_t>(RiskRejectReason::PriceTickInvalid);
+       
+        for(auto& tick_size_entry : symbolmeta.tick_size_table)
+        {
+            TickSizeEntry* entry = tick_size_entry.load(std::memory_order_acquire);
+
+            if (entry && (entry->price_to == 0 || (price_scaled >= (entry->price_from) && price_scaled <= (entry->price_to))))
+            {
+                int64_t tick_size = entry->tick_size;
+
+                if (UNLIKELY(tick_size <= 0))
+                    return static_cast<uint32_t>(RiskRejectReason::RiskEngineInternalError);
+
+                if (UNLIKELY((price_scaled % tick_size) != 0))
+                    return static_cast<uint32_t>(RiskRejectReason::PriceTickInvalid);
+            }
+            else 
+            {
+                continue;
+            }
+        }
 
         return 0;
     }
@@ -663,22 +684,29 @@ private:  // Helper functions associated with the public functions
         return 0;
     }
 
-    inline uint32_t check_account_risk(AccountRisk &accRisk, const AccountLimit &accLim, const int64_t price_scaled, const uint32_t qty) noexcept
+    inline uint32_t check_account_risk(Order &order, AccountRisk &accRisk, const AccountLimit &accLim, const int64_t price_scaled, const uint32_t qty) noexcept
     {
-        check_acc_status(accRisk.status.load(std::memory_order_acquire));
+        uint32_t reason = 0;
 
-        int64_t estimated_notional = price_scaled * qty;
-        int64_t estimated_margin_needed = estimated_notional / accRisk.current_leverage * 1'000'000ULL; // assuming leverage is scaled by 1,000,000    
+        reason |=
+            check_acc_status(accRisk.status.load(std::memory_order_acquire)) |
+            check_max_leverage(accRisk.current_leverage.load(std::memory_order_acquire), accLim.max_leverage) |
+            check_max_drawdown(accRisk.daily_realized_pnl.load(std::memory_order_acquire), accLim.max_daily_loss);
 
-        check_free_margin(accRisk.balance.load(std::memory_order_acquire), accRisk.total_unrealized_pnl.load(std::memory_order_acquire), estimated_margin_needed, accRisk.used_margin.load(std::memory_order_acquire));   
-        check_balance(accRisk.balance.load(std::memory_order_acquire), estimated_margin_needed);
-        check_max_leverage(accRisk.current_leverage.load(std::memory_order_acquire), accLim.max_leverage);
-        check_max_notional(accRisk.current_exposure.load(std::memory_order_acquire), estimated_notional, accLim.max_notional);
-        check_max_drawdown(accRisk.daily_realized_pnl.load(std::memory_order_acquire), accLim.max_daily_loss);
+        if (order.price > 0 && order.order_type == OrderType::Limit)
+        {
+            int64_t estimated_notional = price_scaled * qty;
+            int64_t estimated_margin_needed = estimated_notional / accRisk.current_leverage * 1'000'000ULL; // assuming leverage is scaled by 1,000,000
 
-        return 0; // OK
+            reason |=
+                check_free_margin(accRisk.balance.load(std::memory_order_acquire), accRisk.total_unrealized_pnl.load(std::memory_order_acquire), estimated_margin_needed, accRisk.used_margin.load(std::memory_order_acquire)) |
+                check_balance(accRisk.balance.load(std::memory_order_acquire), estimated_margin_needed) |
+                check_max_notional(accRisk.current_exposure.load(std::memory_order_acquire), estimated_notional, accLim.max_notional);
+        }
+
+        return reason; 
     }
-    
+
     inline uint32_t check_market_data_and_price_band_helper(int64_t best_bid_scaled, int64_t best_ask_scaled, int64_t price_scaled, int64_t max_price_deviation) noexcept
     {
         // Market data yoksa
@@ -719,6 +747,5 @@ private:  // Helper functions associated with the public functions
 
         return 0;
     }
- 
 };
 
