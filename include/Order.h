@@ -30,6 +30,18 @@ enum class OrderType : uint8_t
    StopLimit = 4
 };
 
+enum class TimeInForce : uint8_t
+{
+   DAY = 0,
+   GTC = 1,
+   IOC = 3,
+   FOK = 4,
+   GTD = 6,
+   AT_CROSSING = 9,
+   GTS = 'S',
+   Unknown = 99
+};
+
 enum class Status : uint8_t
 {
    // === BASIC STATES ===
@@ -86,9 +98,10 @@ struct alignas(64) Order
    OrderType order_type = OrderType::Unknown;   // Limit, Market, Stop
    SyncState syncState = SyncState::WaitingNew;
    std::array<Status,2> StatusesPreNew;
-   uint8_t time_in_force = 0;  // IOC, GTC, etc.
-  
-   uint8_t pad1[5]; // 64-byte alignment
+   TimeInForce time_in_force = TimeInForce::Unknown;  // IOC, GTC, etc.
+   uint8_t cancelled_count = 0;
+
+   uint8_t pad1[4]; // 64-byte alignment
 
    // 🟠 LOOKUP & ROUTING
    uint64_t client_order_id = 0; // Strategy-assigned client order ID

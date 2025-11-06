@@ -72,7 +72,10 @@ void RiskEngine::initialize_symbolrisks() noexcept
 }
 
 inline void RiskEngine::update_order_risk(const Order &order, const uint8_t venue_index) noexcept   
-{    
+{
+    if (UNLIKELY(order.cancelled_count > 0))
+        return;
+
     OrderRiskKey key{order.symbol_index, order.price, static_cast<uint8_t>(order.side)};
     auto &oRmap = orderrisks_[venue_index];
     auto it = oRmap.find(key);
@@ -89,10 +92,7 @@ inline void RiskEngine::update_order_risk(const Order &order, const uint8_t venu
         (1ULL << static_cast<uint64_t>(Status::Cancelled))
         | (1ULL << static_cast<uint64_t>(Status::Expired))
         | (1ULL << static_cast<uint64_t>(Status::DoneForDay))
-        | (1ULL << static_cast<uint64_t>(Status::Stopped))
-        | (1ULL << static_cast<uint64_t>(Status::Rejected))
-        | (1ULL << static_cast<uint64_t>(Status::CancelReject))
-        | (1ULL << static_cast<uint64_t>(Status::ReplaceReject));
+        | (1ULL << static_cast<uint64_t>(Status::Stopped));
 
         if (oR->remaining_qty.load(std::memory_order_relaxed) == 0 || (terminal_mask & (1ULL << static_cast<uint64_t>(order.status)))) {      
            oRmap.erase(it);
@@ -130,20 +130,21 @@ void RiskEngine::update_risk() noexcept
         const uint8_t venue_index = static_cast<uint8_t>(order->venue);
         auto &accRisk = accountrisks_[venue_index];
         const auto &accLim = limits_.getAccountLimit(venue_index);
+        const OrderMetrics metrics(*order);
 
-        if (update_risk_for_protocol_fix(accRisk, accLim, *order))
+        if (update_risk_for_protocol_fix(accRisk, accLim, *order, metrics))
             continue;
 
-        update_symbol_risk(accRisk, *order, venue_index);
+        update_symbol_risk(accRisk, *order, metrics, venue_index);
 
         if (order->isOurOrder) {
             update_order_risk(*order, venue_index);
-            update_account_risk(accRisk, accLim, *order, venue_index);
+            update_account_risk(accRisk, accLim, *order, metrics, venue_index);
         }
     }    
 }
 
- bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const AccountLimit &accLim, Order &order) noexcept
+ bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const AccountLimit &accLim, Order &order, const OrderMetrics metrics) noexcept
     {
         if (order.protocol == Protocol::FIX) {
             if(UNLIKELY(order.syncState == SyncState::WaitingNew))
@@ -156,9 +157,9 @@ void RiskEngine::update_risk() noexcept
                 for(size_t i = 0; i <= order.StatusesPreNew.size(); i++)
                 {
                     if(order.status != Status::Unknown){
-                        update_symbol_risk(accRisk, order, venue_index);
+                        update_symbol_risk(accRisk, order, metrics, venue_index);
                         update_order_risk(order, venue_index);
-                        update_account_risk(accRisk, accLim, order, venue_index);
+                        update_account_risk(accRisk, accLim, order, metrics, venue_index);
                     }
                     order.status = order.StatusesPreNew[i & 1UL];
                 }

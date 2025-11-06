@@ -188,6 +188,18 @@ enum class RiskRejectReason : uint32_t
 
 };
 
+struct OrderMetrics
+{
+    const int64_t nominal;
+    const int64_t notional;
+    const int64_t remaining;
+    const int8_t side_mult;
+   
+    OrderMetrics(const Order &order) noexcept
+        : nominal(order.price * static_cast<int64_t>(order.last_exec_quantity)), notional(order.price * static_cast<int64_t>(order.quantity)), 
+          remaining(order.price * static_cast<int64_t>(order.cancelled_quantity)), side_mult(order.side == Side::Buy ? 1 : -1) {}
+};
+
 struct OrderWithRejectReason
 {
     Order &order;
@@ -319,13 +331,17 @@ private:  // Helper functions associated with the public functions
     
     // --------------------------------------UPDATE FUNCTIONS-----------------------------------------------
     void update_order_risk(const Order &order, const uint8_t venue_index) noexcept;
-    bool update_risk_for_protocol_fix(AccountRisk &accRisk, const AccountLimit &accLim, Order &order) noexcept;
+    bool update_risk_for_protocol_fix(AccountRisk &accRisk, const AccountLimit &accLim, Order &order, const OrderMetrics metrics) noexcept;
     
-    inline void update_symbol_risk(AccountRisk &accRisk, const Order &order, const uint8_t venue_index) noexcept
+    inline void update_symbol_risk(AccountRisk &accRisk, const Order &order, const OrderMetrics metrics, const uint8_t venue_index) noexcept
     {
+        const int8_t side_mult = metrics.side_mult;
+        const int64_t nominal = metrics.nominal;
+        const int64_t notional = metrics.notional;
+        const int64_t remaining = metrics.remaining;
         auto &symRisk = symbolrisks_[venue_index][order.symbol_index];
 
-        int64_t filled_qty_int64 = static_cast<int64_t>(order.filled_quantity);
+        const int64_t exec_qty_int64 = static_cast<int64_t>(order.last_exec_quantity);
 
         // ----- Bize ait order ise -----
         if (order.isOurOrder)
@@ -338,7 +354,8 @@ private:  // Helper functions associated with the public functions
             case Status::Accepted:
             case Status::PendingSubmit:
                 symRisk.open_orders_count.fetch_add(1, std::memory_order_acq_rel);
-                symRisk.pending_notional_scaled.fetch_add(order.price * static_cast<int64_t>(order.quantity), std::memory_order_release);
+                if(order.price > 0)
+                    symRisk.pending_notional_scaled.fetch_add(notional, std::memory_order_release);
                 break;
 
             // --- Parsiyel dolum ---
@@ -346,9 +363,9 @@ private:  // Helper functions associated with the public functions
             {
                 int8_t side_mult = (order.side == Side::Buy ? 1 : -1);
 
-                symRisk.net_position_scaled.fetch_add(side_mult * filled_qty_int64, std::memory_order_release);
-                symRisk.pending_notional_scaled.fetch_sub(filled_qty_int64 * order.price, std::memory_order_release);
-                symRisk.cost_basis_scaled.fetch_add(side_mult * (order.price * filled_qty_int64), std::memory_order_release);
+                symRisk.net_position_scaled.fetch_add(side_mult * exec_qty_int64, std::memory_order_release);
+                symRisk.pending_notional_scaled.fetch_sub(nominal, std::memory_order_release);
+                symRisk.cost_basis_scaled.fetch_add(side_mult * nominal, std::memory_order_release);
                 break;
             }
             // --- Tam dolum ---
@@ -356,9 +373,9 @@ private:  // Helper functions associated with the public functions
             {
                 int8_t side_mult = (order.side == Side::Buy ? 1 : -1);
 
-                symRisk.net_position_scaled.fetch_add(side_mult * filled_qty_int64, std::memory_order_release);
-                symRisk.pending_notional_scaled.fetch_sub(filled_qty_int64 * order.price, std::memory_order_release);
-                symRisk.cost_basis_scaled.fetch_add(side_mult * (order.price * filled_qty_int64), std::memory_order_release);
+                symRisk.net_position_scaled.fetch_add(side_mult * exec_qty_int64, std::memory_order_release);
+                symRisk.pending_notional_scaled.fetch_sub(nominal, std::memory_order_release);
+                symRisk.cost_basis_scaled.fetch_add(side_mult * nominal, std::memory_order_release);
                 symRisk.open_orders_count.fetch_sub(1, std::memory_order_release);
                 break;
             }
@@ -367,8 +384,11 @@ private:  // Helper functions associated with the public functions
             case Status::DoneForDay:
             case Status::Stopped:
             case Status::Suspended:
+                if (UNLIKELY(order.cancelled_count > 1))
+                    return;
                 symRisk.open_orders_count.fetch_sub(1, std::memory_order_release);
-                symRisk.pending_notional_scaled.store(0, std::memory_order_release);
+                if(order.price > 0)
+                    symRisk.pending_notional_scaled.fetch_sub(remaining, std::memory_order_release);
                 break;
 
             case Status::Rejected:          // Order hiç yaşamadı
@@ -385,11 +405,12 @@ private:  // Helper functions associated with the public functions
         // ----- Başkasına ait market verisi -----
         else
         {
-            symRisk.best_bid.store(marketbook_.best_bid(marketbook_.get_symBook(order)), std::memory_order_release);
-            symRisk.best_ask.store(marketbook_.best_ask(marketbook_.get_symBook(order)), std::memory_order_release);
-            const int64_t best_bid = symRisk.best_bid.load(std::memory_order_relaxed);
-            const int64_t best_ask = symRisk.best_ask.load(std::memory_order_relaxed);
-            if(!(best_bid <= 0 || best_ask <= 0)) 
+            const int64_t best_bid = marketbook_.best_bid(marketbook_.get_symBook(order));
+            const int64_t best_ask = marketbook_.best_ask(marketbook_.get_symBook(order));
+            symRisk.best_bid.store(best_bid, std::memory_order_release);
+            symRisk.best_ask.store(best_ask, std::memory_order_release);
+
+            if(!(best_bid <= 0 || best_ask <= 0) && symRisk.cost_basis_scaled.load(std::memory_order_relaxed) != 0)
             {
                 accRisk.total_unrealized_pnl.fetch_sub(symRisk.unrealized_pnl.load(std::memory_order_relaxed), std::memory_order_release);
                 update_unrealized_pnl(symRisk, best_bid, best_ask);
@@ -404,10 +425,12 @@ private:  // Helper functions associated with the public functions
             symRisk.open_orders_count.store(0, std::memory_order_release);
     }
 
-    inline void update_account_risk(AccountRisk &accRisk, const AccountLimit &accLim, const Order &order, const uint8_t venue_index) noexcept
+    inline void update_account_risk(AccountRisk &accRisk, const AccountLimit &accLim, const Order &order, const OrderMetrics metrics, const uint8_t venue_index) noexcept
     {
-        const int8_t side_mult = (order.side == Side::Buy ? 1 : -1);
-        const int64_t nominal = order.price * static_cast<int64_t>(order.last_exec_quantity);
+        const int8_t side_mult = metrics.side_mult;
+        const int64_t nominal = metrics.nominal;
+        const int64_t notional = metrics.notional;
+        const int64_t remaining = metrics.remaining;
         const int64_t fee = order.order_type == OrderType::Market ? accLim.taker_fee_rate * nominal / 1'000'000 : accLim.maker_fee_rate * nominal / 1'000'000;
 
         switch (order.status) {
@@ -417,15 +440,18 @@ private:  // Helper functions associated with the public functions
             case Status::PendingNew:
             case Status::Accepted:
             case Status::PendingSubmit: {
-                accRisk.current_exposure.fetch_add(nominal * side_mult, std::memory_order_release);
-                accRisk.used_margin.fetch_add(nominal, std::memory_order_release);
+                if(order.price > 0) {
+                    accRisk.current_exposure.fetch_add(metrics.notional * metrics.side_mult, std::memory_order_release);
+                    accRisk.used_margin.fetch_add(notional, std::memory_order_release);
+                }
                 accRisk.open_orders_count.fetch_add(1, std::memory_order_release);
                 break;
             }
 
             // --- Parsiyel dolum ---
             case Status::Partial: {
-                accRisk.balance.fetch_sub(nominal + fee, std::memory_order_release); 
+                accRisk.balance.fetch_sub(metrics.nominal + fee, std::memory_order_release);
+                accRisk.used_margin.fetch_sub(nominal, std::memory_order_release);
                 break;
             }
 
@@ -442,16 +468,22 @@ private:  // Helper functions associated with the public functions
             case Status::Expired:
             case Status::DoneForDay:
             case Status::Stopped:
-            case Status::Rejected:
-            case Status::CancelReject:
-            case Status::ReplaceReject: {
-                accRisk.current_exposure.fetch_sub(nominal * side_mult, std::memory_order_release);
-                accRisk.used_margin.fetch_sub(nominal, std::memory_order_release);
-                accRisk.open_orders_count.fetch_sub(1, std::memory_order_release);
-                break;
+            {
+                if (UNLIKELY(order.cancelled_count > 1))
+                    return;
+                if (order.price > 0)
+                {
+                    accRisk.current_exposure.fetch_sub(remaining * side_mult, std::memory_order_release);
+                    accRisk.used_margin.fetch_sub(remaining, std::memory_order_release);
+                }
+                    accRisk.open_orders_count.fetch_sub(1, std::memory_order_release);
+                    break;
             }
 
             // --- Değişiklik veya belirsiz durum ---
+            case Status::Rejected:
+            case Status::CancelReject:
+            case Status::ReplaceReject:
             case Status::PendingReplace:
             case Status::Restated:
             case Status::Unknown:
@@ -459,8 +491,9 @@ private:  // Helper functions associated with the public functions
                 break;
         }
 
-        if (accRisk.balance != 0) 
-            accRisk.current_leverage.store(accRisk.current_exposure / accRisk.balance, std::memory_order_release);
+        int64_t balance = accRisk.balance.load(std::memory_order_relaxed);
+        if (balance != 0) 
+            accRisk.current_leverage.store(accRisk.current_exposure.load(std::memory_order_relaxed) / balance, std::memory_order_release);
         
     }
 

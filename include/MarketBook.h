@@ -48,9 +48,8 @@ public:
         return symBook.bid_ask_trees_[1].empty() ? 0LL : symBook.bid_ask_trees_[1].begin()->first;
     }
 
-    inline void flush(const uint8_t venue_index, const std::array<char, SYMBOL_SIZE> &symbol) noexcept
+    inline void flush(const uint8_t venue_index, const uint32_t symbol_index) noexcept
     {
-        const auto symbol_index = hashtables_.getIndex(venue_index, symbol);
         auto &symbolbook = symbolbooks_[venue_index][symbol_index];
         auto &bid_ask_trees = symbolbook.bid_ask_trees_;
         bid_ask_trees[0].clear();

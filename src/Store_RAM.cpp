@@ -97,6 +97,35 @@ void Store_RAM::handle_tick_size_definition(auto &tick_size_table, int64_t price
    }
 }
 
+void Store_RAM::handle_flush_status(const uint8_t venue_index, const uint32_t symbol_index) noexcept {
+  
+  for(auto &order : our_orders_all_venue_[venue_index][symbol_index].orders) 
+  {
+      if(!order) 
+         continue;
+
+      if(order->status == Status::New) 
+      {
+          order->status = Status::Cancelled;
+          order->cancelled_count++;
+          order->cancelled_quantity = order->quantity;
+      }
+      else if (order->status == Status::Partial)
+      {
+         order->status = Status::Cancelled;
+         order->cancelled_count++;
+         order->cancelled_quantity = order->quantity - order->filled_quantity;
+      }
+      else 
+      {
+          continue;
+      }
+
+      store_to_risk_.push(order);
+      store_to_strategy_.push(order);
+  }
+}
+
 void Store_RAM::store() noexcept
 {
    MessageWithVenue<MessageTypes_t> msgWithVenue;
@@ -187,14 +216,13 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
    {
       std::array<uint8_t, 128> arr = {};
       arr['0'] = 1;
-      arr['1'] = 1;
-      arr['2'] = 1;
       arr['4'] = 1;
-      arr['8'] = 1;
-      arr['6'] = 1;
       arr['5'] = 1;
-      arr['E'] = 1; // 69
+      arr['8'] = 1;
+      arr['9'] = 1;
       arr['C'] = 1;
+      arr['F'] = 1;
+      arr['L'] = 1;
       return arr;
    }();
 
@@ -227,8 +255,8 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
 
    store_to_db_.push(fixMsg);
    store_to_db_.push(order);
-   store_to_strategy_.push(order);
    store_to_risk_.push(order);
+   store_to_strategy_.push(order);
    
 }
 
@@ -280,8 +308,8 @@ void Store_RAM::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg)
                      order->canModify = 0x00;
 
                      this->store_to_db_.push(order);
-                     this->store_to_strategy_.push(order);
                      this->store_to_risk_.push(order);
+                     this->store_to_strategy_.push(order);
                  }
                  else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderBookDirectoryMessage>)
                  {
@@ -303,7 +331,11 @@ void Store_RAM::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg)
                  }
                  else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderBookFlushMessage>)
                  {
-                    this->update_symbol_halt_status(msg->order_book_id, Venue::BIST, true);
+                    const auto venue_index = static_cast<std::underlying_type_t<Venue>>(Venue::BIST);
+                    const auto symbol = instrument_cache_[venue_index].find(msg->order_book_id)->second.symbol;
+                    const auto symbol_index = hashtables_.getIndex(venue_index, symbol);
+                    this->marketbook_.flush(venue_index, symbol_index);
+                    this->handle_flush_status(venue_index, symbol_index);
                  }
 
                  this->store_to_db_.push(itchMsg);
@@ -372,8 +404,8 @@ void Store_RAM::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMs
                      order->canModify = 0x00;
 
                      this->store_to_db_.push(order);
-                     this->store_to_strategy_.push(order);
                      this->store_to_risk_.push(order);
+                     this->store_to_strategy_.push(order);
                      
                }
                else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHStockDirectoryMessage>)
@@ -458,8 +490,8 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                      order->canModify = 0x00;
 
                      this->store_to_db_.push(order);
-                     this->store_to_strategy_.push(order);
                      this->store_to_risk_.push(order);
+                     this->store_to_strategy_.push(order);
                      
                }
 

@@ -1,24 +1,100 @@
 #pragma once
 
 #include "common.h"
+#include "Session_FIX.h"
+#include "Logger.h"
 
 #include <string_view>
 #include <cstdint>
 #include <array>
 #include <cstring>
+#include <cstdio>
 #include <vector>
 #include <immintrin.h>
 #include <boost/lockfree/spsc_queue.hpp>
 #include <boost/pool/object_pool.hpp>
+#include <variant>
+#include <absl/container/btree_map.h>
+#include <type_traits>
+
+enum class FIXTypes : uint8_t
+{
+    Logon = 'A',
+    Logout = '5',
+    Heartbeat = '0',
+    TestRequest = '1',
+    ResendRequest = '2',
+    Reject = '3',
+    SequenceReset = '4',
+    NewOrderSingle = 'D',
+    OrderCancelRequest = 'F',
+    OrderCancelReplaceRequest = 'G',
+};
+
+/* enum class LogonStatus : uint8_t
+{
+    Active = 0,
+    Password_changed = 1,
+    Password_error = 3,
+    Invalid_id = 9,
+    Invalid_bodylength = 100, // 100 = crtical error-session suspended --- requires manual intervention
+    Low_interval = 101,
+    Unknown = 255
+}; */
+
+enum class LogoutStatus : uint8_t
+{
+    Password_Error = 3,
+    Logged_out = 4,
+    Invalid_userinfo = 5,
+    Account_locked = 6,
+    Password_expired = 8,
+    Invalid_id = 9,
+    Invalid_bodylength = 100, // 100 = crtical error-session suspended --- requires manual intervention
+    Low_interval = 101,
+    Unknown = 255
+
+};
+
+enum class SessionRejectReason : uint8_t
+{
+    Invalid_tag_number = 0,
+    Required_tag_missing = 1,
+    Tag_not_defined_for_this_type = 2,
+    Undefined_tag = 3,
+    Tag_specified_without_a_value = 4,
+    Out_of_range_value = 5,
+    Incorrect_data_format_for_value = 6,
+    CompID_problem = 9,
+    Sendingtime_accuracy_problem = 10,
+    Invalid_type = 11,
+    Repeating_group_fields = 15,
+    Incorrect_numInGroup = 16,
+    Other = 99, 
+    Unknown = 255
+};
+
+enum class CxlRejectReason : uint8_t
+{
+    Invalid_tag_number = 0,
+    Required_tag_missing = 1,
+    Tag_not_defined_for_this_type = 2,
+    Incorrect_data_format_for_value = 6, // 100 = crtical error-session suspended --- requires manual intervention
+    Unknown = 255
+};
 
 struct alignas(64) FIXMessage
 {
     int64_t price = -1;         // 8 byte, FIX Tag 44: Fiyat (fixed-point encoding)
+    
     uint32_t quantity = 0;      // 4 byte, FIX Tag 38: Miktar (Order Qty)
     uint32_t leaves_qty = 0;    // 4 byte, FIX Tag 151: Kalan miktar (Remaining Qty)
     uint32_t last_qty = 0;      // 4 byte, FIX Tag 14: Doldurulan miktar (Exec Qty)
     uint32_t filled_qty = 0;    // 4 byte, FIX Tag 32: Doldurulan miktar (Filled Qty (cum))
     uint32_t transact_time = 0; // 4 byte, FIX Tag 60: İşlem zamanı (UTC timestamp saniye cinsinden)
+    uint32_t instrument_id = 0;
+    uint32_t last_price = 0;
+    uint32_t seqnum = 0;
 
     uint8_t msg_type = 0;      // 1 byte, FIX Tag 35: Mesaj tipi (NewOrder, ExecReport, vb.)
     uint8_t side = 0;          // 1 byte, FIX Tag 54: Emir yönü (Buy/Sell)
@@ -26,21 +102,53 @@ struct alignas(64) FIXMessage
     uint8_t exec_type = 0;     // 1 byte, FIX Tag 150: Gerçekleşme tipi (Trade, Cancel, vb.)
     uint8_t ord_type = 0;      // 1 byte, FIX Tag 40: Emir tipi (Limit, Market, vb.)
     uint8_t time_in_force = 0; // 1 byte, FIX Tag 59: Geçerlilik süresi
+    uint8_t cxl_rej_response_to = 0;
+    uint8_t cxl_rej_reason = 255;
 
-    uint8_t pad1[14]; // 2 byte padding (8-byte hizalamayı sağlamak için)
     std::string_view symbol; // 16 byte, FIX Tag 55: İşlem gören varlık (Symbol)
 
     //cache-line boundary (64 byte)
     std::string_view order_id;  // 16 byte, FIX Tag 37: Broker tarafından atanan emir ID'si (Order ID)
     std::string_view cl_ord_id; // 16 byte, FIX Tag 11: Müşteri emir ID'si (Client Order ID)
     std::string_view exec_id;   // 16 byte, FIX Tag 17: Gerçekleşme ID'si (Execution ID)
-    std::string_view fix_version;
+    std::string_view orig_cl_ord_id;
+    
+};
+
+struct alignas(64) FIXSessionMessage
+{
+    uint32_t seqnum = 0;
+    uint32_t interval = 0;      
+    uint32_t ses_status = 255;
+    uint32_t new_seqnum = 0;    
+    uint32_t begin_seqnum = 0; 
+    uint32_t end_seqnum = 0;     
+    uint32_t ref_seqnum = 0;         
+    uint32_t ord_status = 0; 
+    uint32_t test_req_id = 0;
+    uint32_t sending_time = 0;
+    uint32_t org_sending_time = 0;
+
+    uint8_t gap_fill_flag = 0;      
+    uint8_t reject_reason = 255;     
+    uint8_t msg_type = 0;
+    uint8_t possDubFlag = 0;
+
+    
+    std::string_view text;
+    
+    uint8_t pad[3];   
 };
 
 inline constexpr size_t FIX_QUEUE_CAPACITY = 1024;
 
-using FIXMessagePool = std::vector<FIXMessage>;
-using spscFIXQueue_t = boost::lockfree::spsc_queue<FIXMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
+using FIXMessagePool = std::array<FIXMessage, FIX_QUEUE_CAPACITY>;
+using spscFIXQueue_t = boost::lockfree::spsc_queue<FIXMessage*, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
+
+using FIXSesMessagePool = std::array<FIXSessionMessage, FIX_QUEUE_CAPACITY>;
+using spscFIXSesQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage*, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
+
+using FIXPendingMap_t = absl::btree_map<uint32_t, std::variant<FIXMessage*, FIXSessionMessage*>>; 
 
 class Parser_FIX
 {
@@ -48,22 +156,258 @@ private:
     FIXMessagePool fixMsg_pool_;
     spscFIXQueue_t free_fixMsg_list_;
 
+    FIXSesMessagePool fixSesMsg_pool_;
+    spscFIXSesQueue_t free_fixSesMsg_list_;
+    
+    FIXPendingMap_t pending_to_store_map_;
+
     static constexpr char SOH = '\x01';
-    static constexpr size_t MAX_TAG = 192;
+    static constexpr size_t MAX_TAG = 512;
+    static constexpr size_t MAX_SESTAG = 2048;
 
     using TagHandlerFunc = void (*)(std::string_view, FIXMessage *) noexcept;
     static std::array<TagHandlerFunc, MAX_TAG> makeTagHandlersLookup() noexcept;
     static std::array<TagHandlerFunc, MAX_TAG> tagHandlers;
 
-public:
-    Parser_FIX() noexcept;
+    using SesTagHandlerFunc = void (*)(std::string_view, FIXSessionMessage *) noexcept;
+    static std::array<SesTagHandlerFunc, MAX_SESTAG> makeSesTagHandlersLookup() noexcept;
+    static std::array<SesTagHandlerFunc, MAX_SESTAG> SestagHandlers;
 
-    inline void releaseFIX(FIXMessage *fixMsg) noexcept
+    Session_FIX &session_;
+
+public:
+    Parser_FIX(Session_FIX &session) noexcept;
+
+    template <typename T>
+    T* parse(const char *data, size_t len) noexcept
+    {
+        T *msg{nullptr};
+
+        if constexpr (std::is_same_v<T, FIXMessage>)
+            free_fixMsg_list_.pop(msg);
+        else
+            free_fixSesMsg_list_.pop(msg);
+
+        auto const &handlers = []() -> auto const &
+        {
+            if constexpr (std::is_same_v<T, FIXMessage>)
+                return tagHandlers;
+            else
+                return SestagHandlers;
+        }();
+
+        size_t pos = 0;
+        size_t tag_start = 0;
+
+        const __m256i eq_mask = _mm256_set1_epi8('=');
+        const __m256i soh_mask = _mm256_set1_epi8('\x01');
+
+        while (pos + 32 <= len)
+        {
+            __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(data + pos));
+
+            uint32_t eq_bits = _mm256_movemask_epi8(_mm256_cmpeq_epi8(chunk, eq_mask));
+            uint32_t soh_bits = _mm256_movemask_epi8(_mm256_cmpeq_epi8(chunk, soh_mask));
+
+            while (eq_bits != 0)
+            {
+
+                int eq_offset = __builtin_ctz(eq_bits);
+                size_t eq_pos = pos + eq_offset;
+
+                int soh_offset = 0;
+                size_t soh_pos = static_cast<size_t>(-1);
+
+                uint32_t soh_after = soh_bits & (~0u << (eq_offset + 1));
+
+                if (soh_after != 0)
+                {
+                    soh_offset = __builtin_ctz(soh_after);
+                    soh_pos = pos + soh_offset;
+                }
+                else
+                {
+                    size_t search_pos = eq_pos + 1;
+                    while (search_pos < len && data[search_pos] != '\x01')
+                        ++search_pos;
+                    soh_pos = search_pos;
+                }
+
+                std::string_view value(data + eq_pos + 1, soh_pos - (eq_pos + 1));
+
+                uint32_t tag = parseNumber(data + tag_start, eq_pos - tag_start);
+
+                auto& handler = handlers[tag];
+                if (handler)
+                    handler(value, msg);
+
+                tag_start = soh_pos + 1;
+
+                eq_bits &= ~(1u << eq_offset);
+            }
+
+            pos += 32;
+        }
+
+        while (pos < len)
+        {
+            // '=' işaretini bul
+            size_t eq_pos = pos;
+            while (data[eq_pos] != '=')
+                ++eq_pos;
+            // Tag kısmı [pos, eq_pos)
+            uint32_t tag = parseNumber(data + tag_start, eq_pos - tag_start);
+            // SOH karakterini bul
+            size_t soh_pos = eq_pos + 1;
+            while (data[soh_pos] != '\x01')
+                ++soh_pos;
+
+            // Value kısmı [eq_pos+1, soh_pos)
+            std::string_view value(data + eq_pos + 1, soh_pos - (eq_pos + 1));
+
+             auto& handler = handlers[tag];
+             if (handler)
+                handler(value, msg);
+
+            tag_start = soh_pos + 1;
+            pos = soh_pos + 1;
+        }
+        return msg;
+    }
+
+    inline bool handle_sesMsg(FIXSessionMessage *fixSesMsg) noexcept
+    {
+        const FIXTypes type = static_cast<FIXTypes>(fixSesMsg->msg_type);
+      
+            switch(type) 
+            {
+
+                case FIXTypes::ResendRequest:
+                    return false;
+                
+                case FIXTypes::Reject:
+                {
+                    const SessionRejectReason reject_reason = static_cast<SessionRejectReason>(fixSesMsg->reject_reason);
+                    const std::string_view reason = to_string(reject_reason);
+                    const std::string_view text = fixSesMsg->text;
+                   
+                    const char* txt = text.data();
+                    size_t txt_len = text.size();
+                
+                    const char* rs = reason.data();
+                    size_t rs_len = reason.size();
+
+                    std::string msg;
+                    msg.reserve(rs_len + 4 + txt_len);
+                    msg.append(rs, rs_len);
+                    msg.append(" => ", 4);
+                    msg.append(txt);
+
+                    LOG_ERROR(msg);
+                    return false;
+                }
+                
+                case FIXTypes::SequenceReset:
+                    session_.set_expected_seq(fixSesMsg->new_seqnum);
+                    return true;
+                
+                case FIXTypes::TestRequest:
+                    return false;
+                
+                case FIXTypes::Logout:
+                {
+                    const LogoutStatus ses_status = static_cast<LogoutStatus>(fixSesMsg->ses_status);
+                    const std::string_view status = to_string(ses_status);
+                    const std::string_view text = fixSesMsg->text;
+
+                    const char *txt = text.data();
+                    size_t txt_len = text.size();
+
+                    const char *st = status.data();
+                    size_t st_len = status.size();
+
+                    std::string msg;
+                    msg.reserve(st_len + 4 + txt_len);
+                    msg.append(st, st_len);
+                    msg.append(" => ", 4);
+                    msg.append(txt);
+
+                    LOG_ERROR(msg);
+                    return true;
+                }
+
+                default:
+                    return true;
+
+            } 
+    }
+
+    inline void releaseFIX(FIXMessage* fixMsg) noexcept
     {
         free_fixMsg_list_.push(fixMsg);
     }
 
-    FIXMessage *parse(const char *data, size_t len) noexcept;
+    inline void releaseFIX(FIXSessionMessage* fixSesMsg) noexcept
+    {
+        free_fixSesMsg_list_.push(fixSesMsg);
+    }
+
+    inline char find_type(const char* data)
+    {
+        const __m256i eq_mask = _mm256_set1_epi8('=');
+        __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(data));
+        __m256i eq_cmp = _mm256_cmpeq_epi8(chunk, eq_mask);
+        uint32_t eq_bits = _mm256_movemask_epi8(eq_cmp);
+        int eq_offset = 0;
+        
+        for (uint8_t i = 0; i < 2; i++)
+        {
+            eq_offset = __builtin_ctz(eq_bits);
+            eq_bits &= ~(1u << eq_offset);
+        }
+
+        int third_eq_offset = __builtin_ctz(eq_bits);
+        
+        return *(data + third_eq_offset + 1);
+    }
+
+    inline const auto get_expected() const noexcept 
+    {
+        return session_.get_expected();
+    }
+
+    inline bool is_expected_seqnum(const uint32_t seqnum) noexcept
+    {
+        return get_expected() == seqnum;
+    }
+
+    inline void increase_expected() noexcept
+    {
+        return session_.increase_expected_seq();
+    }
+
+    template<typename T>
+    inline void push_pending(T* msg) noexcept
+    {
+        using type_t = std::conditional_t<std::is_same_v<T, FIXMessage>, FIXMessage*, FIXSessionMessage*>;
+        pending_to_store_map_.emplace(
+            msg->seqnum,
+            std::variant<FIXMessage *, FIXSessionMessage *>{std::in_place_type<type_t>, msg});
+    }
+
+    inline std::variant<FIXMessage*, FIXSessionMessage*>* find_in_pending(const uint32_t expected) noexcept
+    {
+        auto it = pending_to_store_map_.find(expected);
+        if (it == pending_to_store_map_.end())
+            return nullptr;
+
+        return &it->second;
+    }
+
+    inline void pop_pending(const auto seqnum) noexcept
+    {
+        pending_to_store_map_.erase(seqnum);
+    }
 
 private:
 
@@ -94,4 +438,63 @@ private:
         return result;
     }
 
+   static constexpr std::string_view to_string(SessionRejectReason reason) 
+   {
+        switch(reason)
+        {
+            case SessionRejectReason::Invalid_tag_number:
+                return "Invalid_tag_number";
+            case SessionRejectReason::Required_tag_missing:
+                return "Required_tag_missing";
+            case SessionRejectReason::Tag_not_defined_for_this_type:
+                return "Tag_not_defined_for_this_type";
+            case SessionRejectReason::Undefined_tag:
+                return "Undefined_tag";
+            case SessionRejectReason::Tag_specified_without_a_value:
+                return "Tag_specified_without_a_value";
+            case SessionRejectReason::Out_of_range_value:
+                return "Out_of_range_value";
+            case SessionRejectReason::Incorrect_data_format_for_value:
+                return "Incorrect_data_format_for_value";
+            case SessionRejectReason::CompID_problem:
+                return "CompID_problem";
+            case SessionRejectReason::Sendingtime_accuracy_problem:
+                return "Sendingtime_accuracy_problem";
+            case SessionRejectReason::Invalid_type:
+                return "Invalid_type";
+            case SessionRejectReason::Repeating_group_fields:
+                return "Repeating_group_fields";
+            case SessionRejectReason::Incorrect_numInGroup:
+                return "Incorrect_numInGroup";
+            case SessionRejectReason::Other:
+                return "Other";
+            default:
+                return "Unknown";
+        }
+   }
+
+   static constexpr std::string_view to_string(LogoutStatus status)
+   {
+        switch (status)
+       {
+       case LogoutStatus::Password_Error:
+           return "Password_Error";
+       case LogoutStatus::Logged_out:
+           return "Logged_out";
+       case LogoutStatus::Invalid_userinfo:
+           return "Invalid_userinfo";
+       case LogoutStatus::Account_locked:
+           return "Account_locked";
+       case LogoutStatus::Password_expired:
+           return "Password_expired";
+       case LogoutStatus::Invalid_id:
+           return "Invalid_id";
+       case LogoutStatus::Invalid_bodylength:
+           return "Invalid_bodylength ";
+       case LogoutStatus::Low_interval:
+           return "Low_interval";
+       default:
+           return "Unknown";
+       }
+   }
 };

@@ -46,14 +46,14 @@
 
   "venue_limits": {
      "BIST": {
-       "max_order_rate_per_interval": 0,
+       "max_order_per_interval": 0,
        "order_rate_interval_ns": 0,
        "max_cancels_per_sec": 0,
        "maker_fee_rate": 0,
        "taker_fee_rate": 0
     },
     "NYSE": {
-       "max_order_rate_per_interval": 0,
+       "max_order_per_interval": 0,
        "order_rate_interval_ns": 0,
        "max_cancels_per_sec": 0,
        "maker_fee_rate": 0,

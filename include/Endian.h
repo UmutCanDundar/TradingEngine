@@ -3,11 +3,6 @@
 
 struct Endian
 {
-   // 8 bit -> endian farkı yok
-   static constexpr uint8_t read_u8(const char* p) noexcept {
-      return static_cast<uint8_t>(p[0]);
-   }
-
    // 16 bit big endian read
    static constexpr uint16_t read_u16_be(const char* p) noexcept {
       return (uint16_t(uint8_t(p[0])) << 8) |

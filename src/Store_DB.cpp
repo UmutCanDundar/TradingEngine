@@ -86,10 +86,6 @@ void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
    col_time_in_force->Append(std::string(1, msg->time_in_force));
    block.AppendColumn("time_in_force", col_time_in_force);
 
-   auto col_fix_version = std::make_shared<ColumnString>();
-   col_fix_version->Append(msg->fix_version);
-   block.AppendColumn("fix_version", col_fix_version);
-
    client_->Insert("FIX_Table", block);
 }
 
@@ -628,7 +624,7 @@ void Store_DB::insert(const Order *order)
 
    // Taktik parametreler
    auto col_time_in_force = std::make_shared<ColumnUInt8>();
-   col_time_in_force->Append(order->time_in_force);
+   col_time_in_force->Append(static_cast<uint8_t>(order->time_in_force));
    block.AppendColumn("time_in_force", col_time_in_force);
 
    auto col_order_type = std::make_shared<ColumnUInt8>();

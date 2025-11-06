@@ -135,7 +135,7 @@ inline constexpr size_t OUR_ORDER_MAP_THRESHOLD = 16384;
 inline constexpr uint8_t STRATEGY_DONE = 0x01;
 inline constexpr uint8_t RISK_DONE = 0x02;
 
-using spscPendingQueue_t = boost::lockfree::spsc_queue<PendingMessage<MessageWithVenue<MessageTypes_t>>, boost::lockfree::capacity<PENDING_QUEUE_CAPACITY>>;
+using spscStorePendingQueue_t = boost::lockfree::spsc_queue<PendingMessage<MessageWithVenue<MessageTypes_t>>, boost::lockfree::capacity<PENDING_QUEUE_CAPACITY>>;
 using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
 using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<SBEMessage>>, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
 
@@ -161,13 +161,14 @@ private:
 
     absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> market_order_map_;
     absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> our_order_map_;
+    
     std::array<absl::flat_hash_map<uint64_t, SymbolMeta>,VENUE_COUNT> instrument_cache_;
 
     std::array<std::vector<OrderHistory>, VENUE_COUNT> our_orders_all_venue_;
     std::array<VenueFlags, VENUE_COUNT> venue_flags_;
 
     spscMessageQueue_t &parser_to_store_;
-    spscPendingQueue_t pending_to_strategy_;
+    spscStorePendingQueue_t pending_to_strategy_;
     spscOrderQueue_t &store_to_risk_;
     spscOrderQueue_t &store_to_strategy_;
     spscOrderQueue_t &store_to_strategy_free_slot_;
@@ -221,6 +222,8 @@ private:
 
     void handle_tick_size_definition(const BIST::ITCHTickSizeTableEntryMessage *msg, Venue venue) noexcept;
     void handle_tick_size_definition(auto &tick_size_table, int64_t price_from, int64_t price_to, uint64_t tick_size) noexcept;
+
+    void handle_flush_status(const uint8_t venue_index, const uint32_t symbol_index) noexcept;
 
     inline void ReleaseOrder(OrderKey &orderkey, OrderHistory &orderhistory, Order *order)
     {
@@ -292,10 +295,11 @@ private:
         order.message_type = msg->msg_type;
         order.protocol = Protocol::FIX;
 
-        order.time_in_force = msg->time_in_force;
+        order.time_in_force = static_cast<TimeInForce>(msg->time_in_force);
         order.order_type = static_cast<OrderType>(msg->ord_type - '0');
         
         order.StatusesPreNew.fill(Status::Unknown);
+        order.cancelled_count = 0; 
         // order.timestamp_ns = static_cast<uint64_t>(msg->transact_time) * 1'000'000'000ULL;
         // Diğer opsiyonel alanlar sıfır kalabilir
     }
@@ -327,6 +331,7 @@ private:
         order.last_update_time  = static_cast<uint64_t>(msg->transact_time);
         if (UNLIKELY(order.syncState == SyncState::WaitingNew))
             order.StatusesPreNew[1] = Status::Cancelled;
+        order.cancelled_count++;
     }
 
     inline void fill_fix_rejected(Order &order, const FIXMessage *msg) noexcept
@@ -396,6 +401,7 @@ private:
         order.message_type = msg->message_type;
         order.protocol = Protocol::ITCH;
         order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
+        order.cancelled_count = 0;
     }
 
     inline void fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedMessage *msg) noexcept
@@ -420,6 +426,7 @@ private:
         order.status = Status::Cancelled;
         order.cancelled_quantity = order.quantity;
         order.last_update_time = msg->timestamp_ns;
+        order.cancelled_count++;
     }
 
     inline void fill_itch_trade(Order &order, const BIST::ITCHTradeMessage *msg, Venue venue) noexcept
@@ -480,7 +487,7 @@ private:
         order.message_type = msg->message_type;
         order.protocol = Protocol::ITCH;
         order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
-
+        order.cancelled_count = 0;
         // order.timestamp_ns = msg->timestamp;
     }
 
@@ -505,6 +512,7 @@ private:
         order.message_type = msg->message_type;
         order.protocol = Protocol::ITCH;
         order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
+        order.cancelled_count = 0;
 
         // order.timestamp_ns = msg->timestamp;
         // MPID alanı order struct'ta yok, gerekirse eklenebilir
@@ -515,6 +523,7 @@ private:
         order.status = Status::Cancelled;
         order.last_update_time = msg->timestamp;
         order.cancelled_quantity = msg->cancelled_shares;
+        order.cancelled_count++;
     }
 
     inline void fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedMessage *msg) noexcept
@@ -562,6 +571,7 @@ private:
         order.protocol = Protocol::ITCH;
         order.last_update_time = msg->timestamp;
         order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
+        order.cancelled_count = 0;
     }
 
     inline void fill_itch_trade(Order &order, const NASDAQ::ITCHTradeMessage *msg, Venue venue) noexcept
@@ -586,7 +596,6 @@ private:
 
         order.price = static_cast<int64_t>(msg->price);
         order.status = Status::Filled;
-        
     }
     
     //===========================================================
@@ -615,7 +624,7 @@ private:
         order.message_type = static_cast<uint8_t>(msg->header.templateId);
         order.protocol = Protocol::SBE;
         order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
-
+        order.cancelled_count = 0;
         // order.timestamp_ns = msg->header.version;
     }
 
@@ -630,6 +639,7 @@ private:
         order.status = Status::Cancelled;
         order.cancelled_quantity = order.quantity - order.filled_quantity;
         order.last_update_time = msg->header.version;
+        order.cancelled_count++;
     }
 
     inline void fill_sbe_trade(Order &order, const SBETradeMessage *msg, Venue venue) noexcept
@@ -659,5 +669,6 @@ private:
         order.last_update_time = msg->header.version;
         order.message_type = static_cast<uint8_t>(msg->header.templateId);
         order.protocol = Protocol::SBE;
+        order.cancelled_count = 0;
     }
 };
