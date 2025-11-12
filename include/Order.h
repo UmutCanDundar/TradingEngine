@@ -85,7 +85,7 @@ struct alignas(64) Order
    int64_t price = 0;               // Fixed-point scaled
    uint32_t quantity = 0;           // Original order quantity
    uint32_t filled_quantity = 0;    // Cumulative filled quantity
-   uint32_t cancelled_quantity = 0;
+   uint32_t remaining_quantity = 0;
    uint32_t last_exec_quantity = 0;
    uint32_t symbol_index = 0;       // From Hashtable 
    uint32_t instrument_id = 0; // SBE/ITCH instrument identifier
@@ -100,6 +100,7 @@ struct alignas(64) Order
    std::array<Status,2> StatusesPreNew;
    TimeInForce time_in_force = TimeInForce::Unknown;  // IOC, GTC, etc.
    uint8_t cancelled_count = 0;
+   uint8_t exec_type = 0; // For FIX
 
    uint8_t pad1[4]; // 64-byte alignment
 

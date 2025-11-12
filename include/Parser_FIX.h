@@ -16,6 +16,7 @@
 #include <variant>
 #include <absl/container/btree_map.h>
 #include <type_traits>
+#include <chrono>
 
 enum class FIXTypes : uint8_t
 {
@@ -85,15 +86,15 @@ enum class CxlRejectReason : uint8_t
 
 struct alignas(64) FIXMessage
 {
-    int64_t price = -1;         // 8 byte, FIX Tag 44: Fiyat (fixed-point encoding)
-    
+    int64_t price = 0;         // 8 byte, FIX Tag 44: Fiyat (fixed-point encoding)
+    int64_t last_price = 0;
+
     uint32_t quantity = 0;      // 4 byte, FIX Tag 38: Miktar (Order Qty)
     uint32_t leaves_qty = 0;    // 4 byte, FIX Tag 151: Kalan miktar (Remaining Qty)
     uint32_t last_qty = 0;      // 4 byte, FIX Tag 14: Doldurulan miktar (Exec Qty)
     uint32_t filled_qty = 0;    // 4 byte, FIX Tag 32: Doldurulan miktar (Filled Qty (cum))
     uint32_t transact_time = 0; // 4 byte, FIX Tag 60: İşlem zamanı (UTC timestamp saniye cinsinden)
     uint32_t instrument_id = 0;
-    uint32_t last_price = 0;
     uint32_t seqnum = 0;
 
     uint8_t msg_type = 0;      // 1 byte, FIX Tag 35: Mesaj tipi (NewOrder, ExecReport, vb.)
@@ -105,14 +106,17 @@ struct alignas(64) FIXMessage
     uint8_t cxl_rej_response_to = 0;
     uint8_t cxl_rej_reason = 255;
 
-    std::string_view symbol; // 16 byte, FIX Tag 55: İşlem gören varlık (Symbol)
+    uint8_t pad1[12];
 
-    //cache-line boundary (64 byte)
+    //cache-line
+    std::string_view symbol; // 16 byte, FIX Tag 55: İşlem gören varlık (Symbol) 
     std::string_view order_id;  // 16 byte, FIX Tag 37: Broker tarafından atanan emir ID'si (Order ID)
     std::string_view cl_ord_id; // 16 byte, FIX Tag 11: Müşteri emir ID'si (Client Order ID)
     std::string_view exec_id;   // 16 byte, FIX Tag 17: Gerçekleşme ID'si (Execution ID)
-    std::string_view orig_cl_ord_id;
     
+    // cache-line
+    std::string_view orig_cl_ord_id;
+    uint8_t pad2[48];
 };
 
 struct alignas(64) FIXSessionMessage
@@ -134,13 +138,16 @@ struct alignas(64) FIXSessionMessage
     uint8_t msg_type = 0;
     uint8_t possDubFlag = 0;
 
-    
     std::string_view text;
-    
-    uint8_t pad[3];   
+
+    //cache-line
+    uint8_t reset_seqnum_flag = 'N';
+   
+    uint8_t pad2[63];
 };
 
 inline constexpr size_t FIX_QUEUE_CAPACITY = 1024;
+inline constexpr size_t MESSAGE_QUEUE_CAPACITY = 1024;
 
 using FIXMessagePool = std::array<FIXMessage, FIX_QUEUE_CAPACITY>;
 using spscFIXQueue_t = boost::lockfree::spsc_queue<FIXMessage*, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
@@ -148,7 +155,9 @@ using spscFIXQueue_t = boost::lockfree::spsc_queue<FIXMessage*, boost::lockfree:
 using FIXSesMessagePool = std::array<FIXSessionMessage, FIX_QUEUE_CAPACITY>;
 using spscFIXSesQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage*, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
 
-using FIXPendingMap_t = absl::btree_map<uint32_t, std::variant<FIXMessage*, FIXSessionMessage*>>; 
+using spscFIXInSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage*, boost::lockfree::capacity<MESSAGE_QUEUE_CAPACITY>>;
+
+using FIXPendingMap_t = absl::btree_map<uint32_t, std::variant<FIXMessage*, FIXSessionMessage*>>;
 
 class Parser_FIX
 {
@@ -174,14 +183,15 @@ private:
     static std::array<SesTagHandlerFunc, MAX_SESTAG> SestagHandlers;
 
     Session_FIX &session_;
+    spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;
 
 public:
-    Parser_FIX(Session_FIX &session) noexcept;
+    Parser_FIX(Session_FIX &session, spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept;
 
     template <typename T>
     T* parse(const char *data, size_t len) noexcept
     {
-        T *msg{nullptr};
+        T* msg{nullptr};
 
         if constexpr (std::is_same_v<T, FIXMessage>)
             free_fixMsg_list_.pop(msg);
@@ -335,6 +345,13 @@ public:
                     LOG_ERROR(msg);
                     return true;
                 }
+                case FIXTypes::Logon:
+                    if(fixSesMsg->reset_seqnum_flag == 'Y') 
+                    {
+                        session_.set_expected_seq(2);
+                        session_.set_next_seq(1);
+                    }
+                    return true;
 
                 default:
                     return true;
@@ -346,7 +363,6 @@ public:
     {
         free_fixMsg_list_.push(fixMsg);
     }
-
     inline void releaseFIX(FIXSessionMessage* fixSesMsg) noexcept
     {
         free_fixSesMsg_list_.push(fixSesMsg);
@@ -371,21 +387,6 @@ public:
         return *(data + third_eq_offset + 1);
     }
 
-    inline const auto get_expected() const noexcept 
-    {
-        return session_.get_expected();
-    }
-
-    inline bool is_expected_seqnum(const uint32_t seqnum) noexcept
-    {
-        return get_expected() == seqnum;
-    }
-
-    inline void increase_expected() noexcept
-    {
-        return session_.increase_expected_seq();
-    }
-
     template<typename T>
     inline void push_pending(T* msg) noexcept
     {
@@ -394,7 +395,6 @@ public:
             msg->seqnum,
             std::variant<FIXMessage *, FIXSessionMessage *>{std::in_place_type<type_t>, msg});
     }
-
     inline std::variant<FIXMessage*, FIXSessionMessage*>* find_in_pending(const uint32_t expected) noexcept
     {
         auto it = pending_to_store_map_.find(expected);
@@ -403,10 +403,63 @@ public:
 
         return &it->second;
     }
-
     inline void pop_pending(const auto seqnum) noexcept
     {
         pending_to_store_map_.erase(seqnum);
+    }
+    
+    inline void resend_logic(uint32_t msg_seqnum) noexcept 
+    {
+        auto now_ts = std::chrono::steady_clock::now();
+        auto last_resend_ts = session_.get_last_resend_ts();
+
+        if (session_.get_resend_counter() < FIXSequence::MAX_RESEND_ATTEMPT && 
+            now_ts - last_resend_ts > FIXSequence::RESEND_INTERVAL)
+        {
+            FIXSessionMessage *msg_1;
+            free_fixSesMsg_list_.pop(msg_1);
+            msg_1->begin_seqnum = session_.get_expected(); 
+            msg_1->end_seqnum = msg_seqnum;
+            msg_1->msg_type = static_cast<uint8_t>(FIXTypes::ResendRequest);
+            parser_to_fixbuilder_in_.push(msg_1);
+
+            session_.increase_resend_counter(); 
+        }
+        else 
+        {
+            FIXSessionMessage *msg_2;
+            free_fixSesMsg_list_.pop(msg_2);
+            msg_2->msg_type = static_cast<uint8_t>(FIXTypes::Logout);
+            parser_to_fixbuilder_in_.push(msg_2);
+
+            FIXSessionMessage *msg_3;
+            free_fixSesMsg_list_.pop(msg_3);
+            msg_3->msg_type = static_cast<uint8_t>(FIXTypes::Logon);
+            parser_to_fixbuilder_in_.push(msg_3);
+
+            pending_to_store_map_.clear();
+            session_.reset_resend_counter();
+        }
+    }
+    inline void resend_logic_logon(FIXSessionMessage* fixSesMsg) noexcept
+    {
+        if (fixSesMsg->reset_seqnum_flag == 'Y')
+        {
+            session_.set_expected_seq(2);
+            session_.set_next_seq(1);
+            pending_to_store_map_.clear(); 
+
+            releaseFIX(fixSesMsg);
+            return;
+        }
+        
+        FIXSessionMessage *msg;
+        free_fixSesMsg_list_.pop(msg);
+        msg->begin_seqnum = session_.get_expected();
+        msg->end_seqnum = fixSesMsg->seqnum - 1;
+        msg->msg_type = static_cast<uint8_t>(FIXTypes::ResendRequest);
+        parser_to_fixbuilder_in_.push(msg);
+        push_pending(fixSesMsg);
     }
 
 private:

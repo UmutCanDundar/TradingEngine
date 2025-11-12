@@ -14,7 +14,6 @@
 #include <cstdio>
 #include <atomic>
 
-inline constexpr size_t MESSAGE_QUEUE_CAPACITY = 1024;
 using spscFIXSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage*, boost::lockfree::capacity<MESSAGE_QUEUE_CAPACITY>>;
 
 class Builder_FIX {
@@ -58,12 +57,12 @@ private:
 
     Session_FIX& session_;
     const VenueUserInfo &vui_;
-
+    
 public:
     Builder_FIX(Session_FIX& session) noexcept;
     ~Builder_FIX() noexcept;
     
-    inline Buffer *ResendRequest(const size_t seqnum)
+    inline Buffer *handleResendRequest(const size_t seqnum)
     {
         const auto& msg_history = session_.get_history();
         const Buffer *org_buf = &msg_history[seqnum];
@@ -71,12 +70,12 @@ public:
             return build_resend(org_buf);
     }
 
-    inline Buffer *Reject()
+    inline Buffer *handleReject()
     {
        return build<FIXTypes::Logout>();
     }
 
-    inline Buffer *TestRequest()
+    inline Buffer *handleTestRequest()
     {
         return build<FIXTypes::Heartbeat>();
     }

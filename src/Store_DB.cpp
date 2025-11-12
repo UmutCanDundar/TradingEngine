@@ -184,9 +184,9 @@ void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
             col_order_ref->Append(msg->order_ref);
             block.AppendColumn("order_ref", col_order_ref);
 
-            auto col_cancelled_quantity = std::make_shared<ColumnUInt32>();
-            col_cancelled_quantity->Append(msg->cancelled_quantity);
-            block.AppendColumn("cancelled_quantity", col_cancelled_quantity);
+            auto col_remaining_quantity = std::make_shared<ColumnUInt32>();
+            col_remaining_quantity->Append(msg->remaining_quantity);
+            block.AppendColumn("remaining_quantity", col_remaining_quantity);
          }
          else if constexpr (std::is_same_v<MsgType, ITCHExecutedMessage>)
          {
@@ -350,9 +350,9 @@ void Store_DB::insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg)
             col_order_ref->Append(msg->order_ref);
             block.AppendColumn("order_ref", col_order_ref);
 
-            auto col_cancelled_quantity = std::make_shared<ColumnUInt32>();
-            col_cancelled_quantity->Append(msg->cancelled_quantity);
-            block.AppendColumn("cancelled_quantity", col_cancelled_quantity);
+            auto col_remaining_quantity = std::make_shared<ColumnUInt32>();
+            col_remaining_quantity->Append(msg->remaining_quantity);
+            block.AppendColumn("remaining_quantity", col_remaining_quantity);
          }
          else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHExecutedMessage>)
          {
@@ -593,9 +593,9 @@ void Store_DB::insert(const Order *order)
    col_filled_quantity->Append(order->filled_quantity);
    block.AppendColumn("filled_quantity", col_filled_quantity);
 
-   auto col_cancelled_quantity = std::make_shared<ColumnUInt32>();
-   col_cancelled_quantity->Append(order->cancelled_quantity);
-   block.AppendColumn("cancelled_quantity", col_cancelled_quantity);
+   auto col_remaining_quantity = std::make_shared<ColumnUInt32>();
+   col_remaining_quantity->Append(order->remaining_quantity);
+   block.AppendColumn("remaining_quantity", col_remaining_quantity);
 
    // Symbol (fixed 8-byte array -> string)
    auto col_symbol = std::make_shared<ColumnString>();

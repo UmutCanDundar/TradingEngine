@@ -197,7 +197,7 @@ struct OrderMetrics
    
     OrderMetrics(const Order &order) noexcept
         : nominal(order.price * static_cast<int64_t>(order.last_exec_quantity)), notional(order.price * static_cast<int64_t>(order.quantity)), 
-          remaining(order.price * static_cast<int64_t>(order.cancelled_quantity)), side_mult(order.side == Side::Buy ? 1 : -1) {}
+          remaining(order.price * static_cast<int64_t>(order.remaining_quantity)), side_mult(order.side == Side::Buy ? 1 : -1) {}
 };
 
 struct OrderWithRejectReason
@@ -350,9 +350,6 @@ private:  // Helper functions associated with the public functions
             {
             // --- Yeni veya beklemede ---
             case Status::New:
-            case Status::PendingNew:
-            case Status::Accepted:
-            case Status::PendingSubmit:
                 symRisk.open_orders_count.fetch_add(1, std::memory_order_acq_rel);
                 if(order.price > 0)
                     symRisk.pending_notional_scaled.fetch_add(notional, std::memory_order_release);
@@ -381,9 +378,6 @@ private:  // Helper functions associated with the public functions
             }
             case Status::Cancelled:
             case Status::Expired:
-            case Status::DoneForDay:
-            case Status::Stopped:
-            case Status::Suspended:
                 if (UNLIKELY(order.cancelled_count > 1))
                     return;
                 symRisk.open_orders_count.fetch_sub(1, std::memory_order_release);
@@ -392,12 +386,7 @@ private:  // Helper functions associated with the public functions
                 break;
 
             case Status::Rejected:          // Order hiç yaşamadı
-            case Status::CancelReject:      // Cancel reddedildi, order hala aktif
-            case Status::ReplaceReject:     // Replace reddedildi, order hala aktif
-            case Status::PendingCancel:     // Ara durum
-            case Status::PendingReplace:    // Ara durum
             case Status::Unknown:           // Belirsiz
-            case Status::Restated:
             default:
                 break;
             }
@@ -437,9 +426,7 @@ private:  // Helper functions associated with the public functions
 
             // --- Emir gönderildi / kabul edildi (blokaj başlar) ---
             case Status::New:
-            case Status::PendingNew:
-            case Status::Accepted:
-            case Status::PendingSubmit: {
+            {
                 if(order.price > 0) {
                     accRisk.current_exposure.fetch_add(metrics.notional * metrics.side_mult, std::memory_order_release);
                     accRisk.used_margin.fetch_add(notional, std::memory_order_release);
@@ -466,8 +453,6 @@ private:  // Helper functions associated with the public functions
             // --- İptal veya reddedilme (blokaj geri çözülür) ---
             case Status::Cancelled:
             case Status::Expired:
-            case Status::DoneForDay:
-            case Status::Stopped:
             {
                 if (UNLIKELY(order.cancelled_count > 1))
                     return;
@@ -482,10 +467,6 @@ private:  // Helper functions associated with the public functions
 
             // --- Değişiklik veya belirsiz durum ---
             case Status::Rejected:
-            case Status::CancelReject:
-            case Status::ReplaceReject:
-            case Status::PendingReplace:
-            case Status::Restated:
             case Status::Unknown:
             default:
                 break;

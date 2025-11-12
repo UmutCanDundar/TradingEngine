@@ -278,12 +278,9 @@ private:
     {
         order.price = msg->price;
         order.quantity = msg->quantity;
-        order.filled_quantity = 0; // Yeni emir, henüz doldurulmamış
         copy_symbol(order.symbol, msg->symbol);
         order.symbol_index = hashtables_.getIndex(static_cast<uint8_t>(venue),order.symbol);
         order.side = (msg->side == '1') ? Side::Buy : Side::Sell; // FIX: '1'=Buy, '2'=Sell
-        order.status = Status::New;
-        order.syncState = SyncState::NewSeen;
         order.venue = venue;
 
         order.order_id = absl::Hash<std::string_view>{}(msg->order_id);
@@ -294,20 +291,24 @@ private:
 
         order.message_type = msg->msg_type;
         order.protocol = Protocol::FIX;
+        order.instrument_id = msg->instrument_id;
 
         order.time_in_force = static_cast<TimeInForce>(msg->time_in_force);
         order.order_type = static_cast<OrderType>(msg->ord_type - '0');
-        
+
+        order.status = Status::New;
+        order.syncState = SyncState::NewSeen;
         order.StatusesPreNew.fill(Status::Unknown);
         order.cancelled_count = 0; 
-        // order.timestamp_ns = static_cast<uint64_t>(msg->transact_time) * 1'000'000'000ULL;
-        // Diğer opsiyonel alanlar sıfır kalabilir
+        
     }
 
     inline void fill_fix_partial(Order &order, const FIXMessage *msg) noexcept {
         order.status = Status::Partial;
-        order.filled_quantity = msg->filled_qty;        // toplam dolum
-        order.last_exec_quantity = msg->last_qty;         // bu mesajdaki dolum
+        order.price = msg->last_price;
+        order.filled_quantity = msg->filled_qty;        
+        order.last_exec_quantity = msg->last_qty;        
+        order.remaining_quantity = msg->leaves_qty;
         order.last_update_time = static_cast<uint64_t>(msg->transact_time);
         if (UNLIKELY(order.syncState == SyncState::WaitingNew))
             order.StatusesPreNew[0] = Status::Partial;
@@ -315,8 +316,10 @@ private:
 
     inline void fill_fix_filled(Order &order, const FIXMessage *msg) noexcept {
         order.status = Status::Filled;
-        order.filled_quantity = msg->filled_qty;       // artık quantity ile aynı
-        order.last_exec_quantity = msg->last_qty;         // son dolum
+        order.price = msg->last_price;
+        order.filled_quantity = msg->filled_qty;       
+        order.last_exec_quantity = msg->last_qty;        
+        order.remaining_quantity = msg->leaves_qty;     // 0
         order.last_update_time = static_cast<uint64_t>(msg->transact_time);
         if (UNLIKELY(order.syncState == SyncState::WaitingNew))
             order.StatusesPreNew[0] = Status::Filled;
@@ -326,8 +329,7 @@ private:
     {
         order.status = Status::Cancelled;
         order.filled_quantity = msg->filled_qty;      // iptal öncesi toplam dolum
-        order.last_exec_quantity = msg->last_qty;        // genelde 0
-        order.cancelled_quantity = msg->leaves_qty;
+        order.remaining_quantity = order.quantity - order.filled_quantity;
         order.last_update_time  = static_cast<uint64_t>(msg->transact_time);
         if (UNLIKELY(order.syncState == SyncState::WaitingNew))
             order.StatusesPreNew[1] = Status::Cancelled;
@@ -342,24 +344,12 @@ private:
             order.StatusesPreNew[1] = Status::Rejected;
     }
 
-    inline void fill_fix_pendingcancel(Order &order, const FIXMessage *msg) noexcept
-    {
-        order.status = Status::PendingCancel;
-        order.last_update_time  = static_cast<uint64_t>(msg->transact_time);
-    }
-
-    inline void fill_fix_pendingreplace(Order &order, const FIXMessage *msg) noexcept
-    {
-        order.status = Status::PendingReplace;
-        order.last_update_time  = static_cast<uint64_t>(msg->transact_time);
-    }
-
     inline void fill_fix_expired(Order &order, const FIXMessage *msg) noexcept
     {
         order.status = Status::Expired;
         order.filled_quantity = msg->filled_qty;
         order.last_exec_quantity = msg->last_qty;
-        order.cancelled_quantity = msg->leaves_qty;
+        order.remaining_quantity = order.quantity - order.filled_quantity;
         order.last_update_time = static_cast<uint64_t>(msg->transact_time);
         if (UNLIKELY(order.syncState == SyncState::WaitingNew))
             order.StatusesPreNew[1] = Status::Expired;
@@ -424,7 +414,7 @@ private:
     inline void fill_itch_delete(Order &order, const BIST::ITCHOrderDeleteMessage *msg) noexcept
     {
         order.status = Status::Cancelled;
-        order.cancelled_quantity = order.quantity;
+        order.remaining_quantity = order.quantity;
         order.last_update_time = msg->timestamp_ns;
         order.cancelled_count++;
     }
@@ -522,7 +512,7 @@ private:
     {
         order.status = Status::Cancelled;
         order.last_update_time = msg->timestamp;
-        order.cancelled_quantity = msg->cancelled_shares;
+        order.remaining_quantity = msg->cancelled_shares;
         order.cancelled_count++;
     }
 
@@ -546,7 +536,7 @@ private:
     inline void fill_itch_delete(Order &order, const NASDAQ::ITCHDeleteMessage *msg) noexcept
     {
         order.status = Status::Cancelled;
-        order.cancelled_quantity = order.quantity - order.filled_quantity;
+        order.remaining_quantity = order.quantity - order.filled_quantity;
         order.last_update_time = msg->timestamp;
     }
 
@@ -637,7 +627,7 @@ private:
     inline void fill_sbe_delete(Order &order, const SBEDeleteOrderMessage *msg) noexcept
     {
         order.status = Status::Cancelled;
-        order.cancelled_quantity = order.quantity - order.filled_quantity;
+        order.remaining_quantity = order.quantity - order.filled_quantity;
         order.last_update_time = msg->header.version;
         order.cancelled_count++;
     }

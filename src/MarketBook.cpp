@@ -52,10 +52,10 @@ void MarketBook::cancel_order(const Order &order) noexcept
    auto it = tree.find(order.price);
    if (LIKELY(it != tree.end()))
    {
-      if (it->second <= order.cancelled_quantity)
+      if (it->second <= order.remaining_quantity)
          tree.erase(it);
       else
-         it->second -= order.cancelled_quantity;
+         it->second -= order.remaining_quantity;
    }
 }
 

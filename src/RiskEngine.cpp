@@ -90,9 +90,7 @@ inline void RiskEngine::update_order_risk(const Order &order, const uint8_t venu
 
         constexpr uint64_t terminal_mask =
         (1ULL << static_cast<uint64_t>(Status::Cancelled))
-        | (1ULL << static_cast<uint64_t>(Status::Expired))
-        | (1ULL << static_cast<uint64_t>(Status::DoneForDay))
-        | (1ULL << static_cast<uint64_t>(Status::Stopped));
+        | (1ULL << static_cast<uint64_t>(Status::Expired));
 
         if (oR->remaining_qty.load(std::memory_order_relaxed) == 0 || (terminal_mask & (1ULL << static_cast<uint64_t>(order.status)))) {      
            oRmap.erase(it);

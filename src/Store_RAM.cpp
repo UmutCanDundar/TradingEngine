@@ -108,13 +108,13 @@ void Store_RAM::handle_flush_status(const uint8_t venue_index, const uint32_t sy
       {
           order->status = Status::Cancelled;
           order->cancelled_count++;
-          order->cancelled_quantity = order->quantity;
+          order->remaining_quantity = order->quantity;
       }
       else if (order->status == Status::Partial)
       {
          order->status = Status::Cancelled;
          order->cancelled_count++;
-         order->cancelled_quantity = order->quantity - order->filled_quantity;
+         order->remaining_quantity = order->quantity - order->filled_quantity;
       }
       else 
       {
@@ -208,6 +208,7 @@ Order *Store_RAM::get_order(uint64_t order_id, uint32_t instrument_id, Venue ven
    return nullptr;
 }
 
+// ================= BIST FIX Handler ===================
 void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept
 {
    const auto *msg = fixMsg.msg;
@@ -215,21 +216,20 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
    alignas(64) constexpr auto allowed_exec_type = []
    {
       std::array<uint8_t, 128> arr = {};
-      arr['0'] = 1;
-      arr['4'] = 1;
-      arr['5'] = 1;
-      arr['8'] = 1;
-      arr['9'] = 1;
-      arr['C'] = 1;
-      arr['F'] = 1;
-      arr['L'] = 1;
+      arr['0'] = 1; // order new(status 0) - msgtype 8
+      arr['4'] = 1; // cancel req(4) - mt 8
+      arr['5'] = 1; // cancel replace req(0,1,2,4) - mt 8
+      arr['8'] = 1; // reject(8) - mt 8
+      arr['C'] = 1; // expired(C) - mt 8
+      arr['F'] = 1; // order fill(1,2) - mt 8
+      arr['L'] = 1; // trig or act by the sis(0) - mt 8
       return arr;
    }();
 
    uint64_t order_id = absl::Hash<std::string_view>{}(msg->cl_ord_id);
    std::array<char, SYMBOL_SIZE> symbol_fixed{};
    copy_symbol(symbol_fixed, msg->symbol);
-   Order *order = get_order(order_id, hashtables_.getIndex(static_cast<std::underlying_type_t<Venue>>(fixMsg.venue), symbol_fixed), fixMsg.venue, (msg->side-'0')-1U);
+   Order *order = get_order(order_id, hashtables_.getIndex(static_cast<std::underlying_type_t<Venue>>(fixMsg.venue), symbol_fixed), fixMsg.venue, msg->side);
 
    if (UNLIKELY(order->canModify == 0x00))
    {
@@ -241,6 +241,9 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
    switch (msg->msg_type)
    {
    case '8': // ExecutionReport
+      if (hashtables_.is_duplicate_exec_id(msg->exec_id))
+         return;
+
       if (allowed_exec_type[static_cast<uint8_t>(msg->exec_type)])
          fill_fix_exec_report(*order, msg, fixMsg.venue);
       else
@@ -425,7 +428,7 @@ void Store_RAM::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMs
                   arr['S'] = {false, false}; // system start
                   arr['Q'] = {false, false};  // market open
                   arr['M'] = {true, false};  // market close
-                  arr['E'] = {true, false};   // sysstem stop (only delete message)
+                  arr['E'] = {true, false};   // system stop (only delete message)
                   arr['C'] = {true, false};   // last message
                   return arr;
                   } ();
@@ -538,17 +541,11 @@ void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg, Venue 
    case '4': // Cancelled
       fill_fix_cancel(order, msg);
       break;
-   case '8': // Rejected
-      fill_fix_rejected(order, msg);
-      break;
-   case '6': // Pending Cancel
-      fill_fix_pendingcancel(order, msg);
-      break;
    case '5': // Replaced
       fill_fix_new(order, msg, venue);
       break;
-   case 'E': // Pending Replace
-      fill_fix_pendingreplace(order, msg);
+   case '8': // Rejected
+      fill_fix_rejected(order, msg);
       break;
    case 'C': // Expired
       fill_fix_expired(order, msg);

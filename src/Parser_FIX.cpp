@@ -1,6 +1,6 @@
 #include "Parser_FIX.h"
 
-Parser_FIX::Parser_FIX(Session_FIX &session) noexcept : session_(session) 
+Parser_FIX::Parser_FIX(Session_FIX &session, spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept : session_(session), parser_to_fixbuilder_in_(parser_to_fixbuilder_in)
 {
    for (size_t i = 0; i < FIX_QUEUE_CAPACITY; i++)
       free_fixMsg_list_.push(&fixMsg_pool_[i]);
@@ -56,6 +56,7 @@ std::array<Parser_FIX::SesTagHandlerFunc, Parser_FIX::MAX_SESTAG> Parser_FIX::ma
         handlers[122] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->org_sending_time = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[52] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->sending_time = static_cast<uint32_t>(parseFixedPoint(val)); };
         // SESSION MESSAGES
+        handlers[141] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->reset_seqnum_flag = parseNumber(val.data(), val.size()); };
         handlers[108] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->interval = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[1409] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->ses_status = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[123] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->gap_fill_flag = parseNumber(val.data(), val.size()); };
@@ -66,7 +67,6 @@ std::array<Parser_FIX::SesTagHandlerFunc, Parser_FIX::MAX_SESTAG> Parser_FIX::ma
         handlers[373] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->reject_reason = static_cast<uint8_t>(parseFixedPoint(val)); };
         handlers[112] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->test_req_id = static_cast<uint32_t>(parseFixedPoint(val)); };
         handlers[58] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->text = val; };
-       
    //clang-format on
         return handlers;
     }
