@@ -10,9 +10,9 @@ Parser_FIX::Parser_FIX(Session_FIX &session, spscFIXInSessionQueue_t &parser_to_
 }
 
 
-std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::makeTagHandlersLookup() noexcept
+const std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG>& Parser_FIX::makeTagHandlersLookup() noexcept
 {
-   std::array<TagHandlerFunc, MAX_TAG> handlers{};
+   alignas(64) static std::array<TagHandlerFunc, MAX_TAG> handlers{};
    // clang-format off
         // HEADER
         handlers[35] = [](std::string_view val, FIXMessage *msg) noexcept { msg->msg_type = parseNumber(val.data(), val.size()); };
@@ -42,12 +42,12 @@ std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::makeTagH
         //clang-format on
         return handlers;
     }
-std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::tagHandlers = makeTagHandlersLookup();
+const std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG>& Parser_FIX::tagHandlers = makeTagHandlersLookup();
 
 
-std::array<Parser_FIX::SesTagHandlerFunc, Parser_FIX::MAX_SESTAG> Parser_FIX::makeSesTagHandlersLookup() noexcept
+const std::array<Parser_FIX::SesTagHandlerFunc, Parser_FIX::MAX_SESTAG>& Parser_FIX::makeSesTagHandlersLookup() noexcept
 {
-   std::array<SesTagHandlerFunc, MAX_SESTAG> handlers{};
+   alignas(64) static std::array<SesTagHandlerFunc, MAX_SESTAG> handlers{};
    // clang-format off
         // HEADER
         handlers[35] = [](std::string_view val, FIXSessionMessage *msg) noexcept { msg->msg_type = parseNumber(val.data(), val.size()); };
@@ -70,6 +70,6 @@ std::array<Parser_FIX::SesTagHandlerFunc, Parser_FIX::MAX_SESTAG> Parser_FIX::ma
    //clang-format on
         return handlers;
     }
-std::array<Parser_FIX::SesTagHandlerFunc, Parser_FIX::MAX_SESTAG> Parser_FIX::SestagHandlers = makeSesTagHandlersLookup();
+const std::array<Parser_FIX::SesTagHandlerFunc, Parser_FIX::MAX_SESTAG>& Parser_FIX::SestagHandlers = makeSesTagHandlersLookup();
 
 

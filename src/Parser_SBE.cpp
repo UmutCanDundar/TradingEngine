@@ -7,9 +7,9 @@ Parser_SBE::Parser_SBE() noexcept
     sbe_pools_.initialize_all();
 }
 
-std::array<Parser_SBE::MessageHandlerFunc, Parser_SBE::MAX_MESSAGES> Parser_SBE::makeMessageHandlersLookup() noexcept
+const std::array<Parser_SBE::MessageHandlerFunc, Parser_SBE::MAX_MESSAGES>& Parser_SBE::makeMessageHandlersLookup() noexcept
 {
-    std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
+    alignas(64) static std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
 
     handlers[0] = [](const char *data, SBEMessage &msg) noexcept
     {
@@ -105,4 +105,4 @@ std::array<Parser_SBE::MessageHandlerFunc, Parser_SBE::MAX_MESSAGES> Parser_SBE:
     return handlers;
 }
 
-std::array<Parser_SBE::MessageHandlerFunc, Parser_SBE::MAX_MESSAGES> Parser_SBE::MessageHandlers = makeMessageHandlersLookup();
+const std::array<Parser_SBE::MessageHandlerFunc, Parser_SBE::MAX_MESSAGES>& Parser_SBE::MessageHandlers = makeMessageHandlersLookup();

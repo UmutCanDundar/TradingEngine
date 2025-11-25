@@ -47,8 +47,8 @@ namespace NASDAQ
         static MessagePools<NASDAQ::ITCHMessageTypes> itch_pools_;
 
         using MessageHandlerFunc = void (*)(const char *, NASDAQ::ITCHMessage &) noexcept;
-        static std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
-        static std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
+        static const std::array<MessageHandlerFunc, MAX_MESSAGES>& makeMessageHandlersLookup() noexcept;
+        static const std::array<MessageHandlerFunc, MAX_MESSAGES>& MessageHandlers;
 
     public:
         Parser_ITCH_NASDAQ() noexcept;

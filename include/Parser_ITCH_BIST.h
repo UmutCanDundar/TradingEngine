@@ -53,8 +53,8 @@ private:
     static MessagePools<BIST::ITCHMessageTypes> itch_pools_;
 
     using MessageHandlerFunc = void (*)(const char *, BIST::ITCHMessage &) noexcept;
-    static std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
-    static std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
+    static const std::array<MessageHandlerFunc, MAX_MESSAGES>& makeMessageHandlersLookup() noexcept;
+    static const std::array<MessageHandlerFunc, MAX_MESSAGES>& MessageHandlers;
 
 public:
     Parser_ITCH_BIST() noexcept;

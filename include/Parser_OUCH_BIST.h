@@ -35,8 +35,8 @@ private:
     static MessagePools<BIST::OUCHMessageTypes> ouch_pools_;
 
     using MessageHandlerFunc = void (*)(const char *, BIST::OUCHMessage &) noexcept;
-    static std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
-    static std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
+    static const std::array<MessageHandlerFunc, MAX_MESSAGES>& makeMessageHandlersLookup() noexcept;
+    static const std::array<MessageHandlerFunc, MAX_MESSAGES>& MessageHandlers;
 
 public:
     Parser_OUCH_BIST() noexcept;

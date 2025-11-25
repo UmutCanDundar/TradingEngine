@@ -3,6 +3,8 @@
 #include <atomic>
 #include <array>
 #include <chrono>
+#include <cstdint>
+#include <cstddef>
 
 struct alignas(64) Buffer
 {
@@ -13,8 +15,6 @@ struct alignas(64) Buffer
     char* hotdata_start;  // after header - before trailer (52 > body < 10)
     size_t hotdata_len; 
 };
-
-
 
 struct FIXSequence {
 
@@ -30,7 +30,7 @@ struct FIXSequence {
     static constexpr uint8_t MAX_RESEND_ATTEMPT = 3;
 };
 
-struct VenueUserInfo
+struct VenueUserInfo  // This information will take from config file 
 {
     const char *username;
     const size_t username_len;
@@ -66,7 +66,7 @@ class Session_FIX
 private:
     const char* heartbeat_interval = "60";
     const size_t heartbeat_interval_len = 2;
-    const VenueUserInfo vui_{"BIST USERNAME", 0, "BIST PASSWORD", 0, "BIST MY ID", 0, "BIST ID", 0, "ACC123", 6};
+    const VenueUserInfo vui_{"BIST USERNAME", 0, "BIST PASSWORD", 0, "BIST MY ID", 0, "BIST ID", 0, "ACC123", 6}; // These lines will be removed after config file mechanism is implemented
     
     static constexpr size_t DAILY_FIX_MSG_COUNT = 300'000;
     std::array<Buffer, DAILY_FIX_MSG_COUNT> messages;

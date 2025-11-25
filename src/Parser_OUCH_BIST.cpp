@@ -8,9 +8,9 @@ Parser_OUCH_BIST::Parser_OUCH_BIST() noexcept
    ouch_pools_.initialize_all();
 }
 
-std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MESSAGES> Parser_OUCH_BIST::makeMessageHandlersLookup() noexcept
+const std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MESSAGES>& Parser_OUCH_BIST::makeMessageHandlersLookup() noexcept
 {
-   alignas(64) std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
+   alignas(64) static std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
 
    handlers[0] = [](const char *data, BIST::OUCHMessage &msg) noexcept
    {
@@ -119,4 +119,4 @@ std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MESSAGES>
    return handlers;
 }
 
-std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MESSAGES> Parser_OUCH_BIST::MessageHandlers = makeMessageHandlersLookup();
+const std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MESSAGES>& Parser_OUCH_BIST::MessageHandlers = makeMessageHandlersLookup();

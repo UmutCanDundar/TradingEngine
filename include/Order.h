@@ -121,7 +121,7 @@ struct alignas(64) Order
    uint8_t pad2[10]; // 64-byte alignment
    
    //Cache-Line
-   std::array<char, FIX_ORDER_ID_SIZE> fix_org_order_id{};  // For FIX original order ID
+   std::array<char, FIX_ORDER_ID_SIZE> fix_org_order_id{};  // For FIX original order ID (This field may be used to hold the existing-order-token for ouch replaced messages)
    std::array<char, ORDER_TOKEN_SIZE> client_order_token{}; // Unique client order token
    
 };

@@ -175,12 +175,12 @@ private:
     static constexpr size_t MAX_SESTAG = 2048;
 
     using TagHandlerFunc = void (*)(std::string_view, FIXMessage *) noexcept;
-    static std::array<TagHandlerFunc, MAX_TAG> makeTagHandlersLookup() noexcept;
-    static std::array<TagHandlerFunc, MAX_TAG> tagHandlers;
+    static const std::array<TagHandlerFunc, MAX_TAG>& makeTagHandlersLookup() noexcept;
+    static const std::array<TagHandlerFunc, MAX_TAG>& tagHandlers;
 
     using SesTagHandlerFunc = void (*)(std::string_view, FIXSessionMessage *) noexcept;
-    static std::array<SesTagHandlerFunc, MAX_SESTAG> makeSesTagHandlersLookup() noexcept;
-    static std::array<SesTagHandlerFunc, MAX_SESTAG> SestagHandlers;
+    static const std::array<SesTagHandlerFunc, MAX_SESTAG>& makeSesTagHandlersLookup() noexcept;
+    static const std::array<SesTagHandlerFunc, MAX_SESTAG>& SestagHandlers;
 
     Session_FIX &session_;
     spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;

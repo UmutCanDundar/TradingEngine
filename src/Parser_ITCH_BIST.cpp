@@ -8,9 +8,9 @@ Parser_ITCH_BIST::Parser_ITCH_BIST() noexcept
    itch_pools_.initialize_all();
 }
 
-std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES> Parser_ITCH_BIST::makeMessageHandlersLookup() noexcept
+const std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES>& Parser_ITCH_BIST::makeMessageHandlersLookup() noexcept
 {
-   alignas(64) std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
+   alignas(64) static std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
 
    handlers[0] = [](const char *data, BIST::ITCHMessage &msg) noexcept
    {
@@ -251,4 +251,4 @@ std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES>
    return handlers;
 }
 
-std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES> Parser_ITCH_BIST::MessageHandlers = makeMessageHandlersLookup();
+const std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES>& Parser_ITCH_BIST::MessageHandlers = makeMessageHandlersLookup();

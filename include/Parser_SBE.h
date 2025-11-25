@@ -37,8 +37,8 @@ private:
     static MessagePools<SBEMessageTypes> sbe_pools_;
 
     using MessageHandlerFunc = void (*)(const char *, SBEMessage &) noexcept;
-    static std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
-    static std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
+    static const std::array<MessageHandlerFunc, MAX_MESSAGES>& makeMessageHandlersLookup() noexcept;
+    static const std::array<MessageHandlerFunc, MAX_MESSAGES>& MessageHandlers;
 
 public:
     Parser_SBE() noexcept;
