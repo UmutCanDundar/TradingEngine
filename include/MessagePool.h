@@ -9,7 +9,7 @@ template <typename T>
 struct PoolAndFreeList
 {
     // Capacity sabit olsun
-    static constexpr size_t POOL_CAPACITY = 1024;
+    static constexpr size_t POOL_CAPACITY = 512;
 
     std::vector<T> pool_;
     boost::lockfree::spsc_queue<T *> free_list_{POOL_CAPACITY};

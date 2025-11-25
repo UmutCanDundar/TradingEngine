@@ -146,6 +146,7 @@ enum class RiskRejectReason : uint32_t
     MaxPositionLimitExceeded = 1 << 0, // Belirlen pozisyon limitinin aşılması
     MaxOrderSizeExceeded = 1 << 1,       // Emir büyüklüğü lot bazında limitin aşılması
     MinOrderSizeExceeded = 1 << 13,      // Emir büyüklüğü lot bazında limitin aşılması
+    InvalidLotSize = 1 << 24,           // Emir lot büyüklüğü round lot size kuralına uymuyor
     NotionalOrderValueExceeded = 1 << 2, // Emir parasal değeri limitin aşılması
     MaxNotionalLimitExceeded = 1 << 26,
     MaxOpenOrdersReachedAccount = 1 << 3, // Toplam açık emir sayısı limit aşımı
@@ -193,11 +194,14 @@ struct OrderMetrics
     const int64_t nominal;
     const int64_t notional;
     const int64_t remaining;
+    const int64_t replaced;
     const int8_t side_mult;
+    
    
     OrderMetrics(const Order &order) noexcept
         : nominal(order.price * static_cast<int64_t>(order.last_exec_quantity)), notional(order.price * static_cast<int64_t>(order.quantity)), 
-          remaining(order.price * static_cast<int64_t>(order.remaining_quantity)), side_mult(order.side == Side::Buy ? 1 : -1) {}
+          remaining(order.price * static_cast<int64_t>(order.remaining_quantity)), replaced(order.price * static_cast<int64_t>(order.replaced_quantity)),
+          side_mult(order.side == Side::Buy ? 1 : -1) {}
 };
 
 struct OrderWithRejectReason
@@ -339,6 +343,7 @@ private:  // Helper functions associated with the public functions
         const int64_t nominal = metrics.nominal;
         const int64_t notional = metrics.notional;
         const int64_t remaining = metrics.remaining;
+        const int64_t replaced = metrics.replaced;
         auto &symRisk = symbolrisks_[venue_index][order.symbol_index];
 
         const int64_t exec_qty_int64 = static_cast<int64_t>(order.last_exec_quantity);
@@ -384,9 +389,11 @@ private:  // Helper functions associated with the public functions
                 if(order.price > 0)
                     symRisk.pending_notional_scaled.fetch_sub(remaining, std::memory_order_release);
                 break;
+            case Status::Replaced:
+                if (order.price > 0)
+                    symRisk.pending_notional_scaled.fetch_add(replaced, std::memory_order_release);
 
-            case Status::Rejected:          // Order hiç yaşamadı
-            case Status::Unknown:           // Belirsiz
+            case Status::Unknown:  // Belirsiz
             default:
                 break;
             }
@@ -420,6 +427,7 @@ private:  // Helper functions associated with the public functions
         const int64_t nominal = metrics.nominal;
         const int64_t notional = metrics.notional;
         const int64_t remaining = metrics.remaining;
+        const int64_t replaced = metrics.replaced;
         const int64_t fee = order.order_type == OrderType::Market ? accLim.taker_fee_rate * nominal / 1'000'000 : accLim.maker_fee_rate * nominal / 1'000'000;
 
         switch (order.status) {
@@ -464,7 +472,13 @@ private:  // Helper functions associated with the public functions
                     accRisk.open_orders_count.fetch_sub(1, std::memory_order_release);
                     break;
             }
-
+            case Status::Replaced:
+                if (order.price > 0)
+                {
+                    accRisk.current_exposure.fetch_add((replaced) * side_mult, std::memory_order_release);
+                    accRisk.used_margin.fetch_add(replaced, std::memory_order_release);
+                }
+                break;
             // --- Değişiklik veya belirsiz durum ---
             case Status::Rejected:
             case Status::Unknown:
@@ -621,12 +635,14 @@ private:  // Helper functions associated with the public functions
         return false;
     } */
 
-    inline uint32_t check_quantity_bounds(uint32_t qty, uint32_t min_qty, uint32_t max_qty) noexcept
+    inline uint32_t check_quantity_bounds(uint32_t qty, uint32_t min_qty, uint32_t max_qty, uint32_t round_lot_size) noexcept
     {
         if (UNLIKELY(qty < min_qty))
             return static_cast<uint32_t>(RiskRejectReason::MinOrderSizeExceeded); // reuse code for small orders
         if (UNLIKELY(qty > max_qty))
             return static_cast<uint32_t>(RiskRejectReason::MaxOrderSizeExceeded);
+        if (UNLIKELY((qty % round_lot_size) != 0))
+            return static_cast<uint32_t>(RiskRejectReason::InvalidLotSize);
         return 0;
     }
     

@@ -59,7 +59,7 @@ namespace NASDAQ
             itch_pools_.get_pool<T>().release(itchMsg);
         }
 
-        inline void releaseITCH(NASDAQ::ITCHMessage &itchMsg)
+        inline void releaseITCH(NASDAQ::ITCHMessage itchMsg)
         {
             std::visit([this](auto *ptr)
                        {
@@ -71,7 +71,7 @@ namespace NASDAQ
         inline NASDAQ::ITCHMessage parse(const char *data) noexcept
         {
             NASDAQ::ITCHMessage ITCHmsg;
-            size_t index = NASDAQ::MessageIndex(*data);
+            size_t index = static_cast<size_t>(NASDAQ::itchMessageIndex(*data));
             if (index != 99)
                 MessageHandlers[index](data, ITCHmsg);
             return ITCHmsg;

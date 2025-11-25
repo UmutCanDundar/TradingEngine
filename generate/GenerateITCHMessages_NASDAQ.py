@@ -208,7 +208,7 @@ def messagetype_index(msg):
         return i  
 
 def generate_enum(messages):
-     line = [f"\nenum ITCHTypes : uint8_t {{ "]
+     line = [f"\nenum class ITCHTypes : uint8_t {{ "]
      for i, msg in enumerate(messages):
          messagetype = messagetype_index(msg)
          default = msg["fields"][messagetype][1]  
@@ -219,7 +219,7 @@ def generate_enum(messages):
      return" ".join(line)
 
 def generate_func(messages):
-    line = [f"\n\ninline constexpr ITCHTypes MessageIndex(char type) {{\n"]
+    line = [f"\n\ninline constexpr ITCHTypes itchMessageIndex(char type) {{\n"]
     line.append("   switch(type) {")
     for i, msg in enumerate(messages):
         messagetype = messagetype_index(msg)

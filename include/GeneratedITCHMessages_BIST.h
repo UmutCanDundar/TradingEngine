@@ -173,9 +173,9 @@ struct alignas(64) ITCHEquilibriumPriceUpdateMessage {
     char pad[11];                               // Doldurma (Padding)
 };
 
-enum ITCHTypes : uint8_t {   T = 0,  R = 1,  M = 2,  L = 3,  V = 4,  S = 5,  O = 6,  A = 7,  E = 8,  C = 9,  D = 10,  Y = 11,  P = 12,  Z = 13,  unknownITCHtype = 99 };
+enum class ITCHTypes : uint8_t {   T = 0,  R = 1,  M = 2,  L = 3,  V = 4,  S = 5,  O = 6,  A = 7,  E = 8,  C = 9,  D = 10,  Y = 11,  P = 12,  Z = 13,  unknownITCHtype = 99 };
 
-inline constexpr ITCHTypes MessageIndex(char type) {
+inline constexpr ITCHTypes itchMessageIndex(char type) {
 
    switch(type) {
       case 'T': return ITCHTypes::T;

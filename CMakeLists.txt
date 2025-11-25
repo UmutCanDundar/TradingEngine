@@ -9,15 +9,12 @@ file(GLOB_RECURSE SOURCES CMAKE_CONFIGURE_DEPENDS
       ${CMAKE_SOURCE_DIR}/src/*.cpp 
     )
 
-# Python3 bul
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-
 find_package(fmt REQUIRED)
-
 find_package(Threads REQUIRED)
+find_package(TBB REQUIRED)
 
 
-# .h dosyasını generate eden komut
 add_custom_command(
     OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedErrorMap.h
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateErrorMap.py
@@ -41,6 +38,12 @@ add_custom_command(
 )
 
 add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedOUCHMessages_BIST.h
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateOUCHMessages_BIST.py
+    DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateOUCHMessages_BIST.py
+)
+
+add_custom_command(
     OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedSBEMessages.h
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateSBEMessages.py
     DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateSBEMessages.py
@@ -57,6 +60,7 @@ add_custom_target(GeneratedFiles ALL
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedIpPort.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages_BIST.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages_NASDAQ.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedOUCHMessages_BIST.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSBEMessages.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSymbolTables.h
 )
@@ -83,7 +87,7 @@ add_executable(MarketData ${SOURCES})
 # include path ve bağımlılık
 target_include_directories(MarketData PRIVATE include third-party/json/single_include)
 
-target_link_libraries(MarketData PRIVATE fmt::fmt absl::flat_hash_map absl::hash clickhouse-cpp-lib Threads::Threads)
+target_link_libraries(MarketData PRIVATE fmt::fmt absl::flat_hash_map absl::hash clickhouse-cpp-lib Threads::Threads TBB::tbb)
 
 target_compile_options(MarketData PRIVATE 
     -mavx2 

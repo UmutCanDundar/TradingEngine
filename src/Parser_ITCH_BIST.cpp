@@ -35,7 +35,7 @@ std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES>
       m->round_lot_size = Endian::read_u32_be(data + 97);
       m->block_lot_size = Endian::read_u32_be(data + 101);
       m->underlying_order_book_id = Endian::read_u32_be(data + 114);
-      m->strike_price = static_cast<int32_t>(Endian::read_u32_be(data + 118));
+      m->strike_price = Endian::read_i32_be(data + 118);
       m->expiration_date = Endian::read_u32_be(data + 122);
       m->decimals_in_price = Endian::read_u16_be(data + 89);
       m->decimals_in_nominal = Endian::read_u16_be(data + 91);
@@ -76,8 +76,8 @@ std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES>
       m->tick_size = Endian::read_u64_be(data + 9);
       m->timestamp_ns = Endian::read_u32_be(data + 1);
       m->order_book_id = Endian::read_u32_be(data + 5);
-      m->price_from = static_cast<int32_t>(Endian::read_u32_be(data + 17));
-      m->price_to = static_cast<int32_t>(Endian::read_u32_be(data + 21));
+      m->price_from = Endian::read_i32_be(data + 17);
+      m->price_to = Endian::read_i32_be(data + 21);
       m->message_type = data[0];
 
       msg = m;
@@ -132,7 +132,7 @@ std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES>
       m->timestamp_ns = Endian::read_u32_be(data + 1);
       m->order_book_id = Endian::read_u32_be(data + 13);
       m->ranking_seq_number = Endian::read_u32_be(data + 18);
-      m->price = static_cast<int32_t>(Endian::read_u32_be(data + 30));
+      m->price = Endian::read_i32_be(data + 30);
       m->order_attributes = Endian::read_u16_be(data + 34);
       m->lot_type = data[36];
       m->message_type = data[0];
@@ -171,7 +171,7 @@ std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES>
       m->timestamp_ns = Endian::read_u32_be(data + 1);
       m->order_book_id = Endian::read_u32_be(data + 13);
       m->combo_group_id = Endian::read_u32_be(data + 34);
-      m->trade_price = static_cast<int32_t>(Endian::read_u32_be(data + 52));
+      m->trade_price = Endian::read_i32_be(data + 52);
       m->message_type = data[0];
       m->side = data[17];
       std::memcpy(&m->reserved1, data + 38, 7);
@@ -218,7 +218,7 @@ std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES>
       m->timestamp_ns = Endian::read_u32_be(data + 1);
       m->combo_group_id = Endian::read_u32_be(data + 13);
       m->order_book_id = Endian::read_u32_be(data + 26);
-      m->trade_price = static_cast<int32_t>(Endian::read_u32_be(data + 30));
+      m->trade_price = Endian::read_i32_be(data + 30);
       m->message_type = data[0];
       m->side = data[17];
       std::memcpy(&m->reserved1, data + 34, 7);
@@ -240,9 +240,9 @@ std::array<Parser_ITCH_BIST::MessageHandlerFunc, Parser_ITCH_BIST::MAX_MESSAGES>
       m->best_ask_quantity = Endian::read_u64_be(data + 45);
       m->timestamp_ns = Endian::read_u32_be(data + 1);
       m->order_book_id = Endian::read_u32_be(data + 5);
-      m->equilibrium_price = static_cast<int32_t>(Endian::read_u32_be(data + 25));
-      m->best_bid_price = static_cast<int32_t>(Endian::read_u32_be(data + 29));
-      m->best_ask_price = static_cast<int32_t>(Endian::read_u32_be(data + 33));
+      m->equilibrium_price = Endian::read_i32_be(data + 25);
+      m->best_bid_price = Endian::read_i32_be(data + 29);
+      m->best_ask_price = Endian::read_i32_be(data + 33);
       m->message_type = data[0];
 
       msg = m;

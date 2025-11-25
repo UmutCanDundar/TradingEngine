@@ -29,6 +29,44 @@ struct Endian
              uint64_t(uint8_t(p[7]));
    }
 
+   // 16 bit big endian read
+   static constexpr uint16_t read_i16_be(const char *p) noexcept
+   {
+      return static_cast<int16_t>
+            (
+            (uint16_t(uint8_t(p[0])) << 8) |
+            (uint16_t(uint8_t(p[1])))
+            );
+   }
+
+   // 32 bit big endian read
+   static constexpr uint32_t read_i32_be(const char *p) noexcept
+   {
+      return static_cast<int32_t>
+            (
+             (uint32_t(uint8_t(p[0])) << 24) |
+             (uint32_t(uint8_t(p[1])) << 16) |
+             (uint32_t(uint8_t(p[2])) << 8) |
+             (uint32_t(uint8_t(p[3])))
+            );
+   }
+
+   // 64 bit big endian read
+   static constexpr uint64_t read_i64_be(const char *p) noexcept
+   {
+      return static_cast<int64_t>
+            (
+             (uint64_t(uint8_t(p[0])) << 56) |
+             (uint64_t(uint8_t(p[1])) << 48) |
+             (uint64_t(uint8_t(p[2])) << 40) |
+             (uint64_t(uint8_t(p[3])) << 32) |
+             (uint64_t(uint8_t(p[4])) << 24) |
+             (uint64_t(uint8_t(p[5])) << 16) |
+             (uint64_t(uint8_t(p[6])) << 8) |
+             (uint64_t(uint8_t(p[7])))
+            );
+   }
+
   // Big-endian yazım (network byte order)
 // CPU'daki little endian değeri, gönderim öncesi network formatına çevirir
    static constexpr void write_u16_be(char* p, uint16_t v) noexcept {

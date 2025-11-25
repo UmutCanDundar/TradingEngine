@@ -65,7 +65,7 @@ public:
         itch_pools_.get_pool<T>().release(itchMsg);
     }
 
-    inline void releaseITCH(BIST::ITCHMessage &itchMsg)
+    inline void releaseITCH(BIST::ITCHMessage itchMsg)
     {
         std::visit([this](auto *ptr)
                    {
@@ -77,7 +77,7 @@ public:
     inline BIST::ITCHMessage parse(const char *data) noexcept
     {
         BIST::ITCHMessage ITCHmsg;
-        size_t index = BIST::MessageIndex(*data);
+        size_t index = static_cast<size_t>(BIST::itchMessageIndex(*data));
         if (index != 99)
             MessageHandlers[index](data, ITCHmsg);
         return ITCHmsg;

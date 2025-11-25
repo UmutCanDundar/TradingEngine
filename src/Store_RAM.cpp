@@ -17,22 +17,22 @@ Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &stor
    
 }
 
-void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessage *msg, Venue venue) noexcept
+void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessage &msg, Venue venue) noexcept
 {
-   auto [it, inserted] = instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].emplace(msg->instrumentId, SymbolMeta{msg->instrumentId});
-   copy_symbol(it->second.symbol, msg->symbol);
+   auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.instrumentId, SymbolMeta{msg.instrumentId});  // USING SBE IS NOT DETERMINED YET
+   copy_symbol(it->second.symbol, msg.symbol);
 }
 
-void Store_RAM::handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage *msg, Venue venue) noexcept
+void Store_RAM::handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg, Venue venue) noexcept
 {
-   auto [it, inserted] = instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].emplace(msg->order_book_id, SymbolMeta{msg->order_book_id});
-   copy_symbol(it->second.symbol, msg->symbol);
+   auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.order_book_id, SymbolMeta{msg.order_book_id, msg.round_lot_size});
+   copy_symbol(it->second.symbol, msg.symbol);
 }
 
-void Store_RAM::handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage *msg, Venue venue) noexcept
+void Store_RAM::handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage &msg, Venue venue) noexcept
 {
-   auto [it, inserted] = instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].emplace(msg->stock_locate, SymbolMeta{msg->stock_locate});
-   copy_symbol(it->second.symbol, msg->stock);
+   auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.stock_locate, SymbolMeta{msg.stock_locate, msg.round_lot_size});
+   copy_symbol(it->second.symbol, msg.stock);
 
    static constexpr std::array<std::pair<std::pair<int64_t, int64_t>, uint64_t>, 5> nasdaq_tick_size_ranges = {{
       {{0, 199999}, 1},
@@ -46,16 +46,16 @@ void Store_RAM::handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMes
       handle_tick_size_definition(it->second.tick_size_table, price_range.first, price_range.second, tick_size);
 }
 
-void Store_RAM::handle_tick_size_definition(const BIST::ITCHTickSizeTableEntryMessage *msg, Venue venue) noexcept 
+void Store_RAM::handle_tick_size_definition(const BIST::ITCHTickSizeTableEntryMessage &msg, Venue venue) noexcept 
 {
-   auto symbolmeta_it = instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].find(msg->order_book_id);
+   auto symbolmeta_it = instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].find(msg.order_book_id);
    
    SymbolMeta &symbolmeta = symbolmeta_it->second;
 
    TickSizeEntry *new_entry = &tick_size_entry_pool_[tick_size_bist_next_slot++ & (TICKSIZE_CAPACITY_FOR_BIST - 1)];
-   new_entry->price_from = msg->price_from;
-   new_entry->price_to = msg->price_to;
-   new_entry->tick_size = msg->tick_size;
+   new_entry->price_from = msg.price_from;
+   new_entry->price_to = msg.price_to;
+   new_entry->tick_size = msg.tick_size;
 
    for (auto &entry : symbolmeta.tick_size_table)
    {
@@ -67,11 +67,11 @@ void Store_RAM::handle_tick_size_definition(const BIST::ITCHTickSizeTableEntryMe
          return;
       }
 
-      if(existing->price_from == msg->price_from && existing->price_to == msg->price_to)
+      if(existing->price_from == msg.price_from && existing->price_to == msg.price_to)
       {
-         existing->price_from = msg->price_from;
-         existing->price_to = msg->price_to;
-         existing->tick_size = msg->tick_size;
+         existing->price_from = msg.price_from;
+         existing->price_to = msg.price_to;
+         existing->tick_size = msg.tick_size;
          return; 
       } 
    }
@@ -138,7 +138,7 @@ void Store_RAM::store() noexcept
    }
    else
    {
-      parser_to_store_.pop(msgWithVenue);
+     parser_to_store_.pop(msgWithVenue);
    }
 
    std::visit([this, &msgWithVenue](const auto &inner_msg)
@@ -148,33 +148,38 @@ void Store_RAM::store() noexcept
    }, msgWithVenue.msg);
 }
 
-Order *Store_RAM::add_our_order(Order *order) noexcept
+void Store_RAM::add_pending_order(Order *order) noexcept
 {
-   
+   pending_order_map_.emplace(order->client_order_id, order);
+   pending_orders_[static_cast<size_t>(order->venue)][pending_next_slot++ & (PENDING_ORDER_SIZE - 1)].store(order, std::memory_order_release);
+}
+
+Order* Store_RAM::add_our_order(Order *order) noexcept
+{
    if (static uint64_t triggered = 0; UNLIKELY(our_order_map_.size() >= OUR_ORDER_MAP_THRESHOLD))
    {
       if(!(triggered++ & (ORDER_MAP_CAPACITY -1))) 
          our_next_slot = MARKETORDER_LAST_INDEX;
 
       Order* order_to_release = &order_pool_[our_next_slot];
-      OrderKey orderkey = OrderKey{order_to_release->client_order_id, order_to_release->instrument_id, order_to_release->venue, static_cast<std::underlying_type_t<Side>>(order_to_release->side)};
-      auto &orderhistory_for_a_venue = our_orders_all_venue_[static_cast<std::underlying_type_t<Venue>>(order_to_release->venue)];
-      auto &orderhistory_for_a_symbol = orderhistory_for_a_venue[hashtables_.getIndex(static_cast<std::underlying_type_t<Venue>>(order_to_release->venue), order_to_release->symbol)];
+      auto& orderhistory_for_a_venue = our_orders_all_venue_[static_cast<size_t>(order_to_release->venue)];
+      auto& orderhistory_for_a_symbol = orderhistory_for_a_venue[order_to_release->symbol_index];
 
-      ReleaseOrder(orderkey, orderhistory_for_a_symbol, order_to_release);
+      ReleaseOrder(orderhistory_for_a_symbol, *order_to_release);
    }
-   
-   our_order_map_[OrderKey{order->client_order_id, order->instrument_id, order->venue, static_cast<std::underlying_type_t<Side>>(order->side)}] = order;
-   our_next_slot++;
 
-   auto &orderhistory_for_a_venue = our_orders_all_venue_[static_cast<uint8_t>(order->venue)];
-   auto &orderhistory_for_a_symbol = orderhistory_for_a_venue[hashtables_.getIndex(static_cast<uint8_t>(order->venue), order->symbol)];
+   our_order_map_[OrderKey{order->order_id, order->instrument_id, static_cast<uint8_t>(order->venue), static_cast<uint8_t>(order->side)}] = order;
+   if(LIKELY(order->protocol != Protocol::OUCH))
+      our_order_map_wtokenkey_[order->client_order_id] = order;
+
+   auto &orderhistory_for_a_venue = our_orders_all_venue_[static_cast<size_t>(order->venue)];
+   auto &orderhistory_for_a_symbol = orderhistory_for_a_venue[order->symbol_index];
    orderhistory_for_a_symbol.push(order);
 
    return order;
 }
 
-Order *Store_RAM::add_market_order(uint64_t order_id, uint32_t instrument_id, Venue venue, uint8_t side) noexcept
+Order* Store_RAM::add_market_order(uint64_t order_id, uint32_t instrument_id, Venue venue, uint8_t side) noexcept
 {
 
    if (UNLIKELY(market_next_slot >= MARKETORDER_LAST_INDEX))
@@ -183,27 +188,46 @@ Order *Store_RAM::add_market_order(uint64_t order_id, uint32_t instrument_id, Ve
       market_map_full = true;
    }
    if (market_map_full)
-      market_order_map_.erase(OrderKey{order_pool_[market_next_slot].order_id, order_pool_[market_next_slot].instrument_id, order_pool_[market_next_slot].venue, static_cast<std::underlying_type_t<Side>>(order_pool_[market_next_slot].side)});
+      market_order_map_.erase(OrderKey{order_pool_[market_next_slot].order_id, order_pool_[market_next_slot].instrument_id, static_cast<uint8_t>(order_pool_[market_next_slot].venue), static_cast<uint8_t>(order_pool_[market_next_slot].side)});
 
-   Order *order = &order_pool_[market_next_slot];
-   market_order_map_[OrderKey{order_id, instrument_id, venue, side}] = order;
+   Order* order = &order_pool_[market_next_slot];
+   market_order_map_[OrderKey{order_id, instrument_id, static_cast<uint8_t>(venue), side}] = order;
    market_next_slot++;
    return order;
 }
 
-Order *Store_RAM::get_order(uint64_t order_id, uint32_t instrument_id, Venue venue, uint8_t side) noexcept
+Order* Store_RAM::get_order_from_our_map(uint64_t order_id, uint32_t instrument_id, Venue venue, uint8_t side) noexcept
 {
-   auto it = our_order_map_.find(OrderKey{order_id, instrument_id, venue, side});
+   auto it = our_order_map_.find(OrderKey{order_id, instrument_id, static_cast<uint8_t>(venue), side});
    if (it != our_order_map_.end())
-   {
       return it->second;
-   }
+   
+   return nullptr;
+}
 
-   it = market_order_map_.find(OrderKey{order_id, instrument_id, venue, side});
-   if (it != market_order_map_.end())
-   {
+Order* Store_RAM::get_order_from_our_map_wtokenkey(uint64_t client_order_id) noexcept
+{
+   auto it = our_order_map_wtokenkey_.find(client_order_id);
+   if (it != our_order_map_wtokenkey_.end())
       return it->second;
-   }
+
+   return nullptr;
+}
+
+Order* Store_RAM::get_order_from_market_map(uint64_t order_id, uint32_t instrument_id, Venue venue, uint8_t side) noexcept
+{
+   auto it = market_order_map_.find(OrderKey{order_id, instrument_id, static_cast<uint8_t>(venue), side});
+   if (it != market_order_map_.end())
+      return it->second;
+
+   return nullptr;
+}
+
+Order* Store_RAM::get_order_from_pending_order_map(uint64_t client_order_id) noexcept 
+{
+   tbb::concurrent_hash_map<uint64_t, Order*>::const_accessor it;
+   if (pending_order_map_.find(it, client_order_id))
+      return it->second;
 
    return nullptr;
 }
@@ -219,18 +243,37 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
       arr['0'] = 1; // order new(status 0) - msgtype 8
       arr['4'] = 1; // cancel req(4) - mt 8
       arr['5'] = 1; // cancel replace req(0,1,2,4) - mt 8
-      arr['8'] = 1; // reject(8) - mt 8
+      //arr['8'] = 1; // reject(8) - mt 8
       arr['C'] = 1; // expired(C) - mt 8
       arr['F'] = 1; // order fill(1,2) - mt 8
       arr['L'] = 1; // trig or act by the sis(0) - mt 8
       return arr;
    }();
 
-   uint64_t order_id = absl::Hash<std::string_view>{}(msg->cl_ord_id);
+   uint64_t client_order_id = absl::Hash<std::string_view>{}(msg->cl_ord_id);
+   uint64_t order_id = absl::Hash<std::string_view>{}(msg->order_id);
    std::array<char, SYMBOL_SIZE> symbol_fixed{};
    copy_symbol(symbol_fixed, msg->symbol);
-   Order *order = get_order(order_id, hashtables_.getIndex(static_cast<std::underlying_type_t<Venue>>(fixMsg.venue), symbol_fixed), fixMsg.venue, msg->side);
+   uint32_t symbol_index = hashtables_.getIndex(static_cast<std::underlying_type_t<Venue>>(Venue::BIST), symbol_fixed);
+   Order *order = get_order_from_our_map(order_id, msg->instrument_id, Venue::BIST, msg->side);
 
+   if(!order)
+   {
+      order = get_order_from_pending_order_map(client_order_id);
+      
+      if (UNLIKELY(!order))
+         return;
+      
+      if (UNLIKELY(msg->ord_status == '8')) // Order Rejected (Do not proceed further)
+      {
+         store_to_strategy_free_slot_.push(order);
+         return;
+      }
+
+      order = add_our_order(order);
+      pending_order_map_.erase(client_order_id);
+   }
+      
    if (UNLIKELY(order->canModify == 0x00))
    {
       MessageWithVenue<MessageTypes_t> resetMsg(fixMsg.msg, fixMsg.venue);
@@ -245,13 +288,15 @@ void Store_RAM::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexc
          return;
 
       if (allowed_exec_type[static_cast<uint8_t>(msg->exec_type)])
-         fill_fix_exec_report(*order, msg, fixMsg.venue);
+         fill_fix_exec_report(*order, *msg);
       else
          return;
       break;
    case '9': // OrderCancelReject
-      fill_fix_cancel_reject(*order, msg);
-      break;
+      fill_fix_cancel_reject(*order, *msg);
+      store_to_db_.push(fixMsg);
+      store_to_db_.push(order);
+      return;
    }
 
    order->canModify = 0x00;
@@ -272,13 +317,24 @@ void Store_RAM::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg)
 
                  if constexpr (requires { msg->order_id; } || std::is_same_v<MsgType, BIST::ITCHTradeMessage>)
                  {
+                     uint8_t side = msg->side == 'B' ? static_cast<uint8_t>(Side::Buy) : static_cast<uint8_t>(Side::Sell);
                      uint64_t order_id = msg->order_id;
-                     Order *order = this->get_order(order_id, msg->order_book_id, Venue::BIST, static_cast<uint8_t>(msg->side));
+                     Order *order = this->get_order_from_market_map(order_id, msg->order_book_id, Venue::BIST, static_cast<uint8_t>(msg->side));
                      if (!order)
                      {
-                        order = this->add_market_order(order_id, msg->order_book_id, Venue::BIST, static_cast<uint8_t>(msg->side));
-                        if (UNLIKELY(!order))
+                        if constexpr (std::is_same_v<MsgType, BIST::ITCHAddOrderMessage>)
+                        {             
+                           if (pending_order_map_.size() > 0 && is_matched_pending_order(*msg)) // For AddOrder messsage types (ignore our orders)
+                              return;
+
+                           order = this->add_market_order(order_id, msg->order_book_id, Venue::BIST, side);
+                           if (UNLIKELY(!order))
+                              return;
+                        }
+                        else // For all message types other than AddOrder (ignore our orders)
+                        {
                            return;
+                        }
                      }
                      else if (UNLIKELY(order->canModify == 0x00))
                      {
@@ -289,23 +345,23 @@ void Store_RAM::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg)
 
                      if constexpr (std::is_same_v<MsgType, BIST::ITCHAddOrderMessage>)
                      {
-                        this->fill_itch_add(*order, msg, Venue::BIST);
+                        this->fill_itch_add(*order, *msg, Venue::BIST);
                         this->marketbook_.add_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderExecutedMessage> ||
                                           std::is_same_v<MsgType, BIST::ITCHOrderExecutedWithPriceMessage>)
                      {
-                        this->fill_itch_exec_report(*order, msg);
+                        this->fill_itch_exec_report(*order, *msg);
                         this->marketbook_.exec_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderDeleteMessage>)
                      {
-                        this->fill_itch_delete(*order, msg);
+                        this->fill_itch_delete(*order, *msg);
                         this->marketbook_.delete_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, BIST::ITCHTradeMessage>)
                      {
-                        this->fill_itch_trade(*order, msg, Venue::BIST);
+                        this->fill_itch_trade(*order, *msg, Venue::BIST);
                      }
 
                      order->canModify = 0x00;
@@ -316,7 +372,7 @@ void Store_RAM::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg)
                  }
                  else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderBookDirectoryMessage>)
                  {
-                    this->handle_instrument_definition(msg, Venue::BIST);
+                    this->handle_instrument_definition(*msg, Venue::BIST);
                  }
                  else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderBookStateMessage>)
                  {
@@ -357,12 +413,24 @@ void Store_RAM::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMs
                if constexpr (requires { msg->order_ref; })
                {
                      uint64_t order_id = msg->order_ref;
-                     Order *order = this->get_order(order_id, msg->stock_locate, Venue::NASDAQ, 2U);
+                     Order *order = this->get_order_from_market_map(order_id, msg->stock_locate, Venue::NASDAQ, 2);
+                     
                      if (!order)
                      {
-                        order = this->add_market_order(order_id, msg->stock_locate, Venue::NASDAQ, 2U);
-                        if (UNLIKELY(!order))
+                        if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMessage> ||
+                                      std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMPIDMessage>)
+                        {
+                           if (pending_order_map_.size() > 0 && is_matched_pending_order(*msg)) // For AddOrder messsage types (ignore our orders)
+                              return;
+
+                           order = this->add_market_order(order_id, msg->stock_locate, Venue::NASDAQ, 2);
+                           if (UNLIKELY(!order))
+                              return;
+                        }
+                        else // For all message types other than AddOrder (ignore our orders)
+                        {
                            return;
+                        }
                      }
                      else if (UNLIKELY(order->canModify == 0x00))
                      {
@@ -370,38 +438,38 @@ void Store_RAM::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMs
                         pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
                         return;
                      }
-
+                     
                      if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMessage> ||
-                                 std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMPIDMessage>)
+                                      std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMPIDMessage>)
                      {
-                        this->fill_itch_add(*order, msg, Venue::NASDAQ);
+                        this->fill_itch_add(*order, *msg, Venue::NASDAQ);
                         this->marketbook_.add_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHCancelMessage>)
                      {
-                        this->fill_itch_cancel(*order, msg);
+                        this->fill_itch_cancel(*order, *msg);
                         this->marketbook_.cancel_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHExecutedMessage> ||
                                        std::is_same_v<MsgType, NASDAQ::ITCHExecutedWithPriceMessage>)
                      {
-                        this->fill_itch_exec_report(*order, msg);
+                        this->fill_itch_exec_report(*order, *msg);
                         this->marketbook_.exec_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHDeleteMessage>)
                      {
-                        this->fill_itch_delete(*order, msg);
+                        this->fill_itch_delete(*order, *msg);
                         this->marketbook_.delete_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHReplaceMessage>)
                      {
                         this->marketbook_.delete_order(*order);
-                        this->fill_itch_replace(*order, msg, Venue::NASDAQ);
+                        this->fill_itch_replace(*order, *msg, Venue::NASDAQ);
                         this->marketbook_.add_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHTradeMessage>)
                      {
-                        this->fill_itch_trade(*order, msg, Venue::NASDAQ);
+                        this->fill_itch_trade(*order, *msg, Venue::NASDAQ);
                      }
 
                      order->canModify = 0x00;
@@ -413,7 +481,7 @@ void Store_RAM::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMs
                }
                else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHStockDirectoryMessage>)
                {
-                  this->handle_instrument_definition(msg, Venue::NASDAQ);
+                  this->handle_instrument_definition(*msg, Venue::NASDAQ);
                }
                else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHTradingStateMessage>)
                {
@@ -442,6 +510,93 @@ void Store_RAM::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMs
             }, itchMsg.msg);
 }
 
+// ================= BIST OUCH Handler ===================
+void Store_RAM::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg) noexcept
+{
+   std::visit([this, &ouchMsg](const auto *msg)
+              {
+                 using MsgType = std::remove_pointer_t<decltype(msg)>;
+
+                 if constexpr (requires { msg->order_id; })
+                 {
+                     uint64_t client_order_id = absl::Hash<std::string_view>{}(std::string_view{msg->order_token, 14});
+                     const auto& symbol = get_symbolmeta(Venue::BIST, msg->order_book_id)->symbol; 
+                     uint32_t symbol_index = hashtables_.getIndex(static_cast<std::underlying_type_t<Venue>>(Venue::BIST), symbol);
+                     uint64_t order_id = msg->order_id;
+                     Order *order = this->get_order_from_our_map(order_id, msg->order_book_id, Venue::BIST, 2);
+
+                     if (!order)
+                     {
+                        order = get_order_from_pending_order_map(client_order_id);
+                        if (UNLIKELY(!order))
+                           return;
+                        order = this->add_our_order(order);
+                        pending_order_map_.erase(client_order_id);
+                     }
+                     else if (UNLIKELY(order->canModify == 0x00))
+                     {
+                        MessageWithVenue<MessageTypes_t> resetMsg(ouchMsg.msg, Venue::BIST);
+                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
+                        return;
+                     }
+
+                     if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderAcceptedMessage>)
+                     {
+                        this->fill_ouch_accepted(*order, *msg);
+                     }
+                     else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderReplacedMessage>)
+                                          
+                     {
+                        this->fill_ouch_replaced(*order, *msg);
+                     }
+                     else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderCancelledMessage>)
+                     {
+                        this->fill_ouch_cancelled(*order, *msg);
+                     }
+
+                     order->canModify = 0x00;
+
+                     this->store_to_db_.push(order);
+                     this->store_to_risk_.push(order);
+                     this->store_to_strategy_.push(order);
+                 }
+                 else 
+                 {
+                    Order *order = this->get_order_from_our_map_wtokenkey(absl::Hash<std::string_view>{}(std::string_view{msg->order_token, 14}));
+                    if (!order)
+                    {
+                     order = get_order_from_pending_order_map(absl::Hash<std::string_view>{}(std::string_view{msg->order_token, 14}));
+                     if (UNLIKELY(!order))
+                       return;
+                     pending_order_map_.erase(order->client_order_id);
+                    }
+                    else if (UNLIKELY(order->canModify == 0x00))
+                    {
+                       MessageWithVenue<MessageTypes_t> resetMsg(ouchMsg.msg, Venue::BIST);
+                       pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
+                       return;
+                    }
+
+                    if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderExecutedMessage>)
+                    {
+                       this->fill_ouch_executed(*order, *msg);
+
+                       order->canModify = 0x00;
+
+                       this->store_to_risk_.push(order);
+                       this->store_to_strategy_.push(order);
+                       this->store_to_db_.push(order);
+                    }
+                    else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderRejectedMessage>)
+                    {
+                       this->fill_ouch_rejected(*order, *msg);
+                    }
+                 }
+
+                 this->store_to_db_.push(ouchMsg); 
+               }, ouchMsg.msg);
+}
+
 // ================= SBE Handler ===================
 void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept
 {
@@ -455,7 +610,7 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                               std::is_same_v<MsgType, SBETradeMessage>)
                {
                      uint64_t order_id = msg->orderId;
-                     Order *order = this->get_order(order_id, msg->header.schemaId, sbeMsg.venue, 2U);
+                     Order *order = this->get_order_from_market_map(order_id, msg->header.schemaId, sbeMsg.venue, 2U);
                      if (!order)
                      {
                         order = this->add_market_order(order_id, msg->header.schemaId, sbeMsg.venue, 2U);
@@ -471,22 +626,22 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
 
                      if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage>)
                      {
-                        this->fill_sbe_add(*order, msg, sbeMsg.venue);
+                        this->fill_sbe_add(*order, *msg, sbeMsg.venue);
                         this->marketbook_.add_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, SBEModifyOrderMessage>)
                      {
-                        this->fill_sbe_modify(*order, msg);
+                        this->fill_sbe_modify(*order, *msg);
                         this->marketbook_.modify_order(*order, msg->newQuantity);
                      }
                      else if constexpr (std::is_same_v<MsgType, SBEDeleteOrderMessage>)
                      {
-                        this->fill_sbe_delete(*order, msg);
+                        this->fill_sbe_delete(*order, *msg);
                         this->marketbook_.delete_order(*order);
                      }
                      else if constexpr (std::is_same_v<MsgType, SBETradeMessage>)
                      {
-                        this->fill_sbe_trade(*order, msg, sbeMsg.venue);
+                        this->fill_sbe_trade(*order, *msg, sbeMsg.venue);
                         this->marketbook_.exec_order(*order);
                      }
 
@@ -500,7 +655,7 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
 
                else if constexpr (std::is_same_v<MsgType, SBEInstrumentDefinitionMessage>)
                {
-                  this->handle_instrument_definition(msg, sbeMsg.venue);
+                  this->handle_instrument_definition(*msg, sbeMsg.venue);
                }
 
                else if constexpr (std::is_same_v<MsgType, SBEMarketStatusMessage>)
@@ -523,14 +678,14 @@ void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcep
                this->store_to_db_.push(sbeMsg);
 
             },sbeMsg.msg);
-}
+} 
 
-void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg, Venue venue) noexcept
+void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage &msg) noexcept
 {
-   switch (msg->ord_status)
+   switch (msg.ord_status)
    {
    case '0': // New
-      fill_fix_new(order, msg, venue);
+      fill_fix_new(order, msg);
       break;
    case '1': // Partially Filled
       fill_fix_partial(order, msg);
@@ -542,10 +697,7 @@ void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage *msg, Venue 
       fill_fix_cancel(order, msg);
       break;
    case '5': // Replaced
-      fill_fix_new(order, msg, venue);
-      break;
-   case '8': // Rejected
-      fill_fix_rejected(order, msg);
+      fill_fix_replaced(order, msg);
       break;
    case 'C': // Expired
       fill_fix_expired(order, msg);

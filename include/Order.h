@@ -50,6 +50,7 @@ enum class Status : uint8_t
    Partial = 2,   // Kısmen doldu, hala aktif
    Filled = 3,    // Tamamen doldu
    Cancelled = 4, // İptal edildi
+   Replaced = 5,  // Değiştirildi (Modify)
 
    // === PENDING STATES ===
    PendingNew = 10,     // Order gönderildi, onay bekleniyor
@@ -64,8 +65,7 @@ enum class Status : uint8_t
    // === EXCHANGE SPECIFIC ===
    Suspended = 30,                 // Trading halted
    Expired = 31,                   // TTL süresi doldu
-   PartiallyFilled_Cancelled = 32, // Kısmen dolup iptal edildi
-
+   
    // === ERROR STATES ===
    DoneForDay = 40, // Gün sonu kapandı
    Calculated = 41, // Hesaplanmış ama henüz aktif değil
@@ -77,46 +77,51 @@ enum class Status : uint8_t
    Restated = 52       // Order yeniden tanımlandı
 };
 
-inline constexpr size_t SYMBOL_SIZE = 32; 
+inline constexpr size_t SYMBOL_SIZE = 32;
+inline constexpr size_t ORDER_TOKEN_SIZE = 32;
+inline constexpr size_t FIX_ORDER_ID_SIZE = 32;
+inline constexpr size_t ORDER_IDs_SIZE = 32;
 
 struct alignas(64) Order
 {
    // 🔴 HOT PATH (en sık erişilen alanlar)
-   int64_t price = 0;               // Fixed-point scaled
-   uint32_t quantity = 0;           // Original order quantity
-   uint32_t filled_quantity = 0;    // Cumulative filled quantity
+   int64_t price = 0;                                 // Fixed-point scaled
+   uint32_t quantity = 0;                             // Original order quantity
+   uint32_t filled_quantity = 0;                      // Cumulative filled quantity
    uint32_t remaining_quantity = 0;
    uint32_t last_exec_quantity = 0;
-   uint32_t symbol_index = 0;       // From Hashtable 
-   uint32_t instrument_id = 0; // SBE/ITCH instrument identifier
-   Side side = Side::Unknown;       // Buy/Sell
-   Status status = Status::Unknown; // New/Partial/Filled/Cancelled
-   Venue venue;                     // NYSE, NASDAQ, etc.
+   int32_t replaced_quantity = 0;               // For Replace operations
+   uint32_t symbol_index = 0;                         // From Hashtable 
+   uint32_t instrument_id = 0;                        // SBE/ITCH/FIX instrument identifier
+   Side side = Side::Unknown;                         // Buy/Sell
+   Status status = Status::Unknown;                   // New/Partial/Filled/Cancelled
+   Venue venue;                                       // NYSE, NASDAQ, etc.
    bool isOurOrder = false;       
-   std::atomic<uint8_t> canModify = 0x00; // Bitmask for allowed modifications
-   Protocol protocol = Protocol::Unknown; // Source protocol for reconstruction
-   OrderType order_type = OrderType::Unknown;   // Limit, Market, Stop
-   SyncState syncState = SyncState::WaitingNew;
-   std::array<Status,2> StatusesPreNew;
+   std::atomic<uint8_t> canModify = 0x00;             // Bitmask for allowed modifications
+   Protocol protocol = Protocol::Unknown;             // Source protocol for reconstruction
+   OrderType order_type = OrderType::Unknown;         // Limit, Market, Stop
    TimeInForce time_in_force = TimeInForce::Unknown;  // IOC, GTC, etc.
-   uint8_t cancelled_count = 0;
-   uint8_t exec_type = 0; // For FIX
-
-   uint8_t pad1[4]; // 64-byte alignment
-
-   // 🟠 LOOKUP & ROUTING
-   uint64_t client_order_id = 0; // Strategy-assigned client order ID
-   uint64_t last_update_time = 0; // Last modification time
-   // Cache-Line
-   uint64_t order_id = 0;        // Exchange-assigned unique order ID
-   uint64_t timestamp = 0;       // Order creation time 
-
-   // 🟡 PROTOCOL - SYMBOL DATA
-   std::array<char, SYMBOL_SIZE> symbol{};  // Fixed-size symbol for low-latency lookup
-   uint8_t message_type = 0;     // Message type within the protocol      
+   uint8_t pad1[4];                                  // 64-byte alignment
    
-   // 🟢 OPTIONAL (protokol bazlı karar & advanced tactics)
-   uint8_t priority_level = 0; // HFT queue tactics
- 
-   uint8_t pad2[14]; // 64-byte alignment
+   // 🟠 LOOKUP & ROUTING
+   uint64_t order_id = 0;         // Exchange-assigned unique order ID (ITCH and Hash-based FIX)
+   uint64_t client_order_id = 0;  // Hash_based rclient_order_token
+   
+   // Cache-Line
+   uint64_t timestamp = 0;                      // Order creation time 
+   uint64_t last_update_time = 0;                // Last modification time
+   uint8_t cancelled_count = 0;
+   SyncState syncState = SyncState::WaitingNew; // For FIX
+   std::array<Status, 2> StatusesPreNew;        // For FIX
+   uint8_t exec_type = 0;                       // For FIX
+  
+   // 🟡 PROTOCOL - SYMBOL DATA for builder
+   uint8_t message_type = 0;                                // Message type within the protocol
+   std::array<char, SYMBOL_SIZE> symbol{};                  // Fixed-size symbol for low-latency lookup
+   uint8_t pad2[10]; // 64-byte alignment
+   
+   //Cache-Line
+   std::array<char, FIX_ORDER_ID_SIZE> fix_org_order_id{};  // For FIX original order ID
+   std::array<char, ORDER_TOKEN_SIZE> client_order_token{}; // Unique client order token
+   
 };

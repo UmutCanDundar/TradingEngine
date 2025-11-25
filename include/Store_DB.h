@@ -10,6 +10,7 @@ class Store_DB
 private:
     std::unique_ptr<clickhouse::Client> client_;
     spscDbQueue_t &store_to_db_;
+    spscDbQueue_t &db_to_parser_;
 
     inline std::string venue_to_string(Venue venue)
     {
@@ -73,8 +74,6 @@ private:
             return "Suspended";
         case Status::Expired:
             return "Expired";
-        case Status::PartiallyFilled_Cancelled:
-            return "PartiallyFilled_Cancelled";
 
         case Status::DoneForDay:
             return "DoneForDay";
@@ -97,15 +96,16 @@ private:
     void insert(const MessageWithVenue<SBEMessage> &sbeMsg);
     void insert(const MessageWithVenue<BIST::ITCHMessage> &itchMsg);
     void insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg);
+    void insert(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg);
     void insert(const MessageWithVenue<FIXMessage *> &fixMsg);
     void insert(const Order *order);
 
 public:
-    Store_DB(spscDbQueue_t &store_to_db, const std::string &host = "127.0.0.1", const int &port = 9000);
+    Store_DB(spscDbQueue_t &store_to_db, spscDbQueue_t &db_to_parser, const std::string &host = "127.0.0.1", const int &port = 9000);
 
     void store() noexcept
     {
-        std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<SBEMessage>> data;
+        DbData_t data;
         store_to_db_.pop(data);
 
         std::visit([this](const auto &type)

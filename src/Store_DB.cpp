@@ -5,12 +5,13 @@
 
 using namespace clickhouse;
 
-Store_DB::Store_DB(spscDbQueue_t &store_to_db, const std::string &host, const int &port) : store_to_db_(store_to_db)
+Store_DB::Store_DB(spscDbQueue_t &store_to_db, spscDbQueue_t &db_to_parser, const std::string &host, const int &port) : store_to_db_(store_to_db), db_to_parser_(db_to_parser)
 {
    clickhouse::ClientOptions options;
    options.SetHost(host);
    options.SetPort(port);
    client_ = std::make_unique<clickhouse::Client>(options);
+
 }
 
 void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
@@ -630,10 +631,6 @@ void Store_DB::insert(const Order *order)
    auto col_order_type = std::make_shared<ColumnUInt8>();
    col_order_type->Append(static_cast<uint8_t>(order->order_type));
    block.AppendColumn("order_type", col_order_type);
-
-   auto col_priority_level = std::make_shared<ColumnUInt8>();
-   col_priority_level->Append(order->priority_level);
-   block.AppendColumn("priority_level", col_priority_level);
 
    client_->Insert("OrdersTable", block);
 }

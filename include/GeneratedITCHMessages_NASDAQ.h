@@ -145,9 +145,9 @@ struct alignas(64) ITCHTradingStateMessage {
     char pad[37];                        // Doldurma (Padding)
 };
 
-enum ITCHTypes : uint8_t {   A = 0,  F = 1,  X = 2,  E = 3,  C = 4,  D = 5,  U = 6,  P = 7,  S = 8,  R = 9,  H = 10,  unknownITCHtype = 99 };
+enum class ITCHTypes : uint8_t {   A = 0,  F = 1,  X = 2,  E = 3,  C = 4,  D = 5,  U = 6,  P = 7,  S = 8,  R = 9,  H = 10,  unknownITCHtype = 99 };
 
-inline constexpr ITCHTypes MessageIndex(char type) {
+inline constexpr ITCHTypes itchMessageIndex(char type) {
 
    switch(type) {
       case 'A': return ITCHTypes::A;

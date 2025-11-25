@@ -177,14 +177,14 @@ void RiskEngine::update_risk() noexcept
             uint32_t RejectReason = 0;
 
             uint8_t venue_index = static_cast<std::underlying_type_t<Venue>>(order->venue);
-            auto &accRisk = accountrisks_[venue_index];
-            auto &symRisk = symbolrisks_[venue_index][hashtables_.getIndex(venue_index, order->symbol)];
-            const auto &accLim = limits_.getAccountLimit(venue_index);
-            const auto &symLim = limits_.getSymbolLimit(venue_index, hashtables_.getIndex(venue_index, order->symbol));
-            const auto &symmeta = store_ram_.get_symbolmeta(order->venue, order->instrument_id);
+            auto& accRisk = accountrisks_[venue_index];
+            auto& symRisk = symbolrisks_[venue_index][hashtables_.getIndex(venue_index, order->symbol)];
+            const auto& accLim = limits_.getAccountLimit(venue_index);
+            const auto& symLim = limits_.getSymbolLimit(venue_index, hashtables_.getIndex(venue_index, order->symbol));
+            const auto* symmeta = store_ram_.get_symbolmeta(order->venue, order->instrument_id);
 
                 // ===== PRE-RISK CHECKS =====
-                if (check_venue_halt_and_circuit(*order, symmeta) ||
+                if (check_venue_halt_and_circuit(*order, *symmeta) ||
                     check_order_rate_limit(accRisk, symRisk, *order, venue_index) ||
                     check_cancel_rate_limit(accRisk, symRisk, *order, venue_index)) // check_duplicate_order_id(this->order_ids, *order, venue_index))
                 continue;
@@ -193,7 +193,7 @@ void RiskEngine::update_risk() noexcept
                 if (order->order_type == OrderType::Limit)
                 { 
                     RejectReason |=
-                        check_price_tick_valid(order->price, symmeta) |
+                        check_price_tick_valid(order->price, *symmeta) |
                         check_notional_value(order->price, order->quantity, symLim.max_notional_scaled) |
                         check_market_data_and_price_band_helper(symRisk.best_bid, symRisk.best_ask, order->price, symLim.max_price_deviation) |
                         check_fat_finger_price_ratio(order->price, symRisk.best_bid, symRisk.best_ask, symLim.fat_finger_ratio);
@@ -201,7 +201,7 @@ void RiskEngine::update_risk() noexcept
 
                 // ===== MAIN RISK CHECKS =====
                 RejectReason |=
-                    check_quantity_bounds(order->quantity, symLim.min_qty, symLim.max_qty) |
+                    check_quantity_bounds(order->quantity, symLim.min_qty, symLim.max_qty, symmeta->round_lot_size) |
                     check_max_open_orders_account(accRisk.open_orders_count.load(std::memory_order_acquire), accLim.max_open_orders) |
                     check_max_open_orders_symbol(symRisk.open_orders_count.load(std::memory_order_acquire), symLim.max_open_orders) |
                     check_self_trade_order(this->orderrisks_, *order, venue_index) |
