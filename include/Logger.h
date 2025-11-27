@@ -15,28 +15,32 @@ private:
 public:
     static void Init(const std::string &filename = "logs/system_log.txt");
 
-    static inline void Info(const spdlog::source_loc &source_loc, const std::string &msg) noexcept
+    template <typename... Args>
+    static inline void Info( const spdlog::source_loc &loc, spdlog::string_view_t msg, Args &&...args) noexcept
     {
-        instance_->log(source_loc, spdlog::level::info, msg);
+        instance_->log(loc, spdlog::level::info, fmt::runtime(msg), std::forward<Args>(args)...);
     }
 
-    static inline void Error(const spdlog::source_loc &source_loc, const std::string &msg) noexcept
+    template <typename... Args>
+    static inline void Error(const spdlog::source_loc &loc, spdlog::string_view_t msg, Args &&...args) noexcept
     {
-        instance_->log(source_loc, spdlog::level::err, msg);
+        instance_->log(loc, spdlog::level::err, fmt::runtime(msg), std::forward<Args>(args)...);
     }
 
-    static inline void Warn(const spdlog::source_loc &source_loc, const std::string &msg) noexcept
+    template <typename... Args>
+    static inline void Warn(const spdlog::source_loc &loc, spdlog::string_view_t msg, Args &&...args) noexcept
     {
-        instance_->log(source_loc, spdlog::level::warn, msg);
+        instance_->log(loc, spdlog::level::warn, fmt::runtime(msg), std::forward<Args>(args)...);
     }
 
-    static inline void Debug(const spdlog::source_loc &source_loc, const std::string &msg) noexcept
+    template <typename... Args>
+    static inline void Debug(const spdlog::source_loc &loc, spdlog::string_view_t msg, Args &&...args) noexcept
     {
-        instance_->log(source_loc, spdlog::level::debug, msg);
+        instance_->log(loc, spdlog::level::debug,  fmt::runtime(msg), std::forward<Args>(args)...);
     }
 };
 
-#define LOG_INFO(msg) Logger::Info(spdlog::source_loc{__FILE__, __LINE__, __FUNCTION__}, msg)
-#define LOG_ERROR(msg) Logger::Error(spdlog::source_loc{__FILE__, __LINE__, __FUNCTION__}, msg)
-#define LOG_WARN(msg) Logger::Warn(spdlog::source_loc{__FILE__, __LINE__, __FUNCTION__}, msg)
-#define LOG_DEBUG(msg) Logger::Debug(spdlog::source_loc{__FILE__, __LINE__, __FUNCTION__}, msg)
+#define LOG_INFO(msg, ...) Logger::Info({__FILE__, __LINE__, __FUNCTION__}, msg, ##__VA_ARGS__)
+#define LOG_ERROR(msg, ...) Logger::Error({__FILE__, __LINE__, __FUNCTION__}, msg, ##__VA_ARGS__)
+#define LOG_WARN(msg, ...) Logger::Warn({__FILE__, __LINE__, __FUNCTION__}, msg, ##__VA_ARGS__)
+#define LOG_DEBUG(msg, ...) Logger::Debug({__FILE__, __LINE__, __FUNCTION__}, msg, ##__VA_ARGS__)

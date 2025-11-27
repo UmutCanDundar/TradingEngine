@@ -1,6 +1,6 @@
 #include "Parser_FIX.h"
 
-Parser_FIX::Parser_FIX(Session_FIX &session, spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept : session_(session), parser_to_fixbuilder_in_(parser_to_fixbuilder_in)
+Parser_FIX::Parser_FIX(Sequence_FIX &session, spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept : session_(session), parser_to_fixbuilder_in_(parser_to_fixbuilder_in)
 {
    for (size_t i = 0; i < FIX_QUEUE_CAPACITY; i++)
       free_fixMsg_list_.push(&fixMsg_pool_[i]);

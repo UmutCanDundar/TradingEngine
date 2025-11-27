@@ -238,7 +238,7 @@ def generate_file(messages):
 
 def messagetype_index(msg):
     for i, field in enumerate(msg["fields"]):
-       if field[0] is "char message_type":
+       if field[0] == "char message_type":
         return i  
 
 def generate_enum(messages):

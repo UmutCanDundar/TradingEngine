@@ -3,6 +3,7 @@
 #include "common.h"
 #include "Order.h"
 #include "Endian.h"
+#include "SoupBinTcp.h"
 
 #include <cstdint>
 #include <cstddef>
@@ -23,35 +24,40 @@ struct ExchangeClientInfo
     char exchange_info[32];  // Account number (first 16 used) for EQM
 };
 
-struct alignas(64) Buffer
+struct alignas(64) Buffer_OBT
 {
     static constexpr size_t MAX_MSG_SIZE = 128;
 
-    char buf[MAX_MSG_SIZE];
-    size_t len;
+    char msg[MAX_MSG_SIZE];
+    uint16_t len;
 };
 
 class Builder_OUCH_BIST
 {
 private:
     static constexpr size_t DAILY_OUCH_BIST_MSG_COUNT = 300'000;
-    std::array<Buffer, DAILY_OUCH_BIST_MSG_COUNT> messages;
+    std::array<Buffer_OBT, DAILY_OUCH_BIST_MSG_COUNT> messages;
     size_t next_buffer_slot = 0;
     ExchangeClientInfo eci{"DMACCOUNT1234", "EXCHANGEINFO1234567890ABCDEFGH"};
 
+    SoupBinTcp &sbt_;    
+
 public:
-    
-Buffer* build(const Order& order) noexcept
-{
-    constexpr std::array<size_t, 4> msg_sizes = {114, 122, 15, 14};
-    Buffer* buffer = &messages[next_buffer_slot];
-    char* buf = buffer->buf;
+    Builder_OUCH_BIST(SoupBinTcp &sbt) noexcept : sbt_(sbt) {}
 
-    (this->*OuchMessageBuilders[order.message_type])(order, buf);
-    buffer->len = msg_sizes[order.message_type];
+    Buffer_OBT *build(const Order &order) noexcept
+    {
+        constexpr std::array<size_t, 4> msg_sizes = {114, 122, 15, 14};
+        Buffer_OBT *buffer = &messages[next_buffer_slot];
+        char *buf = buffer->msg;
+        buffer->len = msg_sizes[order.message_type];
 
-    return buffer;
-}
+        buf = sbt_.WriteSBTHeaderForDataPacket(buf, buffer->len);
+
+        (this->*OuchMessageBuilders[order.message_type])(order, buf);
+
+        return buffer;
+    }
    
 private:
     inline char* buildEnterOrder(const Order &order, char *buf) noexcept

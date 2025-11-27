@@ -2,7 +2,7 @@
 
 #include "common.h"
 #include "Order.h"
-#include "Session_FIX.h"
+#include "SessionManager.h"
 #include "Parser_FIX.h"
 
 #include <immintrin.h>
@@ -22,7 +22,7 @@ private:
     static constexpr size_t MAX_BODY_SIZE = 256;
 
     static constexpr size_t TEMP_BUFFER_SIZE = 64;
-    std::array<Buffer, TEMP_BUFFER_SIZE> temp_bufs;
+    std::array<Buffer_FIX, TEMP_BUFFER_SIZE> temp_bufs;
     size_t temp_index = 0;
 
     static constexpr auto msg_types = []
@@ -55,48 +55,50 @@ private:
         return arr;
     }();
 
-    Session_FIX& session_;
-    const VenueUserInfo &vui_;
+    SessionManager& sess_mngr_;
     
 public:
-    Builder_FIX(Session_FIX& session) noexcept;
-    ~Builder_FIX() noexcept;
+    Builder_FIX(SessionManager& sess_mngr) noexcept;
+    //~Builder_FIX() noexcept;
     
-    inline Buffer *handleResendRequest(const size_t seqnum)
+   /*  inline Buffer_FIX *handleResendRequest(const size_t seqnum)
     {
-        const auto& msg_history = session_.get_history();
-        const Buffer *org_buf = &msg_history[seqnum];
+        const auto& msg_history = sess_mngr_.get_history();
+        const Buffer_FIX *org_buf = &msg_history[seqnum];
         if (findType(org_buf->data) > 65)
             return build_resend(org_buf);
     }
 
-    inline Buffer *handleReject()
+    inline Buffer_FIX *handleReject()
     {
        return build<FIXTypes::Logout>();
     }
 
-    inline Buffer *handleTestRequest()
+    inline Buffer_FIX *handleTestRequest()
     {
         return build<FIXTypes::Heartbeat>();
     }
-
+ */
     template <FIXTypes T, typename... Args>
-    inline Buffer* build(Args && ...args) noexcept
+    inline Buffer_FIX* build(uint8_t session_index, Args&&... args) noexcept
     {
-        Buffer* buffer = session_.get_buffer(session_.get_next_seq());
+        auto& seq_fix = sess_mngr_.getSessionState(session_index)->fix;
+        auto& auth_fix = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
+
+        Buffer_FIX* buffer = seq_fix.get_buffer(seq_fix.get_next_seq());
         
         char hotdata_temp[MAX_BODY_SIZE];
-        char *hotdata_end_ptr = Builder_FIX::buildBody<T>(hotdata_temp, std::forward<Args>(args)...);
+        char *hotdata_end_ptr = Builder_FIX::buildBody<T>(hotdata_temp, session_index, std::forward<Args>(args)...);
         size_t hotdata_len = static_cast<size_t>(hotdata_end_ptr - hotdata_temp);
         
-        char* buf_end_ptr = buildHeader(*this, buffer->data, hotdata_len, static_cast<size_t>(T));
+        char* buf_end_ptr = buildHeader(buffer->data, hotdata_len, static_cast<size_t>(T), auth_fix, seq_fix);
         std::memcpy(buf_end_ptr, hotdata_temp, hotdata_len);
         buffer->len = static_cast<size_t>(buf_end_ptr + hotdata_len - buffer->data); 
         
         buf_end_ptr = finalizeChecksum(buffer->data, buffer->len);
         buffer->len += 7;
         
-        session_.increase_next_seq();
+        seq_fix.increase_next_seq();
         buffer->hotdata_start = hotdata_temp;
         buffer->hotdata_len = hotdata_len;
         
@@ -104,19 +106,28 @@ public:
     }
 
     template <FIXTypes T, typename... Args>
-    inline char* buildBody(char* buf, Args&&... args) noexcept {
+    inline char* buildBody(char* buf, uint8_t session_index, Args&&... args) noexcept {
         return buildBody_impl(std::integral_constant<FIXTypes, T>{},
-                              buf, std::forward<Args>(args)...);
+                              buf, session_index, std::forward<Args>(args)...);
     }
 
-    inline Buffer* build_resend(const Buffer* org_buf) noexcept
+    /* template <FIXTypes T, typename... Args>
+    inline char *buildBody(char *buf, Args &&...args) noexcept
     {
-        Buffer* temp_buffer = &temp_bufs[temp_index++ & (TEMP_BUFFER_SIZE - 1)];
+        return buildBody_impl(std::integral_constant<FIXTypes, T>{},
+                              buf, std::forward<Args>(args)...);
+    } */
+
+    inline Buffer_FIX* build_resend(const Buffer_FIX* org_buf, uint8_t session_index) noexcept
+    {
+        auto &auth_fix = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
+
+        Buffer_FIX* temp_buffer = &temp_bufs[temp_index++ & (TEMP_BUFFER_SIZE - 1)];
 
         const char *hotdata_start = org_buf->hotdata_start;
         const size_t hotdata_len = org_buf->hotdata_len;
 
-        char *buf_end_ptr = buildHeader(*this, org_buf, temp_buffer->data);
+        char *buf_end_ptr = buildHeader(org_buf, temp_buffer->data, auth_fix);
         std::memcpy(buf_end_ptr, hotdata_start, hotdata_len);
         temp_buffer->len = static_cast<size_t>(buf_end_ptr + hotdata_len - temp_buffer->data);
 
@@ -129,48 +140,49 @@ public:
 private:
 
     // ------------------- HEADER ---------------------
-    static char* buildHeader(Builder_FIX& bf, char* buf, size_t body_len, const size_t msg_index) noexcept;
-    static char* buildHeader(Builder_FIX &bf, const Buffer* org_buf, char* temp) noexcept;
-    
+     char* buildHeader(char* buf, size_t body_len, const size_t msg_index, const VenueUserInfo_FIX& auth_fix, Sequence_FIX& seq_fix) noexcept;
+     char *buildHeader(const Buffer_FIX *org_buf, char *temp, const VenueUserInfo_FIX &auth_fix) noexcept;
 
-    // ------------------- BODY -------------------------
-    // ADMINISTRATIVE MESSAGES
-    static inline char* buildLogon(Builder_FIX& bf, char* buf, const bool reset) noexcept 
+     // ------------------- BODY -------------------------
+     // ADMINISTRATIVE MESSAGES
+     inline char* buildLogon(char* buf, uint8_t session_index, const bool reset = false) noexcept 
     {
-       
+        auto& seq_fix = sess_mngr_.getSessionState(session_index)->fix;
+        auto& fix_auth = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
+
         buf = addTag("98=", 3, "0", 1, buf);
         if(LIKELY(reset))
             buf = addTag("141=", 4, "Y", 1, buf);
-        buf = addTag("108=", 4, bf.session_.get_interval(), bf.session_.get_interval_len(), buf);
-        buf = addTag("553=", 4, bf.vui_.username, bf.vui_.username_len, buf);
-        buf = addTag("554=", 4, bf.vui_.password, bf.vui_.password_len, buf);
+        buf = addTag("108=", 4, seq_fix.get_interval(), seq_fix.get_interval_len(), buf);
+        buf = addTag("553=", 4, fix_auth.username, fix_auth.username_len, buf);
+        buf = addTag("554=", 4, fix_auth.password, fix_auth.password_len, buf);
         buf = addTag("1137=", 5, "9", 1, buf);
 
         return buf;
     }
-    static inline char* buildLogout(char* buf) noexcept
+     inline char* buildLogout(char* buf) noexcept
     {
         return buf;
     }
-    static inline char* buildHeartbeat(char* buf) noexcept
+     inline char* buildHeartbeat(char* buf) noexcept
     {
         return buf;
     }
-    static inline char* buildTestRequest(char* buf) noexcept
+     inline char* buildTestRequest(char* buf) noexcept
     {
-        static uint32_t test_req_counter = 1;
+         uint32_t test_req_counter = 1;
         buf = addTag("112=", 4, test_req_counter++, buf);
 
         return buf;
     }
-    static inline char* buildSequenceReset(char* buf, const uint32_t new_seq) noexcept
+     inline char* buildSequenceReset(char* buf, const uint32_t new_seq) noexcept
     {
         buf = addTag("123=", 4, "Y", 1, buf);
         buf = addTag("36=", 3, new_seq, buf);
 
         return buf;
     }
-    static inline char* buildResendRequest(char* buf, const uint32_t begin_seq, const uint32_t end_seq) noexcept
+     inline char* buildResendRequest(char* buf, const uint32_t begin_seq, const uint32_t end_seq) noexcept
     {
         buf = addTag("7=", 2, begin_seq, buf);
         buf = addTag("16=", 3, end_seq, buf);
@@ -179,10 +191,12 @@ private:
     }
     
     // --- APPLICATION MESSAGES ---
-    static inline char* buildNewOrderSingle(Builder_FIX& bf, const Order &order, char* buf) noexcept
+     inline char* buildNewOrderSingle(const Order &order, char* buf, uint8_t session_index) noexcept
     {
+        auto &fix_auth = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
+
         buf = addTag("11=", 3, static_cast<uint32_t>(order.client_order_id), buf);
-        buf = addTag("1=", 2, bf.vui_.account, bf.vui_.acc_len, buf);
+        buf = addTag("1=", 2, fix_auth.account, fix_auth.acc_len, buf);
         buf = addTag("528=", 4, "A", 1, buf);
         buf = addTag("55=", 3, order.symbol.data(), order.symbol.size() ,buf);
         buf = addTag("54=", 3, static_cast<uint32_t>(order.side), buf);
@@ -201,7 +215,7 @@ private:
         return buf;
     }
 
-    static inline char* buildCancelRequest(const Order& order, char* buf) noexcept 
+     inline char* buildCancelRequest(const Order& order, char* buf) noexcept 
     {
         buf = addTag("41=", 3, "NONE", 4, buf);
         buf = addTag("37=", 3, order.order_id, buf);
@@ -217,12 +231,14 @@ private:
         return buf;
     }
 
-    static inline char* buildReplaceRequest(Builder_FIX& bf, const Order &order, char* buf) noexcept
+     inline char* buildCancelReplaceRequest(const Order &order, char* buf, uint8_t session_index) noexcept
     {
+        auto &fix_auth = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
+
         buf = addTag("37=", 3, order.order_id, buf);
         buf = addTag("41=", 3, "NONE", 4, buf);
         buf = addTag("11=", 3, static_cast<uint32_t>(order.client_order_id), buf);
-        buf = addTag("1=", 2, bf.vui_.account, bf.vui_.acc_len, buf);
+        buf = addTag("1=", 2, fix_auth.account, fix_auth.acc_len, buf);
         buf = addTag("528=", 4, "A", 1, buf);
         buf = addTag("55=", 3, order.symbol.data(), order.symbol.size(), buf);
         buf = addTag("54=", 3, static_cast<uint32_t>(order.side), buf);
@@ -242,46 +258,46 @@ private:
     }
 
   
-    static inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Logon>, Builder_FIX& bf, char* buf, const bool reset) noexcept
+     inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Logon>, char* buf, uint8_t session_index, const bool reset) noexcept
     {
-        return Builder_FIX::buildLogon(bf, buf, reset);
+        return Builder_FIX::buildLogon(buf, session_index, reset);
     }
-    static inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::SequenceReset>, char* buf, const uint32_t new_seq) noexcept
+    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::SequenceReset>, char *buf, uint8_t /*session_index*/, const uint32_t new_seq) noexcept
     {
         return Builder_FIX::buildSequenceReset(buf, new_seq);
     }
-    static inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::ResendRequest>, char* buf, const uint32_t begin_seq, const uint32_t end_seq) noexcept
+    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::ResendRequest>, char *buf, uint8_t /*session_index*/, const uint32_t begin_seq, const uint32_t end_seq) noexcept
     {
         return Builder_FIX::buildResendRequest(buf, begin_seq, end_seq);
     }
-    static inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Logout>, char* buf) noexcept
+    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Logout>, char *buf, uint8_t /*session_index*/) noexcept
     {
         return Builder_FIX::buildLogout(buf);
-    } 
-    static inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Heartbeat>, char* buf) noexcept
+    }
+    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Heartbeat>, char *buf, uint8_t /*session_index*/) noexcept
     {
         return Builder_FIX::buildHeartbeat(buf);
     }
-    static inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::TestRequest>, char* buf) noexcept
+    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::TestRequest>, char *buf, uint8_t /*session_index*/) noexcept
     {
         return Builder_FIX::buildTestRequest(buf);
-    }  
-    static inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::NewOrderSingle>, Builder_FIX& bf, const Order &order, char* buf) noexcept
-    {
-        return Builder_FIX::buildNewOrderSingle(bf, order, buf);
     }
-    static inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::OrderCancelRequest>, const Order &order, char* buf) noexcept
+    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::NewOrderSingle>, char *buf, uint8_t session_index, const Order &order) noexcept
+    {
+        return Builder_FIX::buildNewOrderSingle(order, buf, session_index);
+    }
+    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::OrderCancelRequest>, char *buf, uint8_t /*session_index*/, const Order &order) noexcept
     {
         return Builder_FIX::buildCancelRequest(order, buf);
     }
-    static inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::OrderCancelReplaceRequest>, Builder_FIX& bf, const Order &order, char* buf) noexcept
+    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::OrderCancelReplaceRequest>, char *buf, uint8_t session_index, const Order &order) noexcept
     {
-        return Builder_FIX::buildReplaceRequest(bf, order, buf);
+        return Builder_FIX::buildCancelReplaceRequest(order, buf, session_index);
     }
 
 
     // -------------------  TRAILER ----------------------
-    static inline char *finalizeChecksum(char *buf, size_t len) noexcept
+     inline char *finalizeChecksum(char *buf, size_t len) noexcept
     {
         uint32_t cksum = 0;
         for (size_t i = 0; i < len; ++i)

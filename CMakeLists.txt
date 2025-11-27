@@ -44,6 +44,12 @@ add_custom_command(
 )
 
 add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedOUCHMessages_NASDAQ.h
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateOUCHMessages_NASDAQ.py
+    DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateOUCHMessages_NASDAQ.py
+)
+
+add_custom_command(
     OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedSBEMessages.h
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateSBEMessages.py
     DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateSBEMessages.py
@@ -54,6 +60,12 @@ add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateSymbolTables.py
 )
 
+add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/include/GeneratedSBTPackets.h
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/generate/GenerateSBTPackets.py
+    DEPENDS ${CMAKE_SOURCE_DIR}/generate/GenerateSBTPackets.py
+)
+
 
 add_custom_target(GeneratedFiles ALL
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedErrorMap.h
@@ -61,8 +73,10 @@ add_custom_target(GeneratedFiles ALL
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages_BIST.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedITCHMessages_NASDAQ.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedOUCHMessages_BIST.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedOUCHMessages_NASDAQ.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSBEMessages.h
     DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSymbolTables.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/include/GeneratedSBTPackets.h
 )
 
 set(MARKER_FILE "${CMAKE_BINARY_DIR}/setup_sql.done")

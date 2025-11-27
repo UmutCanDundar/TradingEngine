@@ -90,9 +90,10 @@ struct alignas(64) Order
    uint32_t filled_quantity = 0;                      // Cumulative filled quantity
    uint32_t remaining_quantity = 0;
    uint32_t last_exec_quantity = 0;
-   int32_t replaced_quantity = 0;               // For Replace operations
+   int32_t replaced_quantity = 0;                     // For Replace operations
    uint32_t symbol_index = 0;                         // From Hashtable 
    uint32_t instrument_id = 0;                        // SBE/ITCH/FIX instrument identifier
+   uint32_t user_ref_num = 0;                         // For OUCH-NASDAQ 
    Side side = Side::Unknown;                         // Buy/Sell
    Status status = Status::Unknown;                   // New/Partial/Filled/Cancelled
    Venue venue;                                       // NYSE, NASDAQ, etc.
@@ -101,7 +102,6 @@ struct alignas(64) Order
    Protocol protocol = Protocol::Unknown;             // Source protocol for reconstruction
    OrderType order_type = OrderType::Unknown;         // Limit, Market, Stop
    TimeInForce time_in_force = TimeInForce::Unknown;  // IOC, GTC, etc.
-   uint8_t pad1[4];                                  // 64-byte alignment
    
    // 🟠 LOOKUP & ROUTING
    uint64_t order_id = 0;         // Exchange-assigned unique order ID (ITCH and Hash-based FIX)
@@ -118,7 +118,8 @@ struct alignas(64) Order
    // 🟡 PROTOCOL - SYMBOL DATA for builder
    uint8_t message_type = 0;                                // Message type within the protocol
    std::array<char, SYMBOL_SIZE> symbol{};                  // Fixed-size symbol for low-latency lookup
-   uint8_t pad2[10]; // 64-byte alignment
+   uint8_t pad2[6]; // 64-byte alignment
+   uint32_t pre_user_ref_num = 0; 
    
    //Cache-Line
    std::array<char, FIX_ORDER_ID_SIZE> fix_org_order_id{};  // For FIX original order ID (This field may be used to hold the existing-order-token for ouch replaced messages)

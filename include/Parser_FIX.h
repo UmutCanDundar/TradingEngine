@@ -1,8 +1,9 @@
 #pragma once
 
 #include "common.h"
-#include "Session_FIX.h"
+#include "Sequence_FIX.h"
 #include "Logger.h"
+#include "NetworkIO.h"
 
 #include <string_view>
 #include <cstdint>
@@ -17,7 +18,29 @@
 #include <absl/container/btree_map.h>
 #include <type_traits>
 #include <chrono>
+#include <algorithm>
 
+enum class BodyLenState : uint8_t
+{
+    EXPECT_SOH,
+    EXPECT_9,  
+    EXPECT_EQ, 
+    READ_VALUE, 
+    DONE,
+    None,
+};
+
+struct HalfFIXBuffer 
+{
+    static constexpr size_t DATA_SIZE = 1024;
+    char data[DATA_SIZE];
+    size_t existing_len = 0;
+    size_t remaining_len = 0;
+    size_t body_len = 0;
+    bool active = false;
+    BodyLenState bodylen_state = BodyLenState::None;
+};
+    
 enum class FIXTypes : uint8_t
 {
     Logon = 'A',
@@ -162,6 +185,8 @@ using FIXPendingMap_t = absl::btree_map<uint32_t, std::variant<FIXMessage*, FIXS
 class Parser_FIX
 {
 private:
+    HalfFIXBuffer partial_fix_msg;
+
     FIXMessagePool fixMsg_pool_;
     spscFIXQueue_t free_fixMsg_list_;
 
@@ -182,11 +207,11 @@ private:
     static const std::array<SesTagHandlerFunc, MAX_SESTAG>& makeSesTagHandlersLookup() noexcept;
     static const std::array<SesTagHandlerFunc, MAX_SESTAG>& SestagHandlers;
 
-    Session_FIX &session_;
+    Sequence_FIX &session_;
     spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;
 
 public:
-    Parser_FIX(Session_FIX &session, spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept;
+    Parser_FIX(Sequence_FIX &session, spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept;
 
     template <typename T>
     T* parse(const char *data, size_t len) noexcept
@@ -291,31 +316,11 @@ public:
       
             switch(type) 
             {
-
                 case FIXTypes::ResendRequest:
                     return false;
                 
                 case FIXTypes::Reject:
-                {
-                    const SessionRejectReason reject_reason = static_cast<SessionRejectReason>(fixSesMsg->reject_reason);
-                    const std::string_view reason = to_string(reject_reason);
-                    const std::string_view text = fixSesMsg->text;
-                   
-                    const char* txt = text.data();
-                    size_t txt_len = text.size();
-                
-                    const char* rs = reason.data();
-                    size_t rs_len = reason.size();
-
-                    std::string msg;
-                    msg.reserve(rs_len + 4 + txt_len);
-                    msg.append(rs, rs_len);
-                    msg.append(" => ", 4);
-                    msg.append(txt);
-
-                    LOG_ERROR(msg);
                     return false;
-                }
                 
                 case FIXTypes::SequenceReset:
                     session_.set_expected_seq(fixSesMsg->new_seqnum);
@@ -325,26 +330,8 @@ public:
                     return false;
                 
                 case FIXTypes::Logout:
-                {
-                    const LogoutStatus ses_status = static_cast<LogoutStatus>(fixSesMsg->ses_status);
-                    const std::string_view status = to_string(ses_status);
-                    const std::string_view text = fixSesMsg->text;
-
-                    const char *txt = text.data();
-                    size_t txt_len = text.size();
-
-                    const char *st = status.data();
-                    size_t st_len = status.size();
-
-                    std::string msg;
-                    msg.reserve(st_len + 4 + txt_len);
-                    msg.append(st, st_len);
-                    msg.append(" => ", 4);
-                    msg.append(txt);
-
-                    LOG_ERROR(msg);
                     return true;
-                }
+                
                 case FIXTypes::Logon:
                     if(fixSesMsg->reset_seqnum_flag == 'Y') 
                     {
@@ -462,6 +449,163 @@ public:
         push_pending(fixSesMsg);
     }
 
+    inline std::pair<char*, size_t> nextFixMsg(OutPacket *pkt, size_t& data_offset) noexcept
+    {
+
+        if (data_offset >= pkt->len)
+            return {nullptr, 0};
+   
+        auto *partial_data = partial_fix_msg.data;
+        
+        // Partial Packet Handler Start
+        if (partial_fix_msg.active == true)
+        {
+            size_t &existing_len = partial_fix_msg.existing_len;
+            size_t &remaining_len = partial_fix_msg.remaining_len;
+
+            if(remaining_len == 0)
+            {
+                size_t pos = data_offset;
+                size_t body_len = 0;
+                size_t body_len_end = 0;
+
+                switch (partial_fix_msg.bodylen_state)
+                {
+                    case BodyLenState::EXPECT_SOH:
+                        while (pos < pkt->len && pkt->data[pos] != '\x01')
+                            ++pos;
+                        pos += 3;
+                        break;
+                    case BodyLenState::EXPECT_9:
+                        pos += 2; 
+                        break;
+                    case BodyLenState::EXPECT_EQ:
+                        pos += 1;
+                        break;
+                    case BodyLenState::READ_VALUE:
+                        body_len = partial_fix_msg.body_len;
+                        break;
+                    default:
+                        break;
+                }
+
+                while (pos < pkt->len && pkt->data[pos] >= '0' && pkt->data[pos] <= '9')
+                {
+                    body_len = body_len * 10 + (pkt->data[pos] - '0');
+                    ++pos;
+
+                    if (pos == pkt->len)
+                    {
+                        partial_fix_msg.body_len = body_len;
+                        return{nullptr, 0};
+                    }
+                }                    
+
+                partial_fix_msg.bodylen_state = BodyLenState::DONE;
+                body_len_end = pos + 1;
+                remaining_len = body_len_end + body_len + 7;
+                
+            }
+              
+            size_t copy_len = std::min(remaining_len, static_cast<size_t>(pkt->len));
+            std::memcpy(partial_data + existing_len, pkt->data.data() + data_offset, copy_len);
+
+            existing_len += copy_len;
+            remaining_len -= copy_len;
+
+            if(remaining_len == 0)
+            {
+                const size_t msg_len = existing_len;
+                existing_len = 0;
+                remaining_len = 0;
+                partial_fix_msg.active = false;
+                partial_fix_msg.bodylen_state = BodyLenState::None;
+
+                return {partial_data, msg_len};
+            }
+            else
+            {
+                return{nullptr, 0};
+            }
+        } 
+        //Partial Packet Handler End
+
+        // Finding BodyLen Of The Message Start
+        size_t next_msg_start = data_offset;
+        size_t body_len = 0;
+        size_t body_len_end = 0;
+
+        for (size_t msg_offset = 0; next_msg_start + msg_offset < pkt->len; ++msg_offset)
+        {
+            if (pkt->data[next_msg_start + msg_offset] == '\x01')
+            {
+                partial_fix_msg.bodylen_state = BodyLenState::EXPECT_9;
+                continue;
+            }
+
+            if (pkt->data[next_msg_start + msg_offset] == '9')
+            {
+                partial_fix_msg.bodylen_state = BodyLenState::EXPECT_EQ;
+                continue;
+            }
+
+            if (pkt->data[next_msg_start + msg_offset] == '=')
+            {
+                partial_fix_msg.bodylen_state = BodyLenState::READ_VALUE;
+
+                size_t pos = next_msg_start + msg_offset + 1;
+                while (pos < pkt->len && pkt->data[pos] >= '0' && pkt->data[pos] <= '9')
+                {
+                    body_len = body_len * 10 + (pkt->data[pos] - '0');
+                    ++pos;
+                    
+                    if (pos == pkt->len)
+                        partial_fix_msg.body_len = body_len;
+                }
+               
+                if (pos < pkt->len && pkt->data[pos] == '\x01')
+                {
+                    partial_fix_msg.bodylen_state = BodyLenState::DONE;
+                    body_len_end = pos + 1;
+                }
+            }
+
+            break;
+        }
+        // Finding BodyLen Of The Message End
+
+        // Returns The Message And Its Len (If It Is Not Partial)
+        size_t checksum_start = body_len_end + body_len;
+        size_t msg_len = 0;
+
+        if (body_len_end == 0 || (body_len_end > 0 && (checksum_start + 7 > pkt->len)))
+        {
+            size_t existing_len = pkt->len - data_offset;
+            std::memcpy(partial_data, pkt->data.data() + data_offset, existing_len);
+            partial_fix_msg.existing_len = existing_len;
+            data_offset = pkt->len;
+            partial_fix_msg.active = true;
+
+            if(body_len_end > 0)
+            {
+                msg_len = checksum_start + 7;
+                partial_fix_msg.remaining_len = msg_len - existing_len;
+                partial_fix_msg.bodylen_state = BodyLenState::DONE;
+            }
+            else if(body_len == 0)
+            {
+                partial_fix_msg.bodylen_state = BodyLenState::EXPECT_SOH;
+            }
+            
+            return {nullptr, 0};
+        }
+        else
+        {
+            msg_len = checksum_start + 7;
+            return {pkt->data.data() + data_offset, msg_len};
+        }
+    }
+
 private:
 
     static inline int parseFixedPoint(std::string_view strnum) noexcept
@@ -491,7 +635,10 @@ private:
         return result;
     }
 
-   static constexpr std::string_view to_string(SessionRejectReason reason) 
+};
+
+
+/* static constexpr std::string_view to_string(SessionRejectReason reason) 
    {
         switch(reason)
         {
@@ -549,5 +696,4 @@ private:
        default:
            return "Unknown";
        }
-   }
-};
+   } */

@@ -97,6 +97,7 @@ private:
     void insert(const MessageWithVenue<BIST::ITCHMessage> &itchMsg);
     void insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg);
     void insert(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg);
+    void insert(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg);
     void insert(const MessageWithVenue<FIXMessage *> &fixMsg);
     void insert(const Order *order);
 

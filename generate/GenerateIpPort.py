@@ -13,7 +13,7 @@ PortVenue = {
 }
 
 IPs = {
-    1304: {"123.0.12.12", "122.05.11.11"},
+    1304: {"123.3.12.12", "122.5.11.11"},
 }
 IPs_COUNT = sum(len(ips) for ips in IPs.values())
 
@@ -33,7 +33,7 @@ with open("../include/GeneratedIpPort.h", "w") as f:
     f.write("#include <array>\n#include <cstdint>\n#include <vector>\n#include \"Protocol-Venue.h\"\n\n")
     
     f.write(f"inline constexpr size_t PORTS_COUNT = {PORTS_COUNT};\n\n")
-    f.write(f"inline constexpr size_t IPs_COUNT = {PORTS_COUNT};\n\n")
+    f.write(f"inline constexpr size_t IPs_COUNT = {IPs_COUNT};\n\n")
    
 
     f.write(f"inline constexpr std::array<uint16_t, {PORTS_COUNT}> Ports {{\n")

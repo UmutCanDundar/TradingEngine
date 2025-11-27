@@ -13,7 +13,7 @@
 #include <absl/container/flat_hash_map.h>
 #include <absl/hash/hash.h>
 #include <boost/lockfree/spsc_queue.hpp>
-#include <tbb/concurrent_hash_map.h>
+#include <tbb/concurrent_unordered_map.h>
 #include <vector>
 #include <cstring>
 #include <immintrin.h>
@@ -139,6 +139,7 @@ inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;
 inline constexpr size_t PENDING_QUEUE_CAPACITY = 65536;
 inline constexpr uint8_t STRATEGY_DONE = 0x01;
 inline constexpr uint8_t RISK_DONE = 0x02;
+inline constexpr uint8_t BUILDER_DONE = 0x03;
 
 using spscStorePendingQueue_t = boost::lockfree::spsc_queue<PendingMessage<MessageWithVenue<MessageTypes_t>>, boost::lockfree::capacity<PENDING_QUEUE_CAPACITY>>;
 using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
@@ -163,10 +164,12 @@ private:
     size_t market_next_slot = 0;
     size_t our_next_slot = MARKETORDER_LAST_INDEX;
 
-    absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> market_order_map_;  
-    absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> our_order_map_;
-    absl::flat_hash_map<uint64_t, Order*> our_order_map_wtokenkey_;
-    tbb::concurrent_hash_map<uint64_t, Order*> pending_order_map_; // OUCH-FIX orders awaiting exchange acknowledgement
+    absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> market_orders_;  
+    absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> our_orders_;
+    absl::flat_hash_map<uint64_t, Order*> our_orders_wtokenkey_;
+    tbb::concurrent_unordered_map<uint64_t, Order*> pending_orders_map_; // OUCH-FIX orders awaiting exchange acknowledgement
+    absl::flat_hash_map<uint32_t, OrderKey> nq_ouch_refnum_ordkey_;
+    absl::flat_hash_map<uint64_t, uint32_t> nq_ouch_sym_symid_;
 
     std::array<absl::flat_hash_map<uint64_t, SymbolMeta>,VENUE_COUNT> instrument_cache_;
     std::array<std::vector<OrderHistory>, VENUE_COUNT> our_orders_all_venue_;
@@ -210,7 +213,7 @@ public:
     }
     void store() noexcept;
 
-    void add_pending_order(Order *order) noexcept;
+    void add_pending_order(Order &order) noexcept;
     inline auto const &get_venue_flags(Venue venue) const noexcept { return venue_flags_[static_cast<size_t>(venue)]; }
     inline SymbolMeta const *get_symbolmeta(Venue venue, uint32_t instrument_id) const noexcept 
     { 
@@ -226,14 +229,15 @@ private:
     Order* add_our_order(Order *order) noexcept;
     Order* add_market_order(uint64_t order_id, uint32_t instrument_id, Venue venue, uint8_t side) noexcept;
     Order* get_order_from_market_map(uint64_t order_id, uint32_t instrument_id, Venue venue, uint8_t side) noexcept;
-    Order* get_order_from_our_map(uint64_t order_id, uint32_t instrument_id, Venue venue, uint8_t side) noexcept;
+    Order* get_order_from_our_map(OrderKey orderkey) noexcept;
     Order* get_order_from_our_map_wtokenkey(uint64_t client_order_id) noexcept;
-    Order* get_order_from_pending_order_map(uint64_t client_order_id) noexcept;
+    Order* get_order_from_pending_orders_map(uint64_t client_order_id) noexcept;
 
     void update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept; // ONLY BIST
     void update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg) noexcept;
+    void update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg) noexcept;
     void update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept; //  NECESSITY OF SBE IS NOT DETERMINED YET
 
     void handle_instrument_definition(const SBEInstrumentDefinitionMessage &msg, Venue venue) noexcept;
@@ -248,15 +252,15 @@ private:
     inline void ReleaseOrder(OrderHistory &orderhistory, Order &order)
     {
         store_to_strategy_free_slot_.push(&order);
-        our_order_map_.erase(OrderKey{order.order_id, order.instrument_id, static_cast<uint8_t>(order.venue), static_cast<uint8_t>(order.side)});
-        our_order_map_wtokenkey_.erase(order.client_order_id);
+        our_orders_.erase(OrderKey{order.order_id, order.instrument_id, static_cast<uint8_t>(order.venue), static_cast<uint8_t>(order.side)});
+        our_orders_wtokenkey_.erase(order.client_order_id);
         orderhistory.pop(&order);
     }
 
     inline void ReleaseOrder(Order &order)
     {
         store_to_strategy_free_slot_.push(&order);
-        market_order_map_.erase(OrderKey{order.order_id, order.instrument_id, static_cast<uint8_t>(order.venue), static_cast<uint8_t>(order.side)});
+        market_orders_.erase(OrderKey{order.order_id, order.instrument_id, static_cast<uint8_t>(order.venue), static_cast<uint8_t>(order.side)});
     }
 
     static inline void copy_symbol(std::array<char, SYMBOL_SIZE> &dest, const std::string_view src) noexcept
@@ -388,6 +392,7 @@ private:
         order.status = Status::Cancelled;
         order.filled_quantity = msg.filled_qty;      // iptal öncesi toplam dolum
         order.remaining_quantity = order.quantity - order.filled_quantity;
+        order.replaced_quantity = -1 * order.remaining_quantity;
         order.last_update_time  = static_cast<uint64_t>(msg.transact_time);
         if (UNLIKELY(order.syncState == SyncState::WaitingNew))
             order.StatusesPreNew[1] = Status::Cancelled;
@@ -488,7 +493,7 @@ private:
     inline void fill_itch_delete(Order &order, const BIST::ITCHOrderDeleteMessage &msg) noexcept
     {
         order.status = Status::Cancelled;
-        order.remaining_quantity = order.quantity;
+        order.replaced_quantity = -1 * order.quantity;
         order.last_update_time = msg.timestamp_ns;
         order.cancelled_count++;
         order.message_type = msg.message_type;
@@ -598,9 +603,18 @@ private:
 
     inline void fill_itch_cancel(Order &order, const NASDAQ::ITCHCancelMessage &msg) noexcept
     {
-        order.status = Status::Cancelled;
         order.last_update_time = msg.timestamp;
-        order.remaining_quantity = msg.cancelled_shares;
+        order.remaining_quantity = order.remaining_quantity - msg.cancelled_shares;
+        order.replaced_quantity = msg.cancelled_shares;
+        if (order.remaining_quantity > 0)
+        {
+            order.status = Status::Replaced;
+            order.replaced_quantity *= -1;
+        }
+        else
+        {
+            order.status = Status::Cancelled;
+        }
         order.cancelled_count++;
         order.message_type = msg.message_type;
     }
@@ -628,7 +642,7 @@ private:
     inline void fill_itch_delete(Order &order, const NASDAQ::ITCHDeleteMessage &msg) noexcept
     {
         order.status = Status::Cancelled;
-        order.remaining_quantity = order.quantity - order.filled_quantity;
+        order.replaced_quantity = order.remaining_quantity;
         order.last_update_time = msg.timestamp;
         order.message_type = msg.message_type;
     }
@@ -700,7 +714,7 @@ private:
         order.price = static_cast<int64_t>(msg.price);
         order.quantity = static_cast<uint32_t>(msg.quantity);
         order.remaining_quantity = static_cast<uint32_t>(msg.quantity);
-        order.filled_quantity = order.quantity - order.remaining_quantity;
+        //order.filled_quantity = order.quantity - order.remaining_quantity;
         order.status = Status::New;
         order.order_id = msg.order_id;
         order.timestamp = msg.timestamp;
@@ -718,7 +732,10 @@ private:
         order.quantity += order.replaced_quantity;                        // total qty
         order.status = Status::Replaced;
         order.order_id = msg.order_id;
+        order.timestamp = msg.timestamp;
         order.last_update_time = order.timestamp;
+        order.side = msg.side == 'B' ? Side::Buy : Side::Sell;
+        order.time_in_force = static_cast<TimeInForce>(msg.time_in_force);
     }
 
     inline void fill_ouch_cancelled(Order &order, const BIST::OUT::OUCHOrderCancelledMessage &msg) noexcept
@@ -733,6 +750,7 @@ private:
         order.filled_quantity += msg.traded_quantity;
         order.last_exec_quantity = msg.traded_quantity;
         order.last_update_time = msg.timestamp;
+        order.remaining_quantity -= msg.traded_quantity;
         if (order.filled_quantity < order.quantity)
             order.status = Status::Partial;
         else
@@ -750,6 +768,89 @@ private:
             order.last_update_time = msg.timestamp;
             order.canModify = 0x00;
         }
+    }
+
+    //===========================================================
+    //=================== NASDAQ OUCH fillers ===================
+    //===========================================================
+    inline void fill_ouch_accepted(Order &order, const NASDAQ::OUT::OUCHOrderAcceptedMessage &msg) noexcept
+    {
+        order.price = static_cast<int64_t>(msg.price);
+        order.quantity = msg.quantity;
+        order.remaining_quantity = msg.quantity;
+        order.filled_quantity = order.quantity - order.remaining_quantity;
+        order.status = Status::New;
+        order.order_id = msg.order_reference_number;
+        order.timestamp = msg.timestamp;
+        order.last_update_time = order.timestamp;
+    }
+
+    inline void fill_ouch_replaced(Order &order, const NASDAQ::OUT::OUCHOrderReplacedMessage &msg) noexcept // For now, only used for qty modification
+    {
+
+        order.price = static_cast<int64_t>(msg.price);
+        order.replaced_quantity = static_cast<int32_t>(msg.quantity - order.remaining_quantity); // delta qty
+        order.remaining_quantity = msg.quantity;                          // open qty
+        order.quantity += order.replaced_quantity;                                               // total qty
+        order.status = Status::Replaced;
+        order.order_id = msg.order_reference_number;
+        order.timestamp = msg.timestamp;
+        order.last_update_time = order.timestamp;
+        order.side = msg.side == 'B' ? Side::Buy : Side::Sell;
+        order.time_in_force = static_cast<TimeInForce>(msg.time_in_force);
+        order.user_ref_num = msg.user_ref_num;
+    }
+
+    inline void fill_ouch_cancelled(Order &order, const NASDAQ::OUT::OUCHOrderCancelledMessage &msg) noexcept
+    {
+        order.last_update_time = order.timestamp;
+        order.remaining_quantity = (order.remaining_quantity - msg.quantity > 0) ? order.remaining_quantity - msg.quantity : 0;
+        order.replaced_quantity = msg.quantity;
+        if (order.remaining_quantity > 0)
+        {
+            order.status = Status::Replaced;
+            order.replaced_quantity *= -1;
+        }
+        else
+        {
+            order.status = Status::Cancelled;
+        }
+        order.cancelled_count++;
+    }
+    inline void fill_ouch_executed(Order &order, const NASDAQ::OUT::OUCHOrderExecutedMessage &msg) noexcept
+    {
+        order.price = static_cast<int64_t>(msg.price);
+        order.filled_quantity += msg.quantity;
+        order.last_exec_quantity = msg.quantity;
+        order.last_update_time = msg.timestamp;
+        order.remaining_quantity -= msg.quantity;
+        if (order.filled_quantity < order.quantity)
+            order.status = Status::Partial;
+        else
+            order.status = Status::Filled;
+    }
+
+    inline void fill_ouch_rejected(Order &order, const NASDAQ::OUT::OUCHOrderRejectedMessage &msg) noexcept
+    {
+        if (order.status == Status::Unknown)
+        {
+            store_to_strategy_free_slot_.push(&order);
+        }
+        else
+        {
+            order.last_update_time = msg.timestamp;
+            order.canModify = 0x00;
+        }
+    }
+
+    inline void fill_ouch_modified(Order & order, const NASDAQ::OUT::OUCHOrderModifiedMessage &msg) noexcept
+    {
+        order.replaced_quantity = static_cast<int32_t>(msg.quantity - order.remaining_quantity); // delta qty
+        order.remaining_quantity = msg.quantity;                                                 // open qty
+        order.quantity += order.replaced_quantity;                                               // total qty
+        order.status = Status::Replaced;
+        order.side = msg.side == 'B' ? Side::Buy : Side::Sell;
+        order.last_update_time = order.timestamp;
     }
 
     //===========================================================

@@ -1,7 +1,5 @@
 #include "ErrorHandler.h"
-#include "Logger.h"
 
-#include <cstdio>  // snprintf
 #include <cstring> // strerror
 #include <cerrno>  // errno
 #include <string>  // std::string
@@ -10,46 +8,44 @@
 
 using namespace std::chrono;
 
-void ErrorHandler::BackoffRetry() noexcept
+bool ErrorHandler::BackoffRetry(uint8_t max_retry) noexcept
 {
-   std::this_thread::sleep_for(milliseconds(RETRY_DELAY_MS));
-   RETRY_DELAY_MS = (RETRY_DELAY_MS * 2 >= MAX_DELAY_MS)
-                        ? MAX_DELAY_MS
-                        : RETRY_DELAY_MS * 2;
+   if (retry_count < max_retry)
+   {
+      std::this_thread::sleep_for(milliseconds(RETRY_DELAY_MS));
+      RETRY_DELAY_MS = (RETRY_DELAY_MS * 2 >= MAX_DELAY_MS)
+                           ? MAX_DELAY_MS
+                           : RETRY_DELAY_MS * 2;
+      retry_count++;
+      return true;
+   }
+   
+   resetRetry();
+   return false;
 }
 
-void ErrorHandler::logRetry(const char *msg) noexcept
+bool ErrorHandler::handleError(int err, uint8_t max_retry) noexcept
 {
-   char buffer[LOG_BUF_SIZE];
-   snprintf(buffer, LOG_BUF_SIZE, "%s => RETRIED", msg);
-   LOG_ERROR(std::string(buffer));
-}
+   char errmsg [LOG_BUF_SIZE];
+   strerror_r(err, errmsg, LOG_BUF_SIZE);
 
-void ErrorHandler::logAbort(const char *msg) noexcept
-{
-   char buffer[LOG_BUF_SIZE];
-   snprintf(buffer, LOG_BUF_SIZE, "%s => ABORTED", msg);
-   LOG_ERROR(std::string(buffer));
-}
-
-void ErrorHandler::handleError(int err) noexcept
-{
    switch (errno_strategies[err])
    {
    case ErrorStrategy::Retry:
-      logRetry(strerror(err));
-      BackoffRetry();
+      logError("Retry: {}, Error: {}", retry_count, errmsg);
+      return BackoffRetry(max_retry);
       break;
    case ErrorStrategy::Abort:
-      logAbort(strerror(err));
-      std::abort();
+      logError("Process Aborted after this error: {}", errmsg);
+      //std::abort();
       break;
-   case ErrorStrategy::Custom:
-      // sonra yapılacak
-      break;
+   // case ErrorStrategy::Custom: // if needed
+   //    break;
    default:
       break;
    }
+
+   return false;
 }
 
 void ErrorHandler::handleError(ErrorName err) noexcept
@@ -57,17 +53,16 @@ void ErrorHandler::handleError(ErrorName err) noexcept
    switch (error_strategies[static_cast<uint8_t>(err)])
    {
    case ErrorStrategy::Retry:
-      logRetry();
-      BackoffRetry();
+      // logRetry();
+      // BackoffRetry();
       break;
    case ErrorStrategy::Abort:
-      logAbort();
-      std::abort();
+      // logAbort();
+      //std::abort();
       break;
-   case ErrorStrategy::Custom:
-      // sonra yapılacak
-      break;
+   // case ErrorStrategy::Custom: // if needed
+   //    break;
    default:
       break;
-   }
+   } 
 }

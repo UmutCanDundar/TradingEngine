@@ -139,6 +139,7 @@ void RiskEngine::update_risk() noexcept
             update_order_risk(*order, venue_index);
             update_account_risk(accRisk, accLim, *order, metrics, venue_index);
         }
+        order->canModify.store(order->canModify | RISK_DONE, std::memory_order_release);
     }    
 }
 
@@ -161,7 +162,8 @@ void RiskEngine::update_risk() noexcept
                     }
                     order.status = order.StatusesPreNew[i & 1UL];
                 }
-                order.status = Status::New;
+                
+                order.canModify.store(order.canModify | RISK_DONE, std::memory_order_release);
                 return true;
             }
         }
@@ -216,7 +218,7 @@ void RiskEngine::update_risk() noexcept
                 }
                 
 
-            order->canModify.store(order->canModify | RISK_DONE, std::memory_order_relaxed);    // order_ids[venue_index].insert(order->client_order_id);
+            order->canModify.store(order->canModify | RISK_DONE, std::memory_order_relaxed);   
             risk_to_builder_.push(order);
         }
     }

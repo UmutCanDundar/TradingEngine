@@ -193,14 +193,13 @@ struct OrderMetrics
 {
     const int64_t nominal;
     const int64_t notional;
-    const int64_t remaining;
     const int64_t replaced;
     const int8_t side_mult;
     
    
     OrderMetrics(const Order &order) noexcept
         : nominal(order.price * static_cast<int64_t>(order.last_exec_quantity)), notional(order.price * static_cast<int64_t>(order.quantity)), 
-          remaining(order.price * static_cast<int64_t>(order.remaining_quantity)), replaced(order.price * static_cast<int64_t>(order.replaced_quantity)),
+          replaced(order.price * static_cast<int64_t>(order.replaced_quantity)),
           side_mult(order.side == Side::Buy ? 1 : -1) {}
 };
 
@@ -342,7 +341,6 @@ private:  // Helper functions associated with the public functions
         const int8_t side_mult = metrics.side_mult;
         const int64_t nominal = metrics.nominal;
         const int64_t notional = metrics.notional;
-        const int64_t remaining = metrics.remaining;
         const int64_t replaced = metrics.replaced;
         auto &symRisk = symbolrisks_[venue_index][order.symbol_index];
 
@@ -382,12 +380,11 @@ private:  // Helper functions associated with the public functions
                 break;
             }
             case Status::Cancelled:
-            case Status::Expired:
                 if (UNLIKELY(order.cancelled_count > 1))
                     return;
                 symRisk.open_orders_count.fetch_sub(1, std::memory_order_release);
                 if(order.price > 0)
-                    symRisk.pending_notional_scaled.fetch_sub(remaining, std::memory_order_release);
+                    symRisk.pending_notional_scaled.fetch_sub(replaced, std::memory_order_release);
                 break;
             case Status::Replaced:
                 if (order.price > 0)
@@ -426,7 +423,6 @@ private:  // Helper functions associated with the public functions
         const int8_t side_mult = metrics.side_mult;
         const int64_t nominal = metrics.nominal;
         const int64_t notional = metrics.notional;
-        const int64_t remaining = metrics.remaining;
         const int64_t replaced = metrics.replaced;
         const int64_t fee = order.order_type == OrderType::Market ? accLim.taker_fee_rate * nominal / 1'000'000 : accLim.maker_fee_rate * nominal / 1'000'000;
 
@@ -466,8 +462,8 @@ private:  // Helper functions associated with the public functions
                     return;
                 if (order.price > 0)
                 {
-                    accRisk.current_exposure.fetch_sub(remaining * side_mult, std::memory_order_release);
-                    accRisk.used_margin.fetch_sub(remaining, std::memory_order_release);
+                    accRisk.current_exposure.fetch_sub(replaced * side_mult, std::memory_order_release);
+                    accRisk.used_margin.fetch_sub(replaced, std::memory_order_release);
                 }
                     accRisk.open_orders_count.fetch_sub(1, std::memory_order_release);
                     break;
@@ -692,7 +688,7 @@ private:  // Helper functions associated with the public functions
         OrderRiskKey key{order.symbol_index, order.price, !static_cast<uint8_t>(order.side)};
         auto it = orderrisks_[venue_index].find(key);    
 
-        if(it != orderrisks_[venue_index].end())
+        if(it != orderrisks_[venue_index].end() && it->second->active.load(std::memory_order_acquire))
                     return static_cast<uint32_t>(RiskRejectReason::SelfTradeDetected);
         
         return 0;
