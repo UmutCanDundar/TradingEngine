@@ -9,13 +9,13 @@ char *Builder_FIX::buildHeader(char *buf, size_t body_len, const size_t msg_inde
     const uint8_t seqnum_digits = digit(next_seqnum);
 
     auto ts_pair = transact_time();
-    body_len += 1 + auth_fix.my_id_len + auth_fix.venue_id_len + seqnum_digits + ts_pair.second + 20;
+    body_len += 1 + auth_fix.my_id.size() + auth_fix.venue_id.size() + seqnum_digits + ts_pair.second + 20;
     
     buf = addTag("8=", 2, "9", 1, buf);
     buf = addTag("9=", 2, static_cast<uint32_t>(body_len), buf);
     buf = addTag("35=", 3, msg_types[msg_index], 1, buf);
-    buf = addTag("49=", 3, auth_fix.my_id, auth_fix.my_id_len, buf);   
-    buf = addTag("56=", 3, auth_fix.venue_id, auth_fix.venue_id_len, buf); 
+    buf = addTag("49=", 3, auth_fix.my_id.data(), auth_fix.my_id.size(), buf);   
+    buf = addTag("56=", 3, auth_fix.venue_id.data(), auth_fix.venue_id.size(), buf); 
     buf = addTag("34=", 3, next_seqnum, buf);
     buf = addTag("52=", 3, ts_pair.first, ts_pair.second, buf);
 
@@ -39,8 +39,8 @@ char *Builder_FIX::buildHeader(const Buffer_FIX *org_buf, char *temp, const Venu
     temp = addTag("8=", 2, "9", 1, temp);
     temp = addTag("9=", 2, body_len, temp);
     temp = addTag("35=", 3, type, 1, temp);
-    temp = addTag("49=", 3, auth_fix.my_id, auth_fix.my_id_len, temp);
-    temp = addTag("56=", 3, auth_fix.venue_id, auth_fix.venue_id_len, temp);
+    temp = addTag("49=", 3, auth_fix.my_id.data(), auth_fix.my_id.size(), temp);
+    temp = addTag("56=", 3, auth_fix.venue_id.data(), auth_fix.venue_id.size(), temp);
     temp = addTag("34=", 3, seq, seq_len, temp);
     temp = addTag("43=", 3, "Y", 1, temp);
     temp = addTag("122=", 4, org_send_time, org_send_time_len, temp);

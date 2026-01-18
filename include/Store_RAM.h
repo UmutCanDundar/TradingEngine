@@ -238,9 +238,9 @@ private:
     void update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg) noexcept;
     void update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg) noexcept;
-    void update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept; //  NECESSITY OF SBE IS NOT DETERMINED YET
+    // void update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept; //  NECESSITY OF SBE IS NOT DETERMINED YET
 
-    void handle_instrument_definition(const SBEInstrumentDefinitionMessage &msg, Venue venue) noexcept;
+    // void handle_instrument_definition(const SBEInstrumentDefinitionMessage &msg, Venue venue) noexcept;
     void handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg, Venue venue) noexcept;
     void handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage &msg, Venue venue) noexcept;
 
@@ -853,7 +853,7 @@ private:
         order.last_update_time = order.timestamp;
     }
 
-    //===========================================================
+   /*  //===========================================================
     //======================= SBE fillers =======================  NECESSITY OF SBE IS NOT DETERMINED YET
     //===========================================================
     inline void fill_sbe_add(Order &order, const SBEAddOrderMessage &msg, Venue venue) noexcept
@@ -925,6 +925,6 @@ private:
         order.message_type = static_cast<uint8_t>(msg.header.templateId);
         order.protocol = Protocol::SBE;
         order.cancelled_count = 0;
-    }
+    } */
 };
 

@@ -169,7 +169,7 @@ int NetworkIO::setupSocket(const int sock, const SessionContext& cxt) noexcept
 
    sockaddr_in addr{};
    addr.sin_family = AF_INET;
-   addr.sin_port = htons(cxt.port);
+   addr.sin_port = cxt.port;
    memset(addr.sin_zero, 0, sizeof(addr.sin_zero));
 
    // socket connection for TCP

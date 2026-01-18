@@ -22,11 +22,11 @@ Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &stor
       
 }
 
-void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessage &msg, Venue venue) noexcept
+/* void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessage &msg, Venue venue) noexcept
 {
    auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.instrumentId, SymbolMeta{msg.instrumentId});  // USING SBE IS NOT DETERMINED YET
    copy_symbol(it->second.symbol, msg.symbol);
-}
+} */
 void Store_RAM::handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg, Venue venue) noexcept
 {
    auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.order_book_id, SymbolMeta{msg.order_book_id, msg.round_lot_size});
@@ -718,89 +718,6 @@ void Store_RAM::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMs
                   }, ouchMsg.msg);
 }
 
-// ================= SBE Handler ===================
-void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept
-{
-   std::visit([this, &sbeMsg](const auto *msg)
-            {
-               using MsgType = std::remove_pointer_t<decltype(msg)>;
-
-               if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage> ||
-                              std::is_same_v<MsgType, SBEModifyOrderMessage> ||
-                              std::is_same_v<MsgType, SBEDeleteOrderMessage> ||
-                              std::is_same_v<MsgType, SBETradeMessage>)
-               {
-                     uint64_t order_id = msg->orderId;
-                     Order *order = this->get_order_from_market_map(order_id, msg->header.schemaId, sbeMsg.venue, 2U);
-                     if (!order)
-                     {
-                        order = this->add_market_order(order_id, msg->header.schemaId, sbeMsg.venue, 2U);
-                        if (UNLIKELY(!order))
-                           return;
-                     }
-                     else if (UNLIKELY(order->canModify == 0x00))
-                     {
-                        MessageWithVenue<MessageTypes_t> resetMsg(sbeMsg.msg, sbeMsg.venue);
-                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
-                        return;
-                     }
-
-                     if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage>)
-                     {
-                        this->fill_sbe_add(*order, *msg, sbeMsg.venue);
-                        this->marketbook_.add_order(*order);
-                     }
-                     else if constexpr (std::is_same_v<MsgType, SBEModifyOrderMessage>)
-                     {
-                        this->fill_sbe_modify(*order, *msg);
-                        this->marketbook_.modify_order(*order, msg->newQuantity);
-                     }
-                     else if constexpr (std::is_same_v<MsgType, SBEDeleteOrderMessage>)
-                     {
-                        this->fill_sbe_delete(*order, *msg);
-                        this->marketbook_.delete_order(*order);
-                     }
-                     else if constexpr (std::is_same_v<MsgType, SBETradeMessage>)
-                     {
-                        this->fill_sbe_trade(*order, *msg, sbeMsg.venue);
-                        this->marketbook_.exec_order(*order);
-                     }
-
-                     order->canModify = 0x00;
-
-                     this->store_to_db_.push(order);
-                     this->store_to_risk_.push(order);
-                     this->store_to_strategy_.push(order);
-                     
-               }
-
-               else if constexpr (std::is_same_v<MsgType, SBEInstrumentDefinitionMessage>)
-               {
-                  this->handle_instrument_definition(*msg, sbeMsg.venue);
-               }
-
-               else if constexpr (std::is_same_v<MsgType, SBEMarketStatusMessage>)
-               {
-               
-               static constexpr std::array<std::pair<bool,bool>, 4> sbe_state_map = [] {
-                  std::array<std::pair<bool,bool>, 4> arr{};
-                  arr[0] = {true, false};   // 0 = market halted
-                  arr[1] = {false, false};  // 1 = market open
-                  arr[2] = {true, true};    // 2 = circuit breaker
-                  arr[3] = {false, false};  // 3 = reserved / future states
-                  return arr;
-               } ();
-
-               const auto &st = sbe_state_map[msg->marketState];
-
-               this->update_venue_halt_status(sbeMsg.venue, st.first, st.second);
-               } 
-
-               this->store_to_db_.push(sbeMsg);
-
-            },sbeMsg.msg);
-} 
-
 void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage &msg) noexcept
 {
    switch (msg.ord_status)
@@ -825,3 +742,86 @@ void Store_RAM::fill_fix_exec_report(Order &order, const FIXMessage &msg) noexce
       break;
    }
 }
+
+// // ================= SBE Handler ===================
+// void Store_RAM::update_order(const MessageWithVenue<SBEMessage> &sbeMsg) noexcept
+// {
+//    std::visit([this, &sbeMsg](const auto *msg)
+//               {
+//                  using MsgType = std::remove_pointer_t<decltype(msg)>;
+
+//                  if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage> ||
+//                                std::is_same_v<MsgType, SBEModifyOrderMessage> ||
+//                                std::is_same_v<MsgType, SBEDeleteOrderMessage> ||
+//                                std::is_same_v<MsgType, SBETradeMessage>)
+//                  {
+//                     uint64_t order_id = msg->orderId;
+//                     Order *order = this->get_order_from_market_map(order_id, msg->header.schemaId, sbeMsg.venue, 2U);
+//                     if (!order)
+//                     {
+//                        order = this->add_market_order(order_id, msg->header.schemaId, sbeMsg.venue, 2U);
+//                        if (UNLIKELY(!order))
+//                           return;
+//                     }
+//                     else if (UNLIKELY(order->canModify == 0x00))
+//                     {
+//                        MessageWithVenue<MessageTypes_t> resetMsg(sbeMsg.msg, sbeMsg.venue);
+//                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
+//                        return;
+//                     }
+
+//                     if constexpr (std::is_same_v<MsgType, SBEAddOrderMessage>)
+//                     {
+//                        this->fill_sbe_add(*order, *msg, sbeMsg.venue);
+//                        this->marketbook_.add_order(*order);
+//                     }
+//                     else if constexpr (std::is_same_v<MsgType, SBEModifyOrderMessage>)
+//                     {
+//                        this->fill_sbe_modify(*order, *msg);
+//                        this->marketbook_.modify_order(*order, msg->newQuantity);
+//                     }
+//                     else if constexpr (std::is_same_v<MsgType, SBEDeleteOrderMessage>)
+//                     {
+//                        this->fill_sbe_delete(*order, *msg);
+//                        this->marketbook_.delete_order(*order);
+//                     }
+//                     else if constexpr (std::is_same_v<MsgType, SBETradeMessage>)
+//                     {
+//                        this->fill_sbe_trade(*order, *msg, sbeMsg.venue);
+//                        this->marketbook_.exec_order(*order);
+//                     }
+
+//                     order->canModify = 0x00;
+
+//                     this->store_to_db_.push(order);
+//                     this->store_to_risk_.push(order);
+//                     this->store_to_strategy_.push(order);
+//                  }
+
+//                  else if constexpr (std::is_same_v<MsgType, SBEInstrumentDefinitionMessage>)
+//                  {
+//                     this->handle_instrument_definition(*msg, sbeMsg.venue);
+//                  }
+
+//                  else if constexpr (std::is_same_v<MsgType, SBEMarketStatusMessage>)
+//                  {
+
+//                     static constexpr std::array<std::pair<bool, bool>, 4> sbe_state_map = []
+//                     {
+//                        std::array<std::pair<bool, bool>, 4> arr{};
+//                        arr[0] = {true, false};  // 0 = market halted
+//                        arr[1] = {false, false}; // 1 = market open
+//                        arr[2] = {true, true};   // 2 = circuit breaker
+//                        arr[3] = {false, false}; // 3 = reserved / future states
+//                        return arr;
+//                     }();
+
+//                     const auto &st = sbe_state_map[msg->marketState];
+
+//                     this->update_venue_halt_status(sbeMsg.venue, st.first, st.second);
+//                  }
+
+//                  this->store_to_db_.push(sbeMsg);
+//               },
+//               sbeMsg.msg);
+// }

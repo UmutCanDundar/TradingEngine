@@ -93,7 +93,7 @@ private:
         }
     }
 
-    void insert(const MessageWithVenue<SBEMessage> &sbeMsg);
+    /* void insert(const MessageWithVenue<SBEMessage> &sbeMsg); */
     void insert(const MessageWithVenue<BIST::ITCHMessage> &itchMsg);
     void insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg);
     void insert(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg);

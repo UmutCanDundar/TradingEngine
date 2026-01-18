@@ -154,8 +154,8 @@ private:
         if(LIKELY(reset))
             buf = addTag("141=", 4, "Y", 1, buf);
         buf = addTag("108=", 4, seq_fix.get_interval(), seq_fix.get_interval_len(), buf);
-        buf = addTag("553=", 4, fix_auth.username, fix_auth.username_len, buf);
-        buf = addTag("554=", 4, fix_auth.password, fix_auth.password_len, buf);
+        buf = addTag("553=", 4, fix_auth.username.data(), fix_auth.username.size(), buf);
+        buf = addTag("554=", 4, fix_auth.password.data(), fix_auth.password.size(), buf);
         buf = addTag("1137=", 5, "9", 1, buf);
 
         return buf;
@@ -196,7 +196,7 @@ private:
         auto &fix_auth = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
 
         buf = addTag("11=", 3, static_cast<uint32_t>(order.client_order_id), buf);
-        buf = addTag("1=", 2, fix_auth.account, fix_auth.acc_len, buf);
+        buf = addTag("1=", 2, fix_auth.account.data(), fix_auth.account.size(), buf);
         buf = addTag("528=", 4, "A", 1, buf);
         buf = addTag("55=", 3, order.symbol.data(), order.symbol.size() ,buf);
         buf = addTag("54=", 3, static_cast<uint32_t>(order.side), buf);
@@ -238,7 +238,7 @@ private:
         buf = addTag("37=", 3, order.order_id, buf);
         buf = addTag("41=", 3, "NONE", 4, buf);
         buf = addTag("11=", 3, static_cast<uint32_t>(order.client_order_id), buf);
-        buf = addTag("1=", 2, fix_auth.account, fix_auth.acc_len, buf);
+        buf = addTag("1=", 2, fix_auth.account.data(), fix_auth.account.size(), buf);
         buf = addTag("528=", 4, "A", 1, buf);
         buf = addTag("55=", 3, order.symbol.data(), order.symbol.size(), buf);
         buf = addTag("54=", 3, static_cast<uint32_t>(order.side), buf);

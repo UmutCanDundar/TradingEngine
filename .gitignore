@@ -20,6 +20,9 @@ Makefile
 # VSCode ayarları
 .vscode/
 
+# config
+ *.json
+ 
 #custom
 deneme.h
 deneme.cpp

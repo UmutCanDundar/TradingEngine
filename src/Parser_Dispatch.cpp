@@ -15,7 +15,7 @@ std::array<std::array<Parser_Dispatch::ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT>
    parser_table[static_cast<size_t>(Protocol::OUCH)][static_cast<size_t>(Venue::BIST)] = &Parser_Dispatch::parseOUCH_BIST;
    parser_table[static_cast<size_t>(Protocol::OUCH)][static_cast<size_t>(Venue::NASDAQ)] = &Parser_Dispatch::parseOUCH_NASDAQ;
 
-   parser_table[static_cast<size_t>(Protocol::SBE)][static_cast<size_t>(Venue::BIST)] = &Parser_Dispatch::parseSBE;
+   // parser_table[static_cast<size_t>(Protocol::SBE)][static_cast<size_t>(Venue::BIST)] = &Parser_Dispatch::parseSBE;
 
    return parser_table;
 }

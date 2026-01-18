@@ -1,0 +1,85 @@
+{ 
+    "Sessions": {  
+    
+        "1": {
+            "SessionContext": {
+                "socket_index": 0,
+                "port": 9876,
+                "ip": "10.10.10.1",
+                "account_index": 0,
+                "venue": "BIST",
+                "protocol": "FIX",
+                "session_type": "Order",
+                "tcp_index": 0
+            },
+            "SessionAuth": {
+                "sess_prot": "FIX",
+                "username": "BISTUSER",
+                "password": "BISTPASS",
+                "my_id": "CLIENT01",
+                "venue_id": "BIST",
+                "account": "ACC001"
+            }
+        },
+        
+        "2": {
+            "SessionContext": {
+                "socket_index": 1,
+                "port": 1234,
+                "ip": "10.10.10.2",
+                "account_index": 1,
+                "venue": "BIST",
+                "protocol": "OUCH",
+                "session_type": "Order",
+                "tcp_index": 1
+            },
+            "SessionAuth": {
+                "sess_prot": "SBT",
+                "username": "OUCH01",
+                "password": "PASS01"
+            }
+        },
+        
+        "3": {
+            "SessionContext": {
+                "socket_index": 2,
+                "port": 4321,
+                "ip": "192.168.1.10",
+                "account_index": 2,
+                "venue": "NASDAQ",
+                "protocol": "OUCH",
+                "session_type": "Order",
+                "tcp_index": 2
+            },
+            "SessionAuth": {
+                "sess_prot": "SBT",
+                "username": "NSDQ01",
+                "password": "PASS02"
+            }
+        },
+        
+        "4": {
+            "SessionContext": {
+                "socket_index": 3,
+                "port": 5000,
+                "ip": "239.1.1.1",
+                "account_index": 0,
+                "venue": "BIST",
+                "protocol": "ITCH",
+                "session_type": "Order"
+            }
+        },
+        
+        "5": {
+            "SessionContext": {
+                "socket_index": 4,
+                "port": 6000,
+                "ip": "233.54.12.8",
+                "account_index": 0,
+                "venue": "NASDAQ",
+                "protocol": "ITCH",
+                "session_type": "Order"
+            }
+        }
+    }
+}

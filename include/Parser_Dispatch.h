@@ -25,11 +25,11 @@ struct MessageWithVenue
 
 inline constexpr size_t DB_QUEUE_CAPACITY = 512;
 
-using MessageTypes_t = std::variant<FIXMessage *, BIST::ITCHMessage, NASDAQ::ITCHMessage, BIST::OUCHMessage, NASDAQ::OUCHMessage, SBEMessage>;
+using MessageTypes_t = std::variant<FIXMessage *, BIST::ITCHMessage, NASDAQ::ITCHMessage, BIST::OUCHMessage, NASDAQ::OUCHMessage/*, SBEMessage */>;
 using spscMessageQueue_t = boost::lockfree::spsc_queue<MessageWithVenue<MessageTypes_t>, boost::lockfree::capacity<MESSAGE_QUEUE_CAPACITY>>;
 using spscFIXOutSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage*, boost::lockfree::capacity<MESSAGE_QUEUE_CAPACITY>>;
-using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>, MessageWithVenue<SBEMessage>>, boost::lockfree::capacity<DB_QUEUE_CAPACITY>>;
-using DbData_t = std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>, MessageWithVenue<SBEMessage>>;
+using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>/* , MessageWithVenue<SBEMessage> */>, boost::lockfree::capacity<DB_QUEUE_CAPACITY>>;
+using DbData_t = std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>/* , MessageWithVenue<SBEMessage> */>;
 
 class Parser_Dispatch
 {
@@ -42,7 +42,7 @@ private:
     Parser_ITCH_NASDAQ itchparser_nasdaq_;
     Parser_OUCH_BIST ouchparser_bist_;
     Parser_OUCH_NASDAQ ouchparser_nasdaq_;
-    Parser_SBE sbeparser_;
+    /* Parser_SBE sbeparser_; */
     
     using ParserFunc = void (Parser_Dispatch::*)(OutPacket*) noexcept;
     std::array<std::array<ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> makeParserLookUpTable() noexcept; 
@@ -92,10 +92,10 @@ private:
                 {
                     ouchparser_nasdaq_.releaseOUCH(item.msg);
                 }
-                else if constexpr (std::is_same_v<T, MessageWithVenue<SBEMessage>>)
+               /*  else if constexpr (std::is_same_v<T, MessageWithVenue<SBEMessage>>)
                 {
                     sbeparser_.releaseSBE(item.msg);   
-                }
+                } */
                 else if constexpr (std::is_same_v<T, Order*>)
                 {
                     return;
@@ -224,9 +224,9 @@ private:
         }
     }
     
-    inline void parseSBE(OutPacket *pkt) noexcept
+    /* inline void parseSBE(OutPacket *pkt) noexcept
     {
         SBEMessage sbeMsg{sbeparser_.parse(pkt->data.data())};
         parser_to_store_.push(MessageWithVenue<MessageTypes_t>(sbeMsg, pkt->venue));
-    }
+    } */
 };

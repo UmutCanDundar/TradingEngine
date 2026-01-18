@@ -423,7 +423,7 @@ void Store_DB::insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg)
          client_->Insert("ITCH_Table", block); }, itchMsg.msg);
 }
 
-// === INSERT SBE ===
+/* // === INSERT SBE ===
 void Store_DB::insert(const MessageWithVenue<SBEMessage> &sbeMsg)
 {
    std::visit([this, venue = sbeMsg.venue](const auto *msg)
@@ -544,7 +544,7 @@ void Store_DB::insert(const MessageWithVenue<SBEMessage> &sbeMsg)
         }
 
         client_->Insert("SBE_Table", block); }, sbeMsg.msg);
-}
+} */
 // === INSERT ORDER ===
 void Store_DB::insert(const Order *order)
 {
