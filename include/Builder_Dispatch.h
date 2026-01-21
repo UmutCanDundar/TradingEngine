@@ -10,7 +10,7 @@
 
 #include <variant>
 #include <boost/lockfree/spsc_queue.hpp>
-
+#include <absl/container/btree_map.h>
 
 class SoupBinTcp;
 
@@ -25,8 +25,7 @@ private:
     using BuilderFunc = void (Builder_Dispatch::*)(Order*) noexcept;
     std::array<std::array<BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> makeBuilderLookUpTable() noexcept; 
     std::array<std::array<BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> builder_table_;
-
-    /* Sequence_FIX &sess_mngr_; */
+    
     spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;
     spscFIXOutSessionQueue_t &parser_to_fixbuilder_out_;
     spscOrderQueue_t &risk_to_builder_;
@@ -37,7 +36,7 @@ private:
 public:
     Builder_Dispatch(spscInPacketPayloadQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, SessionManager& sess_mngr, SoupBinTcp &sbt) noexcept;
 
-    void dispatch() noexcept;
+    bool dispatch() noexcept;
 
 private:
     inline void buildFIX_ses_in(FIXSessionMessage &fixSesMsg, uint8_t session_index) noexcept

@@ -54,7 +54,7 @@ with open("../include/GeneratedErrorMap.h", "w") as f:
         f.write(f"    {strname} = {i},\n")
     f.write("};\n\n")
 
-    f.write(f" alignas(64) inline constexpr std::array<ErrorStrategy, {aligned_size}> errno_strategies = {{\n")
+    f.write(f" inline constexpr std::array<ErrorStrategy, {aligned_size}> errno_strategies = {{\n")
 
     # Index 0-255 için strateji ataması
     for i in range(aligned_size):

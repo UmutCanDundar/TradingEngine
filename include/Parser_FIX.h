@@ -207,11 +207,11 @@ private:
     static const std::array<SesTagHandlerFunc, MAX_SESTAG>& makeSesTagHandlersLookup() noexcept;
     static const std::array<SesTagHandlerFunc, MAX_SESTAG>& SestagHandlers;
 
-    Sequence_FIX &session_;
+    SessionManager &sess_mngr_;
     spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;
 
 public:
-    Parser_FIX(Sequence_FIX &session, spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept;
+    Parser_FIX(SessionManager &sess_mngr, spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept;
 
     template <typename T>
     T* parse(const char *data, size_t len) noexcept
@@ -310,7 +310,7 @@ public:
         return msg;
     }
 
-    inline bool handle_sesMsg(FIXSessionMessage *fixSesMsg) noexcept
+    inline bool handle_sesMsg(FIXSessionMessage *fixSesMsg, Sequence_FIX& seq_fix) noexcept
     {
         const FIXTypes type = static_cast<FIXTypes>(fixSesMsg->msg_type);
       
@@ -323,7 +323,7 @@ public:
                     return false;
                 
                 case FIXTypes::SequenceReset:
-                    session_.set_expected_seq(fixSesMsg->new_seqnum);
+                    seq_fix.set_expected_seq(fixSesMsg->new_seqnum);
                     return true;
                 
                 case FIXTypes::TestRequest:
@@ -335,8 +335,8 @@ public:
                 case FIXTypes::Logon:
                     if(fixSesMsg->reset_seqnum_flag == 'Y') 
                     {
-                        session_.set_expected_seq(2);
-                        session_.set_next_seq(1);
+                        seq_fix.set_expected_seq(2);
+                        seq_fix.set_next_seq(1);
                     }
                     return true;
 
@@ -394,23 +394,23 @@ public:
     {
         pending_to_store_map_.erase(seqnum);
     }
-    
-    inline void resend_logic(uint32_t msg_seqnum) noexcept 
+
+    inline void resend_logic(uint32_t msg_seqnum, Sequence_FIX &seq_fix) noexcept
     {
         auto now_ts = std::chrono::steady_clock::now();
-        auto last_resend_ts = session_.get_last_resend_ts();
+        auto last_resend_ts = seq_fix.get_last_resend_ts();
 
-        if (session_.get_resend_counter() < FIXSequence::MAX_RESEND_ATTEMPT && 
+        if (seq_fix.get_resend_counter() < FIXSequence::MAX_RESEND_ATTEMPT && 
             now_ts - last_resend_ts > FIXSequence::RESEND_INTERVAL)
         {
             FIXSessionMessage *msg_1;
             free_fixSesMsg_list_.pop(msg_1);
-            msg_1->begin_seqnum = session_.get_expected(); 
+            msg_1->begin_seqnum = seq_fix.get_expected(); 
             msg_1->end_seqnum = msg_seqnum;
             msg_1->msg_type = static_cast<uint8_t>(FIXTypes::ResendRequest);
             parser_to_fixbuilder_in_.push(msg_1);
 
-            session_.increase_resend_counter(); 
+            seq_fix.increase_resend_counter(); 
         }
         else 
         {
@@ -425,15 +425,15 @@ public:
             parser_to_fixbuilder_in_.push(msg_3);
 
             pending_to_store_map_.clear();
-            session_.reset_resend_counter();
+            seq_fix.reset_resend_counter();
         }
     }
-    inline void resend_logic_logon(FIXSessionMessage* fixSesMsg) noexcept
+    inline void resend_logic_logon(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix) noexcept
     {
         if (fixSesMsg->reset_seqnum_flag == 'Y')
         {
-            session_.set_expected_seq(2);
-            session_.set_next_seq(1);
+            seq_fix.set_expected_seq(2);
+            seq_fix.set_next_seq(1);
             pending_to_store_map_.clear(); 
 
             releaseFIX(fixSesMsg);
@@ -442,7 +442,7 @@ public:
         
         FIXSessionMessage *msg;
         free_fixSesMsg_list_.pop(msg);
-        msg->begin_seqnum = session_.get_expected();
+        msg->begin_seqnum = seq_fix.get_expected();
         msg->end_seqnum = fixSesMsg->seqnum - 1;
         msg->msg_type = static_cast<uint8_t>(FIXTypes::ResendRequest);
         parser_to_fixbuilder_in_.push(msg);

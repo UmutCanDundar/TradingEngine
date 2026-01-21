@@ -16,7 +16,7 @@ enum class ErrorName : uint8_t {
     CouldNotOpenFile = 1,
 };
 
- alignas(64) inline constexpr std::array<ErrorStrategy, 128> errno_strategies = {
+ inline constexpr std::array<ErrorStrategy, 128> errno_strategies = {
     ErrorStrategy::Ignore, // 0: Success
     ErrorStrategy::Abort, // 1: Operation not permitted 
     ErrorStrategy::Ignore, // 2: No such file or directory

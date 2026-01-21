@@ -240,8 +240,8 @@ private:
 public:
     RiskEngine(spscOrderQueue_t &store_to_risk, spscOrderQueue_t &strategy_to_risk, spscRejectOrderQueue_t &risk_to_strategy, spscOrderQueue_t &risk_to_builder, HashTables &hashtables, MarketBook &marketbook, Limits &limits, Store_RAM &store_ram) noexcept;
 
-    void update_risk() noexcept;
-    void check_risk() noexcept;
+    bool update_risk() noexcept;
+    bool check_risk() noexcept;
    
 private: // Helper functions associated with the other private functions
 

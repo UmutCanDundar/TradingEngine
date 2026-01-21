@@ -17,13 +17,14 @@ std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUN
    return Builder_table;
 }
 
-void Builder_Dispatch::dispatch() noexcept
+bool Builder_Dispatch::dispatch() noexcept
 {
    Order* order{nullptr};
-   risk_to_builder_.pop(order);
-
-   if(!order)
-      return;
    
+   if(!risk_to_builder_.pop(order))
+      return false;
+      
    (this->*builder_table_[static_cast<size_t>(order->protocol)][static_cast<size_t>(order->venue)])(order);
+   
+   return true;
 }

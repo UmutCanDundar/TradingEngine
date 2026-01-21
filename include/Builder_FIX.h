@@ -59,26 +59,7 @@ private:
     
 public:
     Builder_FIX(SessionManager& sess_mngr) noexcept;
-    //~Builder_FIX() noexcept;
-    
-   /*  inline Buffer_FIX *handleResendRequest(const size_t seqnum)
-    {
-        const auto& msg_history = sess_mngr_.get_history();
-        const Buffer_FIX *org_buf = &msg_history[seqnum];
-        if (findType(org_buf->data) > 65)
-            return build_resend(org_buf);
-    }
-
-    inline Buffer_FIX *handleReject()
-    {
-       return build<FIXTypes::Logout>();
-    }
-
-    inline Buffer_FIX *handleTestRequest()
-    {
-        return build<FIXTypes::Heartbeat>();
-    }
- */
+  
     template <FIXTypes T, typename... Args>
     inline Buffer_FIX* build(uint8_t session_index, Args&&... args) noexcept
     {
@@ -111,13 +92,6 @@ public:
                               buf, session_index, std::forward<Args>(args)...);
     }
 
-    /* template <FIXTypes T, typename... Args>
-    inline char *buildBody(char *buf, Args &&...args) noexcept
-    {
-        return buildBody_impl(std::integral_constant<FIXTypes, T>{},
-                              buf, std::forward<Args>(args)...);
-    } */
-
     inline Buffer_FIX* build_resend(const Buffer_FIX* org_buf, uint8_t session_index) noexcept
     {
         auto &auth_fix = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
@@ -141,7 +115,7 @@ private:
 
     // ------------------- HEADER ---------------------
      char* buildHeader(char* buf, size_t body_len, const size_t msg_index, const VenueUserInfo_FIX& auth_fix, Sequence_FIX& seq_fix) noexcept;
-     char *buildHeader(const Buffer_FIX *org_buf, char *temp, const VenueUserInfo_FIX &auth_fix) noexcept;
+     char* buildHeader(const Buffer_FIX *org_buf, char *temp, const VenueUserInfo_FIX &auth_fix) noexcept;
 
      // ------------------- BODY -------------------------
      // ADMINISTRATIVE MESSAGES

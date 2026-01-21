@@ -16,6 +16,7 @@
 enum class SessionType : uint8_t
 {
     Order = 0,
+    None = 1,
     // DropCopy = 1,
     // Backup = 2,
 };
@@ -280,6 +281,9 @@ private:
     VENUE_COUNT> session_lookup_; // Maps (venue, protocol, account) to session index
 
 public:
+
+    SessionManager() noexcept;
+
     inline size_t getSessionIndex(Venue venue, Protocol protocol, uint8_t account_index = 0) const noexcept
     { 
         return session_lookup_[static_cast<size_t>(venue)][static_cast<size_t>(protocol)][account_index];
@@ -449,6 +453,8 @@ public:
         {
             if (type == "Order")
                 return SessionType::Order;
+
+            return SessionType::None;
         }
 
         static Venue convertToVenue(const std::string_view ven) 
@@ -457,6 +463,8 @@ public:
                 return Venue::BIST;
             if(ven == "NASDAQ")
                 return Venue::NASDAQ;
+
+            return Venue::Unknown;
         }
 
         static uint32_t convertToNetworkbyte(const std::string_view ip) noexcept

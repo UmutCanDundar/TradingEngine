@@ -99,7 +99,7 @@ add_custom_target(SetupSqlTables ALL
 add_executable(MarketData ${SOURCES})
 
 # include path ve bağımlılık
-target_include_directories(MarketData PRIVATE include third-party/json/single_include)
+target_include_directories(MarketData PRIVATE  ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/third-party/json/single_include)
 
 target_link_libraries(MarketData PRIVATE fmt::fmt absl::flat_hash_map absl::hash clickhouse-cpp-lib Threads::Threads TBB::tbb)
 

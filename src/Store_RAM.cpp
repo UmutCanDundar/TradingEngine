@@ -27,36 +27,37 @@ Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &stor
    auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.instrumentId, SymbolMeta{msg.instrumentId});  // USING SBE IS NOT DETERMINED YET
    copy_symbol(it->second.symbol, msg.symbol);
 } */
+
 void Store_RAM::handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg, Venue venue) noexcept
 {
-   auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.order_book_id, SymbolMeta{msg.order_book_id, msg.round_lot_size});
-   copy_symbol(it->second.symbol, msg.symbol);
+   auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.order_book_id, std::make_unique<SymbolMeta>(msg.order_book_id, msg.round_lot_size));
+   copy_symbol(it->second->symbol, msg.symbol);
 }
 void Store_RAM::handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage &msg, Venue venue) noexcept
 {
    uint64_t symbol_pack;
    std::memcpy(&symbol_pack, msg.stock, 8);
    nq_ouch_sym_symid_.emplace(symbol_pack, msg.stock_locate);
-   auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.stock_locate, SymbolMeta{msg.stock_locate, msg.round_lot_size});
-   copy_symbol(it->second.symbol, msg.stock);
+   auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.stock_locate, std::make_unique<SymbolMeta>(msg.stock_locate, msg.round_lot_size));
+   copy_symbol(it->second->symbol, msg.stock);
 
    static constexpr std::array<std::pair<std::pair<int64_t, int64_t>, uint64_t>, 5> nasdaq_tick_size_ranges = {{
       {{0, 199999}, 1},
       {{200000, 999999}, 5}, 
-      {{1000000, 4999999}, 10},    // BURADAKİ SABİTLER NASDAQ'DAN ALINACAK
+      {{1000000, 4999999}, 10},    // THESE VALUES WILL BE PROVIDED BY NASDAQ
       {{5000000, 9999999}, 50},
       {{10000000, INT64_MAX}, 100}
    }};
 
    for(const auto& [price_range, tick_size] : nasdaq_tick_size_ranges)
-      handle_tick_size_definition(it->second.tick_size_table, price_range.first, price_range.second, tick_size);
+      handle_tick_size_definition(it->second->tick_size_table, price_range.first, price_range.second, tick_size);
 }
 
 void Store_RAM::handle_tick_size_definition(const BIST::ITCHTickSizeTableEntryMessage &msg, Venue venue) noexcept 
 {
    auto symbolmeta_it = instrument_cache_[static_cast<std::underlying_type_t<Venue>>(venue)].find(msg.order_book_id);
    
-   SymbolMeta &symbolmeta = symbolmeta_it->second;
+   SymbolMeta &symbolmeta = *(symbolmeta_it->second);
 
    TickSizeEntry *new_entry = &tick_size_entry_pool_[tick_size_bist_next_slot++ & (TICKSIZE_CAPACITY_FOR_BIST - 1)];
    new_entry->price_from = msg.price_from;
@@ -131,7 +132,7 @@ void Store_RAM::handle_flush_status(const uint8_t venue_index, const uint32_t sy
   }
 }
 
-void Store_RAM::store() noexcept
+bool Store_RAM::store() noexcept
 {
    MessageWithVenue<MessageTypes_t> msgWithVenue;
 
@@ -143,7 +144,8 @@ void Store_RAM::store() noexcept
    }
    else
    {
-     parser_to_store_.pop(msgWithVenue);
+      if (!parser_to_store_.pop(msgWithVenue))
+         return false; 
    }
 
    std::visit([this, &msgWithVenue](const auto &inner_msg)
@@ -151,6 +153,8 @@ void Store_RAM::store() noexcept
       using MsgType = std::decay_t<decltype(inner_msg)>;
       this->store(MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue}); 
    }, msgWithVenue.msg);
+
+   return true;
 }
 
 void Store_RAM::add_pending_order(Order &order) noexcept

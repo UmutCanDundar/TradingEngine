@@ -1,21 +1,32 @@
-#include "config_utils.h"
-#include "MarketDataHandler.h"
+#include "TradingEngine.h"
 
-#include <iostream>
-#include <climits>
+#include <csignal>
+#include <atomic>
+#include <thread>
+#include <chrono>
 
-#include "deneme.h"
+std::atomic<bool> g_running{true};
+
+
+void signal_handler(int)
+{
+    g_running.store(false, std::memory_order_relaxed);
+}
 
 int main()
 {
-    configure_realtime(sched_get_priority_min(SCHED_FIFO));
-    configure_affinity(7);
+    std::signal(SIGINT, signal_handler);
+   
+    TradingEngine engine;
+   
+    engine.start();
 
-    // MarketDataHandler marketDataHandler;
-    // marketDataHandler.run();
+    while (g_running.load(std::memory_order_relaxed))
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
-    x += 6;
-    std::cout << x << std::endl;
-    print();
+    engine.stop();
+
     return 0;
 }

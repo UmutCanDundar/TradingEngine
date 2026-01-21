@@ -91,7 +91,7 @@ void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
 }
 
 // === INSERT ITCH ===
-/* void Store_DB::insert(const MessageWithVenue<BIST::ITCHMessage> &itchMsg)
+ void Store_DB::insert(const MessageWithVenue<BIST::ITCHMessage> &itchMsg)
 {
    std::visit([this, venue = itchMsg.venue](const auto *msg)
               {
@@ -99,9 +99,9 @@ void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
 
          Block block;
 
-         auto col_timestamp = std::make_shared<ColumnUInt64>();
+        /*  auto col_timestamp = std::make_shared<ColumnUInt64>();
          col_timestamp->Append(msg->timestamp);
-         block.AppendColumn("timestamp", col_timestamp);
+         block.AppendColumn("timestamp", col_timestamp); */
 
          auto col_venue = std::make_shared<ColumnString>();
          col_venue->Append(venue_to_string(venue));
@@ -115,8 +115,7 @@ void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
          col_msg_type->Append(std::string(1, msg->message_type));
          block.AppendColumn("msg_type", col_msg_type);
 
-         if constexpr (std::is_same_v<MsgType, ITCHAddOrderMessage> ||
-                        std::is_same_v<MsgType, ITCHAddOrderMPIDMessage>)
+         if constexpr (std::is_same_v<MsgType, BIST::ITCHAddOrderMessage>)
          {
             std::string stock = std::string(msg->stock, 8);
             stock.erase(std::find_if(stock.begin(), stock.end(), [](const char &c)
@@ -143,53 +142,8 @@ void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
             col_side->Append(std::string(1, msg->side));
             block.AppendColumn("side", col_side);
          }
-         else if constexpr (std::is_same_v<MsgType, ITCHAddOrderMPIDMessage>)
-         {
-            std::string stock = std::string(msg->stock, 8);
-            stock.erase(std::find_if(stock.begin(), stock.end(), [](const char &c)
-                                     { return c == ' ' || c == '\0'; }),
-                        stock.end());
-
-            std::string mpid = std::string(msg->mpid, 4);
-            mpid.erase(std::find_if(mpid.begin(), mpid.end(), [](const char &c)
-                                     { return c == ' ' || c == '\0'; }),
-                        mpid.end());
-
-            auto col_stock = std::make_shared<ColumnString>();
-            col_stock->Append(stock);
-            block.AppendColumn("stock", col_stock);
-
-            auto col_order_ref = std::make_shared<ColumnUInt64>();
-            col_order_ref->Append(msg->order_ref);
-            block.AppendColumn("order_ref", col_order_ref);
-
-            auto col_price = std::make_shared<ColumnUInt32>();
-            col_price->Append(msg->price);
-            block.AppendColumn("price", col_price);
-
-            auto col_quantity = std::make_shared<ColumnUInt32>();
-            col_quantity->Append(msg->quantity);
-            block.AppendColumn("quantity", col_quantity);
-
-            auto col_side = std::make_shared<ColumnString>();
-            col_side->Append(std::string(1, msg->side));
-            block.AppendColumn("side", col_side);
-
-            auto col_mpid = std::make_shared<ColumnString>();
-            col_mpid->Append(mpid);
-            block.AppendColumn("mpid", col_mpid);
-         }
-         else if constexpr (std::is_same_v<MsgType, ITCHCancelMessage>)
-         {
-            auto col_order_ref = std::make_shared<ColumnUInt64>();
-            col_order_ref->Append(msg->order_ref);
-            block.AppendColumn("order_ref", col_order_ref);
-
-            auto col_remaining_quantity = std::make_shared<ColumnUInt32>();
-            col_remaining_quantity->Append(msg->remaining_quantity);
-            block.AppendColumn("remaining_quantity", col_remaining_quantity);
-         }
-         else if constexpr (std::is_same_v<MsgType, ITCHExecutedMessage>)
+        
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderExecutedMessage>)
          {
             auto col_order_ref = std::make_shared<ColumnUInt64>();
             col_order_ref->Append(msg->order_ref);
@@ -199,7 +153,7 @@ void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
             col_executed_quantity->Append(msg->executed_quantity);
             block.AppendColumn("executed_quantity", col_executed_quantity);
          }
-         else if constexpr (std::is_same_v<MsgType, ITCHExecutedWithPriceMessage>)
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderExecutedWithPriceMessage>)
          {
             auto col_order_ref = std::make_shared<ColumnUInt64>();
             col_order_ref->Append(msg->order_ref);
@@ -213,13 +167,13 @@ void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
             col_execution_price->Append(msg->execution_price);
             block.AppendColumn("executed_quantity", col_execution_price);
          }
-         else if constexpr (std::is_same_v<MsgType, ITCHDeleteMessage>)
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderDeleteMessage>)
          {
             auto col_order_ref = std::make_shared<ColumnUInt64>();
             col_order_ref->Append(msg->order_ref);
             block.AppendColumn("order_ref", col_order_ref);
          }
-         else if constexpr (std::is_same_v<MsgType, ITCHTradeMessage>)
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHTradeMessage>)
          {
             std::string stock = std::string(msg->stock, 8);
             stock.erase(std::find_if(stock.begin(), stock.end(), [](const char &c)
@@ -247,15 +201,39 @@ void Store_DB::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
             col_match_id->Append(match_id);
             block.AppendColumn("match_id", col_match_id);
          }
-         else if constexpr (std::is_same_v<MsgType, ITCHSystemEventMessage>)
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHSystemEventMessage>)
          {
             auto col_event_code = std::make_shared<ColumnString>();
             col_event_code->Append(std::string(1,msg->event_code));
             block.AppendColumn("event_code", col_event_code);
          }
 
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHSecondsMessage>)
+         {}
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderBookDirectoryMessage>)
+         {
+         }
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHCombinationOrderBookLegMessage>)
+         {
+         }
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHTickSizeTableEntryMessage>)
+         {
+         }
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHShortSellStatusMessage>)
+         {
+         }
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderBookStateMessage>)
+         {
+         }
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderBookFlushMessage>)
+         {
+         }
+         else if constexpr (std::is_same_v<MsgType, BIST::ITCHEquilibriumPriceUpdateMessage>)
+         {
+         }
+
          client_->Insert("ITCH_Table", block); }, itchMsg.msg);
-} */
+} 
 
 void Store_DB::insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg)
 {
@@ -281,8 +259,7 @@ void Store_DB::insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg)
          col_msg_type->Append(std::string(1, msg->message_type));
          block.AppendColumn("msg_type", col_msg_type);
 
-         if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMessage> ||
-                        std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMPIDMessage>)
+         if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHAddOrderMessage>)
          {
             std::string stock = std::string(msg->stock, 8);
             stock.erase(std::find_if(stock.begin(), stock.end(), [](const char &c)
@@ -419,8 +396,174 @@ void Store_DB::insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg)
             col_event_code->Append(std::string(1,msg->event_code));
             block.AppendColumn("event_code", col_event_code);
          }
+         else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHReplaceMessage>)
+         {}
+         else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHStockDirectoryMessage>)
+         {
+         }
+         else if constexpr (std::is_same_v<MsgType, NASDAQ::ITCHTradingStateMessage>)
+         {
+         }
 
-         client_->Insert("ITCH_Table", block); }, itchMsg.msg);
+            client_->Insert("ITCH_Table", block);
+         }, itchMsg.msg);
+}
+
+void Store_DB::insert(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg)
+{
+    std::visit([this, venue = ouchMsg.venue](const auto *msg)
+              {
+      using MsgType = std::remove_pointer_t<decltype(msg)>;
+
+      if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderAcceptedMessage>)
+      {
+      }
+   else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderRejectedMessage>)
+   {
+   }
+   else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderReplacedMessage>)
+   {
+   }
+   else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderCancelledMessage>)
+   {
+   }
+   else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderExecutedMessage>)
+   {
+   }
+},ouchMsg.msg);
+}
+
+void Store_DB::insert(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg)
+{
+   std::visit([this, venue = ouchMsg.venue](const auto *msg)
+              {
+      using MsgType = std::remove_pointer_t<decltype(msg)>;
+
+      if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHSystemEventMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderAcceptedMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderReplacedMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderCancelledMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderExecutedMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderRejectedMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHBrokenTradeMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderModifiedMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHCancelPendingMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHCancelRejectMessage>)
+      {
+      }
+      else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHAccountQueryResponse>)
+      {
+      } 
+   
+   }, ouchMsg.msg);
+}
+
+// === INSERT ORDER ===
+void Store_DB::insert(const Order *order)
+{
+   std::string symbol = std::string(order->symbol.data(), 8);
+   symbol.erase(std::find_if(symbol.begin(), symbol.end(), [](const char &c)
+                             { return c == ' ' || c == '\0'; }),
+                symbol.end());
+
+   Block block;
+
+   auto col_timestamp = std::make_shared<ColumnUInt64>();
+   col_timestamp->Append(order->timestamp);
+   block.AppendColumn("timestamp", col_timestamp);
+
+   auto col_last_update_time = std::make_shared<ColumnUInt64>();
+   col_last_update_time->Append(order->last_update_time);
+   block.AppendColumn("last_update_time", col_last_update_time);
+
+   // Venue & Protocol
+   auto col_venue = std::make_shared<ColumnString>();
+   col_venue->Append(venue_to_string(order->venue));
+   block.AppendColumn("venue", col_venue);
+
+   auto col_protocol = std::make_shared<ColumnString>();
+   col_protocol->Append(protocol_to_string(order->protocol));
+   block.AppendColumn("protocol", col_protocol);
+
+   // Order ve Client ID
+   auto col_order_id = std::make_shared<ColumnUInt64>();
+   col_order_id->Append(order->order_id);
+   block.AppendColumn("order_id", col_order_id);
+
+   auto col_client_order_id = std::make_shared<ColumnUInt64>();
+   col_client_order_id->Append(order->client_order_id);
+   block.AppendColumn("client_order_id", col_client_order_id);
+
+   // Fiyat ve Miktarlar
+   auto col_price = std::make_shared<ColumnInt64>();
+   col_price->Append(order->price);
+   block.AppendColumn("price", col_price);
+
+   auto col_quantity = std::make_shared<ColumnUInt32>();
+   col_quantity->Append(order->quantity);
+   block.AppendColumn("quantity", col_quantity);
+
+   auto col_filled_quantity = std::make_shared<ColumnUInt32>();
+   col_filled_quantity->Append(order->filled_quantity);
+   block.AppendColumn("filled_quantity", col_filled_quantity);
+
+   auto col_remaining_quantity = std::make_shared<ColumnUInt32>();
+   col_remaining_quantity->Append(order->remaining_quantity);
+   block.AppendColumn("remaining_quantity", col_remaining_quantity);
+
+   // Symbol (fixed 8-byte array -> string)
+   auto col_symbol = std::make_shared<ColumnString>();
+   col_symbol->Append(symbol);
+   block.AppendColumn("symbol", col_symbol);
+
+   // Instrument ID
+   auto col_instrument_id = std::make_shared<ColumnUInt32>();
+   col_instrument_id->Append(order->instrument_id);
+   block.AppendColumn("instrument_id", col_instrument_id);
+
+   // Side (0 = Buy, 1 = Sell)
+   auto col_side = std::make_shared<ColumnUInt8>();
+   col_side->Append(static_cast<uint8_t>(order->side));
+   block.AppendColumn("side", col_side);
+
+   // Status (uint8 enum)
+   auto col_status = std::make_shared<ColumnString>();
+   col_status->Append(status_to_string(order->status));
+   block.AppendColumn("status", col_status);
+
+   // Mesaj Tipi (uint16)
+   auto col_message_type = std::make_shared<ColumnUInt16>();
+   col_message_type->Append(order->message_type);
+   block.AppendColumn("message_type", col_message_type);
+
+   // Taktik parametreler
+   auto col_time_in_force = std::make_shared<ColumnUInt8>();
+   col_time_in_force->Append(static_cast<uint8_t>(order->time_in_force));
+   block.AppendColumn("time_in_force", col_time_in_force);
+
+   auto col_order_type = std::make_shared<ColumnUInt8>();
+   col_order_type->Append(static_cast<uint8_t>(order->order_type));
+   block.AppendColumn("order_type", col_order_type);
+
+   client_->Insert("OrdersTable", block);
 }
 
 /* // === INSERT SBE ===
@@ -545,92 +688,3 @@ void Store_DB::insert(const MessageWithVenue<SBEMessage> &sbeMsg)
 
         client_->Insert("SBE_Table", block); }, sbeMsg.msg);
 } */
-// === INSERT ORDER ===
-void Store_DB::insert(const Order *order)
-{
-   std::string symbol = std::string(order->symbol.data(), 8);
-   symbol.erase(std::find_if(symbol.begin(), symbol.end(), [](const char &c)
-                             { return c == ' ' || c == '\0'; }),
-                symbol.end());
-
-   Block block;
-
-   auto col_timestamp = std::make_shared<ColumnUInt64>();
-   col_timestamp->Append(order->timestamp);
-   block.AppendColumn("timestamp", col_timestamp);
-
-   auto col_last_update_time = std::make_shared<ColumnUInt64>();
-   col_last_update_time->Append(order->last_update_time);
-   block.AppendColumn("last_update_time", col_last_update_time);
-
-   // Venue & Protocol
-   auto col_venue = std::make_shared<ColumnString>();
-   col_venue->Append(venue_to_string(order->venue));
-   block.AppendColumn("venue", col_venue);
-
-   auto col_protocol = std::make_shared<ColumnString>();
-   col_protocol->Append(protocol_to_string(order->protocol));
-   block.AppendColumn("protocol", col_protocol);
-
-   // Order ve Client ID
-   auto col_order_id = std::make_shared<ColumnUInt64>();
-   col_order_id->Append(order->order_id);
-   block.AppendColumn("order_id", col_order_id);
-
-   auto col_client_order_id = std::make_shared<ColumnUInt64>();
-   col_client_order_id->Append(order->client_order_id);
-   block.AppendColumn("client_order_id", col_client_order_id);
-
-   // Fiyat ve Miktarlar
-   auto col_price = std::make_shared<ColumnInt64>();
-   col_price->Append(order->price);
-   block.AppendColumn("price", col_price);
-
-   auto col_quantity = std::make_shared<ColumnUInt32>();
-   col_quantity->Append(order->quantity);
-   block.AppendColumn("quantity", col_quantity);
-
-   auto col_filled_quantity = std::make_shared<ColumnUInt32>();
-   col_filled_quantity->Append(order->filled_quantity);
-   block.AppendColumn("filled_quantity", col_filled_quantity);
-
-   auto col_remaining_quantity = std::make_shared<ColumnUInt32>();
-   col_remaining_quantity->Append(order->remaining_quantity);
-   block.AppendColumn("remaining_quantity", col_remaining_quantity);
-
-   // Symbol (fixed 8-byte array -> string)
-   auto col_symbol = std::make_shared<ColumnString>();
-   col_symbol->Append(symbol);
-   block.AppendColumn("symbol", col_symbol);
-
-   // Instrument ID
-   auto col_instrument_id = std::make_shared<ColumnUInt32>();
-   col_instrument_id->Append(order->instrument_id);
-   block.AppendColumn("instrument_id", col_instrument_id);
-
-   // Side (0 = Buy, 1 = Sell)
-   auto col_side = std::make_shared<ColumnUInt8>();
-   col_side->Append(static_cast<uint8_t>(order->side));
-   block.AppendColumn("side", col_side);
-
-   // Status (uint8 enum)
-   auto col_status = std::make_shared<ColumnString>();
-   col_status->Append(status_to_string(order->status));
-   block.AppendColumn("status", col_status);
-
-   // Mesaj Tipi (uint16)
-   auto col_message_type = std::make_shared<ColumnUInt16>();
-   col_message_type->Append(order->message_type);
-   block.AppendColumn("message_type", col_message_type);
-
-   // Taktik parametreler
-   auto col_time_in_force = std::make_shared<ColumnUInt8>();
-   col_time_in_force->Append(static_cast<uint8_t>(order->time_in_force));
-   block.AppendColumn("time_in_force", col_time_in_force);
-
-   auto col_order_type = std::make_shared<ColumnUInt8>();
-   col_order_type->Append(static_cast<uint8_t>(order->order_type));
-   block.AppendColumn("order_type", col_order_type);
-
-   client_->Insert("OrdersTable", block);
-}

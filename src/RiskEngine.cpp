@@ -120,7 +120,7 @@ inline void RiskEngine::update_order_risk(const Order &order, const uint8_t venu
     }
 }
 
-void RiskEngine::update_risk() noexcept
+bool RiskEngine::update_risk() noexcept
 {
     Order *order;
     while (store_to_risk_.pop(order))
@@ -140,7 +140,11 @@ void RiskEngine::update_risk() noexcept
             update_account_risk(accRisk, accLim, *order, metrics, venue_index);
         }
         order->canModify.store(order->canModify | RISK_DONE, std::memory_order_release);
+
+        return true;
     }    
+
+    return false;
 }
 
  bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const AccountLimit &accLim, Order &order, const OrderMetrics metrics) noexcept
@@ -170,7 +174,7 @@ void RiskEngine::update_risk() noexcept
         return false;
     }
 
-    void RiskEngine::check_risk() noexcept
+    bool RiskEngine::check_risk() noexcept
     {
         Order *order;
         
@@ -220,5 +224,9 @@ void RiskEngine::update_risk() noexcept
 
             order->canModify.store(order->canModify | RISK_DONE, std::memory_order_relaxed);   
             risk_to_builder_.push(order);
+            
+            return true;
         }
+
+        return false;
     }

@@ -35,3 +35,5 @@ GenerateSBEMessages.py
 GeneratedSBEMessages.h
 GenerateIpPort.py
 GeneratedIpPort.h
+MarketDataHandler.h
+MarketDataHandler.cpp

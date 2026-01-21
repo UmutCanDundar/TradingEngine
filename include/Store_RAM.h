@@ -20,6 +20,7 @@
 #include <bit>
 #include <tuple>
 #include <atomic>
+#include <memory>
 
 template <typename T>
 concept NASDAQ_ITCHAddMessages =
@@ -63,8 +64,8 @@ struct alignas(64) SymbolMeta
     SymbolMeta(uint64_t id = 0, uint32_t round_lot_size = 0 ,std::array<char, SYMBOL_SIZE> sym = {}, bool halt = false) noexcept : instrument_id(id), round_lot_size(round_lot_size) {halted.store(halt, std::memory_order_relaxed);}
     SymbolMeta(const SymbolMeta&) = delete;
     SymbolMeta& operator=(const SymbolMeta&) = delete;
-    SymbolMeta(SymbolMeta&& other) noexcept {}
-    SymbolMeta& operator=(SymbolMeta&& other) noexcept { return *this; }
+    SymbolMeta(SymbolMeta&& other) noexcept = delete;
+    SymbolMeta& operator=(SymbolMeta&& other) noexcept = delete;
 };
 
 struct OrderKey
@@ -171,7 +172,7 @@ private:
     absl::flat_hash_map<uint32_t, OrderKey> nq_ouch_refnum_ordkey_;
     absl::flat_hash_map<uint64_t, uint32_t> nq_ouch_sym_symid_;
 
-    std::array<absl::flat_hash_map<uint64_t, SymbolMeta>,VENUE_COUNT> instrument_cache_;
+    std::array<absl::flat_hash_map<uint64_t, std::unique_ptr<SymbolMeta>>, VENUE_COUNT> instrument_cache_;
     std::array<std::vector<OrderHistory>, VENUE_COUNT> our_orders_all_venue_;
     std::array<VenueFlags, VENUE_COUNT> venue_flags_;
     std::array<std::array<std::atomic<Order *>, PENDING_ORDER_SIZE>, VENUE_COUNT> pending_orders_; // Pending OUCH orders for matching against early ITCH messages (linear scan)
@@ -211,7 +212,8 @@ public:
     {
         this->update_order(msg);
     }
-    void store() noexcept;
+    
+    bool store() noexcept;
 
     void add_pending_order(Order &order) noexcept;
     inline auto const &get_venue_flags(Venue venue) const noexcept { return venue_flags_[static_cast<size_t>(venue)]; }
@@ -220,7 +222,7 @@ public:
         auto& instrument_map = instrument_cache_[static_cast<size_t>(venue)];
         auto it = instrument_map.find(instrument_id);
         if (LIKELY(it != instrument_map.end()))
-            return &it->second;
+            return it->second.get();
         else
             return nullptr;
     }
@@ -339,12 +341,12 @@ private:
 
     inline void update_symbol_halt_status(uint64_t instrument_id, Venue venue, bool halted) noexcept
     {
-        instrument_cache_[static_cast<size_t>(venue)][instrument_id].halted.store(halted, std::memory_order_release);
+        instrument_cache_[static_cast<size_t>(venue)][instrument_id]->halted.store(halted, std::memory_order_release);
     }
 
     inline void update_symbol_flush_status(uint64_t instrument_id, Venue venue, bool flushed) noexcept
     {
-        instrument_cache_[static_cast<size_t>(venue)][instrument_id].halted.store(flushed, std::memory_order_release);
+        instrument_cache_[static_cast<size_t>(venue)][instrument_id]->halted.store(flushed, std::memory_order_release);
     }
 
     //===========================================================

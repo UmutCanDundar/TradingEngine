@@ -28,8 +28,8 @@ inline constexpr size_t DB_QUEUE_CAPACITY = 512;
 using MessageTypes_t = std::variant<FIXMessage *, BIST::ITCHMessage, NASDAQ::ITCHMessage, BIST::OUCHMessage, NASDAQ::OUCHMessage/*, SBEMessage */>;
 using spscMessageQueue_t = boost::lockfree::spsc_queue<MessageWithVenue<MessageTypes_t>, boost::lockfree::capacity<MESSAGE_QUEUE_CAPACITY>>;
 using spscFIXOutSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage*, boost::lockfree::capacity<MESSAGE_QUEUE_CAPACITY>>;
-using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>/* , MessageWithVenue<SBEMessage> */>, boost::lockfree::capacity<DB_QUEUE_CAPACITY>>;
-using DbData_t = std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>/* , MessageWithVenue<SBEMessage> */>;
+using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>>, boost::lockfree::capacity<DB_QUEUE_CAPACITY>>;
+using DbData_t = std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>>;
 
 class Parser_Dispatch
 {
@@ -37,7 +37,7 @@ private:
     static constexpr uint16_t DB_QUEUE_THRESHOLD = 256;
     static inline uint16_t PktCount = 1;
 
-    Parser_FIX fixparser_{session_, parser_to_fixbuilder_in_};
+    Parser_FIX fixparser_{sess_mngr_, parser_to_fixbuilder_in_};
     Parser_ITCH_BIST itchparser_bist_;
     Parser_ITCH_NASDAQ itchparser_nasdaq_;
     Parser_OUCH_BIST ouchparser_bist_;
@@ -52,14 +52,14 @@ private:
     spscMessageQueue_t &parser_to_store_;
     spscFIXOutSessionQueue_t &parser_to_fixbuilder_out_;
     spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;
-    Sequence_FIX &session_;
+    SessionManager &sess_mngr_;
     spscDbQueue_t &db_to_parser_;
     NetworkIO &network_io_;
 
 public:
-    Parser_Dispatch(spscPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, Sequence_FIX &session, spscDbQueue_t &db_to_parser, NetworkIO &network_io) noexcept;
+    Parser_Dispatch(spscPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io) noexcept;
 
-    void dispatch() noexcept;
+    bool dispatch() noexcept;
 
 private:
 
@@ -105,7 +105,7 @@ private:
         }
     }
 
-    inline void proceedPendingFIX(auto *variant_msg) noexcept
+    inline void proceedPendingFIX(auto *variant_msg, auto& seq_fix) noexcept
     {
         std::visit([&](auto *msg)
                    {
@@ -117,7 +117,7 @@ private:
                        }
                        else
                        {
-                           if (msg->msg_type != static_cast<uint8_t>(FIXTypes::Logon) && !fixparser_.handle_sesMsg(msg))
+                           if (msg->msg_type != static_cast<uint8_t>(FIXTypes::Logon) && !fixparser_.handle_sesMsg(msg, seq_fix))
                                parser_to_fixbuilder_out_.push(msg);
                        }
 
@@ -128,6 +128,9 @@ private:
 
     inline void parseFIX(OutPacket* pkt) noexcept
     {
+        uint8_t sess_index = sess_mngr_.getSessionIndex(pkt->venue, pkt->protocol);
+        Sequence_FIX& seq_fix = sess_mngr_.getSessionState(sess_index)->fix;
+        
         size_t offset = 0;
 
         while (true)
@@ -144,49 +147,49 @@ private:
             if(type > 65) 
             {
                 fixMsg = fixparser_.parse<FIXMessage>(pair.first, pair.second);
-                if (session_.get_expected() == fixMsg->seqnum)
+                if (seq_fix.get_expected() == fixMsg->seqnum)
                 {
                     parser_to_store_.push(MessageWithVenue<MessageTypes_t>(fixMsg, Venue::BIST));
-                    session_.increase_expected_seq();
+                    seq_fix.increase_expected_seq();
 
-                    while (V_t *variant_msg = fixparser_.find_in_pending(session_.get_expected()))
+                    while (V_t *variant_msg = fixparser_.find_in_pending(seq_fix.get_expected()))
                     {
-                        proceedPendingFIX(variant_msg);
-                        session_.increase_expected_seq();
+                        proceedPendingFIX(variant_msg, seq_fix);
+                        seq_fix.increase_expected_seq();
                     }
                 }
                 else
                 {
-                    fixparser_.resend_logic(fixMsg->seqnum);
+                    fixparser_.resend_logic(fixMsg->seqnum, seq_fix);
                     fixparser_.push_pending(fixMsg);
                 }
             }
             else
             {
                 fixSesMsg = fixparser_.parse<FIXSessionMessage>(pair.first, pair.second);
-                if (session_.get_expected() == fixSesMsg->seqnum)
+                if (seq_fix.get_expected() == fixSesMsg->seqnum)
                 {
-                    if (!fixparser_.handle_sesMsg(fixSesMsg))
+                    if (!fixparser_.handle_sesMsg(fixSesMsg, seq_fix))
                         parser_to_fixbuilder_out_.push(fixSesMsg);
 
-                    session_.increase_expected_seq();
+                    seq_fix.increase_expected_seq();
 
-                    while (V_t *variant_msg = fixparser_.find_in_pending(session_.get_expected()))
+                    while (V_t *variant_msg = fixparser_.find_in_pending(seq_fix.get_expected()))
                     {
-                        proceedPendingFIX(variant_msg);
-                        session_.increase_expected_seq();
+                        proceedPendingFIX(variant_msg, seq_fix);
+                        seq_fix.increase_expected_seq();
                     }
                 }
                 else
                 {
                     if (LIKELY(fixSesMsg->msg_type != static_cast<uint8_t>(FIXTypes::Logon))) 
                     {
-                        fixparser_.resend_logic(fixSesMsg->seqnum);
+                        fixparser_.resend_logic(fixSesMsg->seqnum, seq_fix);
                         fixparser_.push_pending(fixSesMsg);
                     }
                     else
                     {
-                        fixparser_.resend_logic_logon(fixSesMsg);
+                        fixparser_.resend_logic_logon(fixSesMsg, seq_fix);
                     }
                 }
             }

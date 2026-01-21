@@ -18,8 +18,6 @@ private:
         {
         case Venue::NASDAQ:
             return "NASDAQ";
-        case Venue::NYSE:
-            return "NYSE";
         case Venue::BIST:
             return "BIST";
         default:
@@ -35,8 +33,8 @@ private:
             return "FIX";
         case Protocol::ITCH:
             return "ITCH";
-        case Protocol::SBE:
-            return "SBE";
+        case Protocol::OUCH:
+            return "OUCH";
         default:
             __builtin_unreachable();
         }
@@ -104,13 +102,16 @@ private:
 public:
     Store_DB(spscDbQueue_t &store_to_db, spscDbQueue_t &db_to_parser, const std::string &host = "127.0.0.1", const int &port = 9000);
 
-    void store() noexcept
+    bool store() noexcept
     {
         DbData_t data;
-        store_to_db_.pop(data);
+        if(!store_to_db_.pop(data))
+            return false;
 
         std::visit([this](const auto &type)
                    { this->insert(type); },
                    data);
+            
+        return true;
     }
 };
