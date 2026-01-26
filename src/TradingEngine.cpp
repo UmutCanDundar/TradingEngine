@@ -1,19 +1,23 @@
 #include "TradingEngine.h"
 
-
 TradingEngine::TradingEngine() noexcept
-    : hashtables_(VENUE_COUNT), 
-      marketbook_(hashtables_), 
-      limits_(hashtables_), 
+    : hashtables_(VENUE_COUNT),
+      marketbook_(hashtables_),
+      limits_(hashtables_),
       session_manager_(),
+      inPkt_pool_(),
+      fixBuilder_(session_manager_),
+      sbt_(session_manager_),
+      login_(sbt_, fixBuilder_, session_manager_),
 
       // ----- COMPONENTS -----
-      sbt_(session_manager_), 
       network_io_(
-        receiver_to_parser_,
-        builder_to_sender_,
-        sbt_,
-        session_manager_),
+          receiver_to_parser_,
+          builder_to_sender_,
+          sbt_,
+          session_manager_,
+          login_,
+          inPkt_pool_),
       parser_dispatch_(
           receiver_to_parser_,
           parser_to_store_,
@@ -48,13 +52,16 @@ TradingEngine::TradingEngine() noexcept
           parser_to_fixbuilder_out_,
           parser_to_fixbuilder_in_,
           session_manager_,
-          sbt_),
+          sbt_,
+          login_,
+          inPkt_pool_,
+          fixBuilder_),
 
       // ----- FLOWS -----
-      network_flow_(network_io_), 
-      parser_flow_(parser_dispatch_), 
-      order_flow_(store_ram_, store_db_), 
-      risk_flow_(risk_engine_), 
+      network_flow_(network_io_),
+      parser_flow_(parser_dispatch_),
+      order_flow_(store_ram_, store_db_),
+      risk_flow_(risk_engine_),
       builder_flow_(builder_dispatch_)
 {
 }

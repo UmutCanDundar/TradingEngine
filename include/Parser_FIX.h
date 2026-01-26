@@ -1,9 +1,9 @@
 #pragma once
 
 #include "common.h"
-#include "Sequence_FIX.h"
 #include "Logger.h"
-#include "NetworkIO.h"
+#include "SessionManager.h"
+#include "NetworkPackets.h"
 
 #include <string_view>
 #include <cstdint>
@@ -286,18 +286,17 @@ public:
 
         while (pos < len)
         {
-            // '=' işaretini bul
+           
             size_t eq_pos = pos;
             while (data[eq_pos] != '=')
                 ++eq_pos;
-            // Tag kısmı [pos, eq_pos)
+           
             uint32_t tag = parseNumber(data + tag_start, eq_pos - tag_start);
-            // SOH karakterini bul
+            
             size_t soh_pos = eq_pos + 1;
             while (data[soh_pos] != '\x01')
                 ++soh_pos;
 
-            // Value kısmı [eq_pos+1, soh_pos)
             std::string_view value(data + eq_pos + 1, soh_pos - (eq_pos + 1));
 
              auto& handler = handlers[tag];
@@ -310,8 +309,9 @@ public:
         return msg;
     }
 
-    inline bool handle_sesMsg(FIXSessionMessage *fixSesMsg, Sequence_FIX& seq_fix) noexcept
-    {
+    inline bool handle_sesMsg(FIXSessionMessage *fixSesMsg, Sequence_FIX& seq_fix, SessionState& state) noexcept
+    {   
+
         const FIXTypes type = static_cast<FIXTypes>(fixSesMsg->msg_type);
       
             switch(type) 
@@ -330,6 +330,12 @@ public:
                     return false;
                 
                 case FIXTypes::Logout:
+                    if(fixSesMsg->ses_status == 255)
+                        return false;
+                    else if (fixSesMsg->ses_status == 4)
+                        state.is_logged_in.store(false,std::memory_order_release);
+                    
+                    
                     return true;
                 
                 case FIXTypes::Logon:
@@ -338,6 +344,9 @@ public:
                         seq_fix.set_expected_seq(2);
                         seq_fix.set_next_seq(1);
                     }
+                    state.is_logged_in.store(true, std::memory_order_release);
+                    state.logged_before.store(true, std::memory_order_release);
+
                     return true;
 
                 default:
@@ -638,62 +647,3 @@ private:
 };
 
 
-/* static constexpr std::string_view to_string(SessionRejectReason reason) 
-   {
-        switch(reason)
-        {
-            case SessionRejectReason::Invalid_tag_number:
-                return "Invalid_tag_number";
-            case SessionRejectReason::Required_tag_missing:
-                return "Required_tag_missing";
-            case SessionRejectReason::Tag_not_defined_for_this_type:
-                return "Tag_not_defined_for_this_type";
-            case SessionRejectReason::Undefined_tag:
-                return "Undefined_tag";
-            case SessionRejectReason::Tag_specified_without_a_value:
-                return "Tag_specified_without_a_value";
-            case SessionRejectReason::Out_of_range_value:
-                return "Out_of_range_value";
-            case SessionRejectReason::Incorrect_data_format_for_value:
-                return "Incorrect_data_format_for_value";
-            case SessionRejectReason::CompID_problem:
-                return "CompID_problem";
-            case SessionRejectReason::Sendingtime_accuracy_problem:
-                return "Sendingtime_accuracy_problem";
-            case SessionRejectReason::Invalid_type:
-                return "Invalid_type";
-            case SessionRejectReason::Repeating_group_fields:
-                return "Repeating_group_fields";
-            case SessionRejectReason::Incorrect_numInGroup:
-                return "Incorrect_numInGroup";
-            case SessionRejectReason::Other:
-                return "Other";
-            default:
-                return "Unknown";
-        }
-   }
-
-   static constexpr std::string_view to_string(LogoutStatus status)
-   {
-        switch (status)
-       {
-       case LogoutStatus::Password_Error:
-           return "Password_Error";
-       case LogoutStatus::Logged_out:
-           return "Logged_out";
-       case LogoutStatus::Invalid_userinfo:
-           return "Invalid_userinfo";
-       case LogoutStatus::Account_locked:
-           return "Account_locked";
-       case LogoutStatus::Password_expired:
-           return "Password_expired";
-       case LogoutStatus::Invalid_id:
-           return "Invalid_id";
-       case LogoutStatus::Invalid_bodylength:
-           return "Invalid_bodylength ";
-       case LogoutStatus::Low_interval:
-           return "Low_interval";
-       default:
-           return "Unknown";
-       }
-   } */

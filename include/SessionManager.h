@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <chrono>
 
 enum class SessionType : uint8_t
 {
@@ -196,24 +197,30 @@ struct SessionAuth
 
 struct SessionState
 {
-    std::atomic<bool> is_logged_in = false;    // These could be single enum var (Dev Comment)
-    std::atomic<bool> is_connected = false;
-    std::atomic<bool> is_joined_multicast = false;
-
-    std::atomic<bool> logged_before = false;
+    alignas(64) // HOT
+    std::atomic<bool> is_logged_in = false;    // All Atomic flags could be enum later (Dev Comment)
     SessionProtocol sess_prot;
 
-     union // Variant could be used here instead of union (Dev Comment)
+    // HOT
+    union alignas(64) // Variant could be used here instead of union (Dev Comment)
     {
         Sequence_FIX fix;
         Sequence_SBT sbt;
     };
-
+    
+    alignas(64) // COLD
+    uint64_t last_login_attempt_ns{0};         
+    uint32_t login_retry_count{0};
+    std::atomic<bool> is_connected = false;
+    std::atomic<bool> is_joined_multicast = false;
+    std::atomic<bool> logged_before = false;
+     
+   
     void ResetState() noexcept
     {
         is_logged_in.store(false, std::memory_order_release);
-        is_connected.store(false, std::memory_order_release);
-        is_joined_multicast.store(false, std::memory_order_release);   
+        is_connected.store(false, std::memory_order_relaxed);
+        is_joined_multicast.store(false, std::memory_order_relaxed);   
     }
 
     SessionState() noexcept : sess_prot(SessionProtocol::None) {}

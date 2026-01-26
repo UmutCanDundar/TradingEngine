@@ -236,6 +236,7 @@ private:
     Order* get_order_from_pending_orders_map(uint64_t client_order_id) noexcept;
 
     void update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept; // ONLY BIST
+    void update_order(const MessageWithVenue<FIXSessionMessage *> &fixMsg) noexcept { return;}
     void update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg) noexcept;

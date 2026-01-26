@@ -1,7 +1,7 @@
 #include "Builder_Dispatch.h"
 
-Builder_Dispatch::Builder_Dispatch(spscInPacketPayloadQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, SessionManager &sess_mngr, SoupBinTcp &sbt) noexcept
-    : builder_to_sender_(builder_to_sender), risk_to_builder_(risk_to_builder), parser_to_fixbuilder_out_(parser_to_fixbuilder_out), parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), sbt_(sbt), builder_table_(makeBuilderLookUpTable()) {}
+Builder_Dispatch::Builder_Dispatch(spscInPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, Builder_FIX &fixBuilder) noexcept
+    : builder_to_sender_(builder_to_sender), risk_to_builder_(risk_to_builder), parser_to_fixbuilder_out_(parser_to_fixbuilder_out), parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), sbt_(sbt), builder_table_(makeBuilderLookUpTable()), login_(login), inPkt_pool_(inPkt_pool), fixBuilder_(fixBuilder) {}
 
 std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> Builder_Dispatch::makeBuilderLookUpTable() noexcept
 {
@@ -20,10 +20,10 @@ std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUN
 bool Builder_Dispatch::dispatch() noexcept
 {
    Order* order{nullptr};
-   
+
    if(!risk_to_builder_.pop(order))
       return false;
-      
+
    (this->*builder_table_[static_cast<size_t>(order->protocol)][static_cast<size_t>(order->venue)])(order);
    
    return true;

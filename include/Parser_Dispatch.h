@@ -5,7 +5,6 @@
 #include "Parser_ITCH_BIST.h"
 #include "Parser_OUCH_BIST.h"
 #include "Parser_OUCH_NASDAQ.h"
-#include "Parser_SBE.h"
 #include "NetworkIO.h"
 
 #include <variant>
@@ -25,11 +24,11 @@ struct MessageWithVenue
 
 inline constexpr size_t DB_QUEUE_CAPACITY = 512;
 
-using MessageTypes_t = std::variant<FIXMessage *, BIST::ITCHMessage, NASDAQ::ITCHMessage, BIST::OUCHMessage, NASDAQ::OUCHMessage/*, SBEMessage */>;
+using MessageTypes_t = std::variant<FIXMessage *, FIXSessionMessage*, BIST::ITCHMessage, NASDAQ::ITCHMessage, BIST::OUCHMessage, NASDAQ::OUCHMessage>; 
 using spscMessageQueue_t = boost::lockfree::spsc_queue<MessageWithVenue<MessageTypes_t>, boost::lockfree::capacity<MESSAGE_QUEUE_CAPACITY>>;
 using spscFIXOutSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage*, boost::lockfree::capacity<MESSAGE_QUEUE_CAPACITY>>;
-using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>>, boost::lockfree::capacity<DB_QUEUE_CAPACITY>>;
-using DbData_t = std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>>;
+using spscDbQueue_t = boost::lockfree::spsc_queue<std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<FIXSessionMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>>, boost::lockfree::capacity<DB_QUEUE_CAPACITY>>;
+using DbData_t = std::variant<Order *, MessageWithVenue<FIXMessage *>, MessageWithVenue<FIXSessionMessage *>, MessageWithVenue<BIST::ITCHMessage>, MessageWithVenue<BIST::OUCHMessage>, MessageWithVenue<NASDAQ::ITCHMessage>, MessageWithVenue<NASDAQ::OUCHMessage>>;
 
 class Parser_Dispatch
 {
@@ -42,7 +41,6 @@ private:
     Parser_ITCH_NASDAQ itchparser_nasdaq_;
     Parser_OUCH_BIST ouchparser_bist_;
     Parser_OUCH_NASDAQ ouchparser_nasdaq_;
-    /* Parser_SBE sbeparser_; */
     
     using ParserFunc = void (Parser_Dispatch::*)(OutPacket*) noexcept;
     std::array<std::array<ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> makeParserLookUpTable() noexcept; 
@@ -76,6 +74,10 @@ private:
                 {
                     fixparser_.releaseFIX(item.msg);
                 }
+                if constexpr (std::is_same_v<T, MessageWithVenue<FIXSessionMessage *>>)
+                {
+                    fixparser_.releaseFIX(item.msg);
+                }
                 else if constexpr (std::is_same_v<T, MessageWithVenue<BIST::ITCHMessage>>)
                 {
                     itchparser_bist_.releaseITCH(item.msg);
@@ -92,10 +94,6 @@ private:
                 {
                     ouchparser_nasdaq_.releaseOUCH(item.msg);
                 }
-               /*  else if constexpr (std::is_same_v<T, MessageWithVenue<SBEMessage>>)
-                {
-                    sbeparser_.releaseSBE(item.msg);   
-                } */
                 else if constexpr (std::is_same_v<T, Order*>)
                 {
                     return;
@@ -105,22 +103,19 @@ private:
         }
     }
 
-    inline void proceedPendingFIX(auto *variant_msg, auto& seq_fix) noexcept
+    inline void proceedPendingFIX(auto *variant_msg, auto& seq_fix, SessionState& state) noexcept
     {
         std::visit([&](auto *msg)
                    {
                        using MsgType = std::remove_pointer_t<decltype(msg)>;
 
-                       if constexpr (std::is_same_v<MsgType, FIXMessage>)
+                       if constexpr (std::is_same_v<MsgType, FIXSessionMessage>)
                        {
-                           parser_to_store_.push(MessageWithVenue<MessageTypes_t>(msg, Venue::BIST));
-                       }
-                       else
-                       {
-                           if (msg->msg_type != static_cast<uint8_t>(FIXTypes::Logon) && !fixparser_.handle_sesMsg(msg, seq_fix))
+                           if (msg->msg_type != static_cast<uint8_t>(FIXTypes::Logon) && !fixparser_.handle_sesMsg(msg, seq_fix, state))
                                parser_to_fixbuilder_out_.push(msg);
                        }
 
+                       parser_to_store_.push(MessageWithVenue<MessageTypes_t>(msg, Venue::BIST));
                        fixparser_.pop_pending(msg->seqnum);
                    },
                    *variant_msg);
@@ -129,7 +124,8 @@ private:
     inline void parseFIX(OutPacket* pkt) noexcept
     {
         uint8_t sess_index = sess_mngr_.getSessionIndex(pkt->venue, pkt->protocol);
-        Sequence_FIX& seq_fix = sess_mngr_.getSessionState(sess_index)->fix;
+        SessionState* state = sess_mngr_.getSessionState(sess_index);
+        Sequence_FIX& seq_fix = state->fix;
         
         size_t offset = 0;
 
@@ -154,7 +150,7 @@ private:
 
                     while (V_t *variant_msg = fixparser_.find_in_pending(seq_fix.get_expected()))
                     {
-                        proceedPendingFIX(variant_msg, seq_fix);
+                        proceedPendingFIX(variant_msg, seq_fix, *state);
                         seq_fix.increase_expected_seq();
                     }
                 }
@@ -169,14 +165,14 @@ private:
                 fixSesMsg = fixparser_.parse<FIXSessionMessage>(pair.first, pair.second);
                 if (seq_fix.get_expected() == fixSesMsg->seqnum)
                 {
-                    if (!fixparser_.handle_sesMsg(fixSesMsg, seq_fix))
+                    if (!fixparser_.handle_sesMsg(fixSesMsg, seq_fix, *state))
                         parser_to_fixbuilder_out_.push(fixSesMsg);
 
                     seq_fix.increase_expected_seq();
 
                     while (V_t *variant_msg = fixparser_.find_in_pending(seq_fix.get_expected()))
                     {
-                        proceedPendingFIX(variant_msg, seq_fix);
+                        proceedPendingFIX(variant_msg, seq_fix, *state);
                         seq_fix.increase_expected_seq();
                     }
                 }
@@ -192,6 +188,8 @@ private:
                         fixparser_.resend_logic_logon(fixSesMsg, seq_fix);
                     }
                 }
+
+                parser_to_store_.push(MessageWithVenue<MessageTypes_t>(fixSesMsg, Venue::BIST));
             }
             offset += pair.second;
         }
@@ -227,9 +225,4 @@ private:
         }
     }
     
-    /* inline void parseSBE(OutPacket *pkt) noexcept
-    {
-        SBEMessage sbeMsg{sbeparser_.parse(pkt->data.data())};
-        parser_to_store_.push(MessageWithVenue<MessageTypes_t>(sbeMsg, pkt->venue));
-    } */
 };

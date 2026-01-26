@@ -22,12 +22,6 @@ Store_RAM::Store_RAM(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &stor
       
 }
 
-/* void Store_RAM::handle_instrument_definition(const SBEInstrumentDefinitionMessage &msg, Venue venue) noexcept
-{
-   auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.instrumentId, SymbolMeta{msg.instrumentId});  // USING SBE IS NOT DETERMINED YET
-   copy_symbol(it->second.symbol, msg.symbol);
-} */
-
 void Store_RAM::handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg, Venue venue) noexcept
 {
    auto [it, inserted] = instrument_cache_[static_cast<size_t>(venue)].emplace(msg.order_book_id, std::make_unique<SymbolMeta>(msg.order_book_id, msg.round_lot_size));
@@ -135,6 +129,15 @@ void Store_RAM::handle_flush_status(const uint8_t venue_index, const uint32_t sy
 bool Store_RAM::store() noexcept
 {
    MessageWithVenue<MessageTypes_t> msgWithVenue;
+
+   std::visit([this, &msgWithVenue](const auto &inner_msg)
+   {  
+      using MsgType = std::decay_t<decltype(inner_msg)>;
+      if constexpr (std::is_same_v<MsgType, FIXSessionMessage>)
+         store_to_db_.push(inner_msg);
+         return false;
+   }, msgWithVenue.msg);
+
 
    if (!pending_to_strategy_.empty() && ((pending_to_strategy_.front().order->canModify.load(std::memory_order_relaxed)) == (STRATEGY_DONE | RISK_DONE | BUILDER_DONE)))
    {

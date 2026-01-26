@@ -3,15 +3,16 @@
 
 #include "NetworkIO.h"
 
-NetworkIO::NetworkIO(spscPacketQueue_t &receiver_to_parser, spscInPacketPayloadQueue_t &builder_to_sender, SoupBinTcp &sbt, SessionManager &sessions) noexcept
+NetworkIO::NetworkIO(spscPacketQueue_t &receiver_to_parser, spscInPacketQueue_t &builder_to_sender, SoupBinTcp &sbt, SessionManager &sessions, LoginController &login, InPacketPoolManager &inPkt_pool) noexcept
     : socks_(Init_Sockets()),
       epoll_fd_(createEpoll()),
       receiver_to_parser_(receiver_to_parser),
       builder_to_sender_(builder_to_sender),
       sbt_(sbt),
-      sessions_(sessions)
+      sessions_(sessions),
+      login_(login),
+      inPkt_pool_(inPkt_pool) 
 {
-
    for (size_t i = 0; i < PACKET_QUEUE_CAPACITY; i++)
       free_pkt_list_.push(&packet_pool_[i]);
 }
@@ -21,7 +22,7 @@ std::array<int, MAX_SESSIONS> NetworkIO::Init_Sockets() noexcept
    std::array<int, MAX_SESSIONS> socks{};
    for (size_t index = 0; index < MAX_SESSIONS; index++)
    {
-      auto* cxt = sessions_.getSessionContext(index); // to ensure session contexts are initialized before socket creation
+      auto* cxt = sessions_.getSessionContext(index); 
       if(!cxt)
          break;
 
@@ -223,8 +224,10 @@ int NetworkIO::setupSocket(const int sock, const SessionContext& cxt) noexcept
          addEpoll(sock, epoll_data, EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET);
          sessions_.setSessionConnected(index, true);
 
-         if (cxt.protocol == Protocol::OUCH)
-            sbtLogin(sock, index, socket_states_[index]);
+         auto *sess_state = sessions_.getSessionState(index);
+         InPacket *inPkt = inPkt_pool_.get_inpkt();
+         login_.InstantLoginAttempt(*inPkt, sock, index, *sess_state);
+         send(*inPkt, sock, index, socket_states_[index]);
       }
    }
       
@@ -349,15 +352,10 @@ void NetworkIO::recv_send() noexcept
    
    while (true)
    {
-      InPacketPayload inPkt_payload;
-      while (builder_to_sender_.pop(inPkt_payload))
+      InPacket* inPkt;
+      while (builder_to_sender_.pop(inPkt))
       {
-         InPacket* inPkt = &inpkt_pool[next_inpkt++ & (PACKET_POOL_CAPACITY -1)];
-         std::memcpy(inPkt->data.data(), inPkt_payload.data, inPkt_payload.len);
-         inPkt->len = inPkt_payload.len;
-         inPkt->sock_index = inPkt_payload.sock_index;
-
-         trySend(inPkt);
+         trySend(*inPkt);
       }
       
       int nfds = epoll_wait(epoll_fd_, events, MAX_EVENTS, -1);
@@ -387,13 +385,13 @@ void NetworkIO::recv_send() noexcept
             }
             else
             {
-               send(states.active_pkt, sock, index, states);
+               send(*states.active_pkt, sock, index, states);
 
                InPacket *inPkt;
 
                while (!states.active_pkt && pending_write_[index].pop(inPkt))
                {
-                  send(inPkt, sock, index, states);      
+                  send(*inPkt, sock, index, states);      
                }
 
                if (!states.active_pkt)
@@ -591,20 +589,20 @@ void NetworkIO::recv_send() noexcept
    }
 }
 
-void NetworkIO::trySend(InPacket *inPkt) noexcept
+void NetworkIO::trySend(InPacket& inPkt) noexcept
 {
-   size_t index = inPkt->sock_index;
+   size_t index = inPkt.sock_index;
    int sock = socks_[index];
    auto& states = socket_states_[index];
 
-   if (UNLIKELY(!sessions_.isSessionLoggedIn(index)))
+   if (UNLIKELY(!sessions_.isSessionLoggedIn(index)) && !inPkt.is_login_msg)
    {
       return;
    }
 
    if (states.active_pkt)
    {
-      pending_write_[index].push(inPkt);
+      pending_write_[index].push(&inPkt);
       return;
    }
    else
@@ -613,15 +611,15 @@ void NetworkIO::trySend(InPacket *inPkt) noexcept
    }
 }
 
-void NetworkIO::send(InPacket *inPkt, const int sock, const uint8_t index, SocketState &states) noexcept
+void NetworkIO::send(InPacket& inPkt, const int sock, const uint8_t index, SocketState &states) noexcept
 {
-   while (inPkt->offset < inPkt->len)
+   while (inPkt.offset < inPkt.len)
    {
-      ssize_t sent = ::send(sock, inPkt->data.data() + inPkt->offset, inPkt->len - inPkt->offset,0);
+      ssize_t sent = ::send(sock, inPkt.data.data() + inPkt.offset, inPkt.len - inPkt.offset,0);
 
       if(sent > 0)
       {
-         inPkt->offset += sent;
+         inPkt.offset += sent;
          continue;
       }
       else if (sent < 0)
@@ -634,7 +632,7 @@ void NetworkIO::send(InPacket *inPkt, const int sock, const uint8_t index, Socke
                states.is_EPOLLOUT_set = true;
             }
 
-            states.active_pkt = inPkt;
+            states.active_pkt = &inPkt;
             return;
          }
          else
@@ -697,9 +695,10 @@ void NetworkIO::handleEINPROGRESS(const int sock, SocketState& states, const uin
       modEpoll(sock, states.epoll_data, EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET);
       states.is_EPOLLOUT_set = false;
 
-      if(sessions_.getSessionContext(index)->protocol == Protocol::OUCH) 
-        sbtLogin(sock, index, states);
-      
+      auto* sess_state = sessions_.getSessionState(index);
+      InPacket* inPkt = inPkt_pool_.get_inpkt();
+      login_.InstantLoginAttempt(*inPkt, sock, index, *sess_state);
+      send(*inPkt, sock, index, states);
    }
 
 NetworkIO::~NetworkIO() noexcept

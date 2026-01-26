@@ -8,6 +8,7 @@
 #include "MarketBook.h"
 #include "Limits.h"
 #include "SessionManager.h"
+#include "LoginController.h"
 
 // ===== COMPONENTS =====
 #include "SoupBinTcp.h"
@@ -42,7 +43,11 @@ private:
     MarketBook marketbook_;
     Limits limits_;
     SessionManager session_manager_;
-
+    LoginController login_;
+    InPacketPoolManager inPkt_pool_;
+    Builder_FIX fixBuilder_;
+    SoupBinTcp sbt_;
+   
     // =========================
     // QUEUES (KATMAN 1)
     // =========================
@@ -54,7 +59,7 @@ private:
     spscOrderQueue_t strategy_to_risk_;
     spscRejectOrderQueue_t risk_to_strategy_;
     spscOrderQueue_t risk_to_builder_;
-    spscInPacketPayloadQueue_t builder_to_sender_;
+    spscInPacketQueue_t builder_to_sender_;
     spscDbQueue_t store_to_db_;
     spscDbQueue_t db_to_parser_;
     spscFIXInSessionQueue_t parser_to_fixbuilder_in_;
@@ -63,7 +68,6 @@ private:
     // =========================
     // COMPONENTS (KATMAN 2)
     // =========================
-    SoupBinTcp sbt_;
     NetworkIO network_io_;
     Parser_Dispatch parser_dispatch_;
     Store_RAM store_ram_;
