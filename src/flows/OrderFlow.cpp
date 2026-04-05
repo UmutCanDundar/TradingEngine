@@ -1,8 +1,10 @@
-#include "flows/OrderFlow.h"
+#include "OrderFlow.h"
 #include "config_utils.h"
 
-OrderFlow::OrderFlow(Store_RAM& store_ram, Store_DB& store_db) noexcept
-    : store_ram_(store_ram), store_db_(store_db)
+#include <immintrin.h>
+
+OrderFlow::OrderFlow(OrderManager& ord_mngr, ClickhouseWriter& ch_writer) noexcept
+    : ord_mngr_(ord_mngr), ch_writer_(ch_writer)
 {
 }
 
@@ -10,39 +12,37 @@ void OrderFlow::start() noexcept
 {
     running_.store(true, std::memory_order_release);
 
-    store_ram_thread_ = std::thread([this]
+    ord_mngr_thread_ = std::thread([this]
                                      {
    
-    lock_memory();                 // mlockall
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); // RT priority
-    configure_affinity(4);         // CPU core (örnek)
+    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+    configure_affinity(4);       
 
-    run_ram(); });
+    run_order_manager(); });
 
-    store_db_thread_ = std::thread([this]
+    ch_writer_thread_ = std::thread([this]
                                       {
    
-    lock_memory();                 // mlockall
-    configure_realtime(sched_get_priority_max(SCHED_FIFO) / 3); // RT priority
-    configure_affinity(15);         // CPU core (örnek)
+    configure_realtime(sched_get_priority_max(SCHED_FIFO) / 3); 
+    configure_affinity(15);        
 
-    run_db(); });
+    run_clickhouse_writer(); });
 }
 
-void OrderFlow::run_ram() noexcept
+void OrderFlow::run_order_manager() noexcept
 {
     while (running_.load(std::memory_order_acquire))
     {
-        if(!store_ram_.store())
+        if(!ord_mngr_.store())
             _mm_pause();
     }
 }
 
-void OrderFlow::run_db() noexcept
+void OrderFlow::run_clickhouse_writer() noexcept
 {
     while (running_.load(std::memory_order_acquire))
     {
-        if (!store_db_.store())
+        if (!ch_writer_.store())
             _mm_pause();
     }
 }
@@ -51,9 +51,9 @@ void OrderFlow::stop() noexcept
 {
     running_.store(false, std::memory_order_release);
 
-    if (store_ram_thread_.joinable())
-        store_ram_thread_.join();
+    if (ord_mngr_thread_.joinable())
+        ord_mngr_thread_.join();
 
-    if (store_db_thread_.joinable())
-        store_db_thread_.join();
+    if (ch_writer_thread_.joinable())
+        ch_writer_thread_.join();
 }

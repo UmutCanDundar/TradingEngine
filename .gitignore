@@ -1,4 +1,4 @@
-# Derleme dosyaları
+# Compile Files
 *.o
 *.obj
 *.so
@@ -6,34 +6,19 @@
 *.exe
 *.out
 
-# Derleme klasörleri
+# Custom Folders
 build/
 third-party/
 
-
-# CMake dosyaları
+# CMake Files
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
 
-# VSCode ayarları
+# VSCode Settings
 .vscode/
 
 # config
  *.json
  
-#custom
-deneme.h
-deneme.cpp
-Parser_SBE.h
-Parser_SBE.cpp
-BaseParser.h
-blacklist.sql
-sbetable.sql
-GenerateSBEMessages.py
-GeneratedSBEMessages.h
-GenerateIpPort.py
-GeneratedIpPort.h
-MarketDataHandler.h
-MarketDataHandler.cpp

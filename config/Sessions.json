@@ -36,7 +36,9 @@
             "SessionAuth": {
                 "sess_prot": "SBT",
                 "username": "OUCH01",
-                "password": "PASS01"
+                "password": "PASS01",
+                "client_account": "DMACCOUNT1234",
+                "exchange_info": "EXCHANGEINFO1234567890ABCDEFGH"
             }
         },
         
@@ -54,7 +56,9 @@
             "SessionAuth": {
                 "sess_prot": "SBT",
                 "username": "NSDQ01",
-                "password": "PASS02"
+                "password": "PASS02",
+                "client_account": "",
+                "exchange_info": ""                
             }
         },
         

@@ -1,5 +1,7 @@
-#include "flows/BuilderFlow.h"
+#include "BuilderFlow.h"
 #include "config_utils.h"
+
+#include <immintrin.h>
 
 BuilderFlow::BuilderFlow(Builder_Dispatch &builder_dispatch) noexcept
     : builder_dispatch_(builder_dispatch)
@@ -13,10 +15,8 @@ void BuilderFlow::start() noexcept
     builder_thread_ = std::thread([this]
                                   {
    
-    lock_memory();                 // mlockall
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); // RT priority
-    configure_affinity(12);         // CPU core (örnek)
-
+    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+    configure_affinity(12);       
     run(); });
 }
 

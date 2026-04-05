@@ -1,5 +1,7 @@
-#include "flows/NetworkFlow.h"
+#include "NetworkFlow.h"
 #include "config_utils.h"
+
+#include <immintrin.h>
 
 NetworkFlow::NetworkFlow(NetworkIO &netIO) noexcept
     : netIO_(netIO)
@@ -12,9 +14,8 @@ void NetworkFlow::start() noexcept
 
     network_thread_ = std::thread([this] {
    
-    lock_memory();                 // mlockall
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); // RT priority
-    configure_affinity(0);         // CPU core (örnek)
+    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+    configure_affinity(0);         
 
     run(); });
 }

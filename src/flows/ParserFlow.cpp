@@ -1,5 +1,7 @@
-#include "flows/ParserFlow.h"
+#include "ParserFlow.h"
 #include "config_utils.h"
+
+#include <immintrin.h>
 
 ParserFlow::ParserFlow(Parser_Dispatch &parser_dispatch) noexcept
     : parser_dispatch_(parser_dispatch)
@@ -13,9 +15,8 @@ void ParserFlow::start() noexcept
     parser_thread_ = std::thread([this]
                                   {
    
-    lock_memory();                 // mlockall
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); // RT priority
-    configure_affinity(2);         // CPU core (örnek)
+    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+    configure_affinity(2);       
 
     run(); });
 }

@@ -1,5 +1,7 @@
-#include "flows/RiskFlow.h"
+#include "RiskFlow.h"
 #include "config_utils.h"
+
+#include <immintrin.h>
 
 RiskFlow::RiskFlow(RiskEngine &risk) noexcept
     : risk_(risk)
@@ -13,18 +15,16 @@ void RiskFlow::start() noexcept
     risk_check_thread_ = std::thread([this]
                                   {
    
-    lock_memory();                 // mlockall
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); // RT priority
-    configure_affinity(8);         // CPU core (örnek)
+    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+    configure_affinity(8);         
 
     run_check(); });
 
     risk_update_thread_ = std::thread([this]
                                      {
    
-    lock_memory();                 // mlockall
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); // RT priority
-    configure_affinity(10);         // CPU core (örnek)
+    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+    configure_affinity(10);       
 
     run_update(); });
 }
