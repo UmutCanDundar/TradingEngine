@@ -20,6 +20,10 @@
 // - After instruction-cache and data-cache profiling,
 //   OrderHot / OrderCold separation may be introduced
 //   to improve cache locality on matching and risk hot-paths.
+// - SyncState mechanism for FIX is kept temporarily for safety, 
+//   but will be removed in production since strict message ordering is guaranteed 
+//   at the parser layer
+//
 // =============================================================================
 
 #pragma once
@@ -33,27 +37,27 @@
 
 #include <boost/lockfree/spsc_queue.hpp>
 
-enum class SyncState : uint8_t 
+enum class SyncState : int 
 {
     WaitingNew = 0,   
-    NewSeen = 1,       
+    NewSeen = 1,
 };
 
-enum class Side : uint8_t
+enum class Side : int
 {
    Buy = 0,
    Sell = 1,
    Unknown = 2,
 };
 
-enum class OrderType : uint8_t
+enum class OrderType : int
 {
    Unknown = 0,
    Market = 1,
    Limit = 2,
 };
 
-enum class TimeInForce : uint8_t
+enum class TimeInForce : int
 {
    DAY = 0,
    GTC = 1,
@@ -65,21 +69,28 @@ enum class TimeInForce : uint8_t
    Unknown = 99
 };
 
-enum class Status : uint8_t
+enum class Status : int
 {
    Unknown = 0,  
    New = 1,       
    Partial = 2,   
    Filled = 3,    
    Cancelled = 4, 
-   Replaced = 5, 
-   Expired = 6,   
+   Replaced = 5,
+   Deleted = 6, 
+   Expired = 7,
+   CancelRequest = 8,
+
 };
 
 inline constexpr size_t SYMBOL_SIZE = 32;
 inline constexpr size_t ORDER_TOKEN_SIZE = 32;
 inline constexpr size_t FIX_ORDER_ID_SIZE = 32;
 inline constexpr size_t ORDER_IDs_SIZE = 32;
+
+inline constexpr uint8_t STRATEGY_DONE = 0x01;
+inline constexpr uint8_t RISK_DONE = 0x02;
+inline constexpr uint8_t BUILDER_DONE = 0x03;
 
 struct alignas(64) Order // 192B
 {
@@ -97,7 +108,7 @@ struct alignas(64) Order // 192B
    Status status = Status::Unknown;                   
    Venue venue;                                       
    bool isOurOrder = false;       
-   std::atomic<uint8_t> canModify = 0x00;             // Bitmask for allowed modifications
+   std::atomic<uint8_t> canModify = STRATEGY_DONE | RISK_DONE | BUILDER_DONE;         // Bitmask for allowed modifications
    Protocol protocol = Protocol::Unknown;             
    OrderType order_type = OrderType::Unknown;         
    TimeInForce time_in_force = TimeInForce::Unknown;  
@@ -111,21 +122,29 @@ struct alignas(64) Order // 192B
    uint64_t last_update_time = 0;
    uint32_t pre_user_ref_num = 0; // For OUCH-NASDAQ
    uint8_t cancelled_count = 0;
-   SyncState syncState = SyncState::WaitingNew; // For FIX (In case a New Order message is received after an acknowledgment message.)
+   SyncState syncState = SyncState::WaitingNew;    // For FIX (In case a New Order message is received after an acknowledgment message.)
    std::array<Status, 2> StatusesPreNew;        // For FIX
    uint8_t exec_type = 0;                       // For FIX
   
    // 🟡 PROTOCOL - SYMBOL - ACCOUNT DATA for builder
    uint8_t message_type = 0;
    uint8_t account_index = 0;                               
-   std::array<char, SYMBOL_SIZE> symbol{}; 
+   std::array<char, SYMBOL_SIZE> symbol{};
+   uint8_t real_symbol_len = 0; 
+   uint8_t real_cl_ord_token_len = 0; 
 
-   uint8_t pad[5]; 
+   uint8_t pad[3]; 
    //Cache-Line 2
    
    std::array<char, FIX_ORDER_ID_SIZE> fix_org_order_id{};  // For FIX original order ID (This field may be used to hold the existing-order-token for ouch replaced messages)
    std::array<char, ORDER_TOKEN_SIZE> client_order_token{}; // Unique client order token
    //Cache-Line 3
+
+   Order() noexcept = default;
+   Order(const Order&) = delete;
+   Order(Order&&) = delete;
+   Order& operator=(const Order&) = delete;
+   Order& operator=(Order&&) = delete;
 };
 
 inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;

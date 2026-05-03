@@ -19,7 +19,6 @@
 class FixBench_singlethread : public benchmark::Fixture
 {
 public:
-    // objects
     std::unique_ptr<InPacketPoolManager> inPkt_pool;
     std::unique_ptr<SessionManager> sess_mngr;
     std::unique_ptr<SoupBinTcp> sbt;
@@ -27,7 +26,6 @@ public:
     std::unique_ptr<LoginController> login;
     std::unique_ptr<NetworkIO> network_io;
 
-    // queues
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
     spscOutPacketQueue_t receiver_to_parser;
     spscInPacketQueue_t builder_to_sender;
@@ -35,15 +33,12 @@ public:
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
     spscDbQueue_t db_to_parser; 
 
-    // parser
     std::unique_ptr<Parser_Dispatch> parser_dispatch;
 
-    // Helper variables
     SessionState* sess_state;
     OutPacket* pkt;
     MessageWithVenue<MessageTypes_t> msg; 
 
-public:
     virtual void SetUp(const ::benchmark::State&)
     {
         inPkt_pool = std::make_unique<InPacketPoolManager>();
@@ -54,27 +49,27 @@ public:
         login       = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
 
         network_io  = std::make_unique<NetworkIO>(
-            receiver_to_parser,
-            builder_to_sender,
-            *sbt,
-            *sess_mngr,
-            *login,
-            *inPkt_pool
-        );
+                                        receiver_to_parser,
+                                        builder_to_sender,
+                                        *sess_mngr,
+                                        *sbt,
+                                        *login,
+                                        *inPkt_pool
+            );
 
         parser_dispatch = std::make_unique<Parser_Dispatch>(
-            receiver_to_parser,
-            parser_to_store,
-            parser_to_fixbuilder_out,
-            parser_to_fixbuilder_in,
-            *sess_mngr,
-            db_to_parser,
-            *network_io
+                                            receiver_to_parser,
+                                            parser_to_store,
+                                            parser_to_fixbuilder_out,
+                                            parser_to_fixbuilder_in,
+                                            *sess_mngr,
+                                            db_to_parser,
+                                            *network_io
         );
 
         uint8_t sess_index = sess_mngr->getSessionIndex(Venue::BIST, Protocol::FIX);
         sess_state = sess_mngr->getSessionState(sess_index);
-        pkt = &test_data::fix_outpacket;
+        pkt = &test_data::fix_outpacket_full_1;
     }
 
     virtual void TearDown(const ::benchmark::State&)

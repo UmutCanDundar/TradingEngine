@@ -76,6 +76,17 @@ private:
         LOG_ERROR(msg, std::forward<Args>(args)...);
     }
 
+    static constexpr std::string_view toString(ErrorName err) noexcept 
+    {
+        using enum ErrorName;
+        switch (err) 
+        {
+            case InvalidIP:          return "InvalidIP";
+            case CouldNotOpenFile:   return "CouldNotOpenFile";
+            default:                 return "UnknownError";
+        }
+    }
+
 public:
     static bool handleError(int err, uint8_t max_retry = 3) noexcept;
     static bool handleError(ErrorName err, uint8_t max_retry = 3) noexcept;

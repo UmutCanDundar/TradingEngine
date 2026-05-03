@@ -11,6 +11,7 @@ FillerOUCH_BIST::FillerOUCH_BIST(OrderManager &om) noexcept : ord_mngr_(om) {}
 
 void FillerOUCH_BIST::fill_ouch_accepted(Order &order, const BIST::OUT::OUCHOrderAcceptedMessage &msg) noexcept
 {
+
     order.price = static_cast<int64_t>(msg.price);
     order.quantity = static_cast<uint32_t>(msg.quantity);
     order.remaining_quantity = static_cast<uint32_t>(msg.quantity);
@@ -39,12 +40,16 @@ void FillerOUCH_BIST::fill_ouch_replaced(Order &order, const BIST::OUT::OUCHOrde
 
 void FillerOUCH_BIST::fill_ouch_cancelled(Order &order, const BIST::OUT::OUCHOrderCancelledMessage &msg) noexcept
 {
+
     order.last_update_time = msg.timestamp;
-    order.status = Status::Cancelled;
+    order.replaced_quantity = -1 * order.remaining_quantity;
+    order.remaining_quantity = 0;
+    order.status = Status::Deleted;
     order.cancelled_count++;
 }
 void FillerOUCH_BIST::fill_ouch_executed(Order &order, const BIST::OUT::OUCHOrderExecutedMessage &msg) noexcept
 {
+
     order.price = static_cast<int64_t>(msg.trade_price);
     order.filled_quantity += msg.traded_quantity;
     order.last_exec_quantity = msg.traded_quantity;

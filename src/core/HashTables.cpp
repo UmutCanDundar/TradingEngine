@@ -2,7 +2,9 @@
 #include "GeneratedSymbolTables.h"
 
 HashTables::HashTables() noexcept
-{}
+{
+   initialize_all(all_symbol_tables);
+}
 
 size_t HashTables::get_symbol_count(const uint8_t venue_index) const noexcept
 {

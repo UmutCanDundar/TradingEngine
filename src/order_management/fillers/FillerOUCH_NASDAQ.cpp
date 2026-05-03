@@ -11,6 +11,7 @@ FillerOUCH_NASDAQ::FillerOUCH_NASDAQ(OrderManager &om) noexcept : ord_mngr_(om) 
 
 void FillerOUCH_NASDAQ::fill_ouch_accepted(Order &order, const NASDAQ::OUT::OUCHOrderAcceptedMessage &msg) noexcept
 {
+
     order.price = static_cast<int64_t>(msg.price);
     order.quantity = msg.quantity;
     order.remaining_quantity = msg.quantity;
@@ -39,23 +40,17 @@ void FillerOUCH_NASDAQ::fill_ouch_replaced(Order &order, const NASDAQ::OUT::OUCH
 
 void FillerOUCH_NASDAQ::fill_ouch_cancelled(Order &order, const NASDAQ::OUT::OUCHOrderCancelledMessage &msg) noexcept
 {
+    
     order.last_update_time = order.timestamp;
     order.remaining_quantity = (order.remaining_quantity - msg.quantity > 0) ? order.remaining_quantity - msg.quantity : 0;
-    order.replaced_quantity = msg.quantity;
-    if (order.remaining_quantity > 0)
-    {
-        order.status = Status::Replaced;
-        order.replaced_quantity *= -1;
-    }
-    else
-    {
-        order.status = Status::Cancelled;
-    }
+    order.replaced_quantity = -1 * msg.quantity;
+    order.status = Status::Cancelled;
     order.cancelled_count++;
 }
 
 void FillerOUCH_NASDAQ::fill_ouch_executed(Order &order, const NASDAQ::OUT::OUCHOrderExecutedMessage &msg) noexcept
 {
+
     order.price = static_cast<int64_t>(msg.price);
     order.filled_quantity += msg.quantity;
     order.last_exec_quantity = msg.quantity;

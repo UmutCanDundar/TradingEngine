@@ -55,31 +55,31 @@
 
 class SoupBinTcp;
 
-
 struct ExchangeClientInfo_local 
 {
     char client_account[16]; // Client/Account for DM
     char exchange_info[32];  // Account number (first 16 used) for EQM
 
-    ExchangeClientInfo_local()
-    {
-        std::memset(client_account, ' ', 16);
-        std::memset(exchange_info, ' ', 32);
-    }
+    ExchangeClientInfo_local() = default;
 
     ExchangeClientInfo_local(const std::string_view cl_acc, const std::string_view exc_info) 
     {
+        std::memset(client_account, ' ', 16);
+        std::memset(exchange_info, ' ', 32);
+        
         std::memcpy(client_account, cl_acc.data(), std::min(cl_acc.size(), size_t(16)));
         std::memcpy(exchange_info, exc_info.data(), std::min(exc_info.size(), size_t(32)));
     }
 };
 
-struct Buffer_OBT
+struct Buffer_OBT // May be separated per msg type after observing real traffic to avoid unnecessary set to some fields
 {
     static constexpr size_t MAX_MSG_SIZE = 128;
 
     char msg[MAX_MSG_SIZE];
     uint16_t len;
+
+   Buffer_OBT() { std::memset(msg, ' ', MAX_MSG_SIZE); }
 };
 
 class Builder_OUCH_BIST
@@ -105,7 +105,7 @@ private:
     inline char* buildEnterOrder(const Order &order, char *buf) noexcept
     {
         *buf = 'O';
-        std::memcpy(buf + 1, &order.client_order_token, 14);
+        std::memcpy(buf + 1, &order.client_order_token, order.real_cl_ord_token_len);
         Endian::write_u32_be(buf + 15, order.instrument_id);
         *(buf + 19) = order.side == Side::Buy ? 'B' : 'S';
         Endian::write_u64_be(buf + 20, order.quantity);
@@ -113,14 +113,14 @@ private:
         *(buf + 32) = static_cast<uint8_t>(order.time_in_force);
         *(buf + 33) = 0;
         std::memcpy(buf + 34, eci_local_[order.account_index].client_account, 16);
-        std::memset(buf + 50, 0, 15);
+        // std::memset(buf + 50, ' ', 15);
         std::memcpy(buf + 65, eci_local_[order.account_index].exchange_info, 32);
         Endian::write_u64_be(buf + 97, 0);
         *(buf + 105) = 1;
         *(buf + 106) = 0;
         *(buf + 107) = 0;
         *(buf + 108) = 0;
-        std::memset(buf + 109, 0, 3);
+        std::memset(buf + 109, ' ', 3);
         std::memset(buf + 112, 0, 2);
 
         return buf;
@@ -130,12 +130,12 @@ private:
     {
         *buf = 'U';
         std::memcpy(buf + 1, &order.fix_org_order_id, 14);
-        std::memcpy(buf + 15, &order.client_order_token, 14);
+        std::memcpy(buf + 15, &order.client_order_token, order.real_cl_ord_token_len);
         Endian::write_u64_be(buf + 29, order.quantity);
         Endian::write_i32_be(buf + 37, order.price);
         *(buf + 41) = 0;
         std::memcpy(buf + 42, eci_local_[order.account_index].client_account, 16);
-        std::memset(buf + 58, 0, 15);
+        // std::memset(buf + 58, ' ', 15);
         std::memcpy(buf + 73, eci_local_[order.account_index].exchange_info, 32);
         Endian::write_u64_be(buf + 105, 0);
         *(buf + 113) = 1;
@@ -162,7 +162,7 @@ private:
         return buf;
     }
     
-    using OuchHandlerFunc = char *(Builder_OUCH_BIST::*)(const Order &order, char *buf) noexcept;
+    using OuchHandlerFunc = char* (Builder_OUCH_BIST::*)(const Order &order, char *buf) noexcept;
     static constexpr std::array<OuchHandlerFunc, 4> OuchMessageBuilders =
     {
             &Builder_OUCH_BIST::buildEnterOrder,

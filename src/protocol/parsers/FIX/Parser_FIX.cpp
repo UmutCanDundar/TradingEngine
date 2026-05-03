@@ -44,9 +44,9 @@ const std::array<Parser_FIX::TagHandlerFunc, Parser_FIX::MAX_TAG> Parser_FIX::ma
    handlers[54] = [](std::string_view val, FIXMessage *msg) noexcept { msg->side = static_cast<uint8_t>(parseNum(val)); };
    handlers[38] = [](std::string_view val, FIXMessage *msg) noexcept { msg->quantity = static_cast<uint32_t>(parseNum(val)); };
    handlers[40] = [](std::string_view val, FIXMessage *msg) noexcept { msg->ord_type = parseChar(val); };
-   handlers[44] = [](std::string_view val, FIXMessage *msg) noexcept { msg->price = static_cast<int64_t>(parseNum(val)); };
+   handlers[44] = [](std::string_view val, FIXMessage *msg) noexcept { msg->price = static_cast<int64_t>(parsePrice<4>(val)); };
    handlers[32] = [](std::string_view val, FIXMessage *msg) noexcept { msg->last_qty = static_cast<uint32_t>(parseNum(val)); };
-   handlers[31] = [](std::string_view val, FIXMessage *msg) noexcept { msg->last_price = static_cast<int64_t>(parseNum(val)); };
+   handlers[31] = [](std::string_view val, FIXMessage *msg) noexcept { msg->last_price = static_cast<int64_t>(parsePrice<4>(val)); };
    handlers[59] = [](std::string_view val, FIXMessage *msg) noexcept { msg->time_in_force = parseChar(val); };
    handlers[151] = [](std::string_view val, FIXMessage *msg) noexcept { msg->leaves_qty = static_cast<uint32_t>(parseNum(val)); };
    handlers[14] = [](std::string_view val, FIXMessage *msg) noexcept { msg->filled_qty = static_cast<uint32_t>(parseNum(val)); };
@@ -411,6 +411,7 @@ std::pair<char*, size_t> Parser_FIX::nextFixMsg(OutPacket *pkt, size_t& data_off
       else
       {
          pkt->consumed = true;
+         partial_fix_msg_.bodylen_state = BodyLenState::None;
          return {pkt->data.data() + data_offset, msg_len};
       }
 

@@ -13,6 +13,7 @@ FillerITCH_NASDAQ::FillerITCH_NASDAQ(OrderManager &om) noexcept : ord_mngr_(om) 
 
 void FillerITCH_NASDAQ::fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMessage &msg, Venue venue) noexcept
 {
+
     order.price = static_cast<int64_t>(msg.price);
     order.quantity = msg.shares;
     order.remaining_quantity = msg.shares;
@@ -32,13 +33,12 @@ void FillerITCH_NASDAQ::fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMe
 
     order.side = (msg.side == 'B') ? Side::Buy : Side::Sell;
     order.status = Status::New;
-
     order.order_id = msg.order_ref;
     order.timestamp = msg.timestamp;
     order.last_update_time = order.timestamp;
-
     order.message_type = msg.message_type;
     order.protocol = Protocol::ITCH;
+    order.venue = venue;
     order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
 }
 
@@ -69,29 +69,24 @@ void FillerITCH_NASDAQ::fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMP
     order.last_update_time = order.timestamp;
     order.message_type = msg.message_type;
     order.protocol = Protocol::ITCH;
+    order.venue = venue;
     order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
 }
 
 void FillerITCH_NASDAQ::fill_itch_cancel(Order &order, const NASDAQ::ITCHCancelMessage &msg) noexcept
 {
+
     order.last_update_time = msg.timestamp;
     order.remaining_quantity = order.remaining_quantity - msg.cancelled_shares;
     order.replaced_quantity = msg.cancelled_shares;
-    if (order.remaining_quantity > 0)
-    {
-        order.status = Status::Replaced;
-        order.replaced_quantity *= -1;
-    }
-    else
-    {
-        order.status = Status::Cancelled;
-    }
+    order.status = Status::Cancelled;
     order.cancelled_count++;
     order.message_type = msg.message_type;
 }
 
 void FillerITCH_NASDAQ::fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedMessage &msg) noexcept
 {
+
     order.last_update_time = msg.timestamp;
     order.filled_quantity += msg.executed_shares;
     order.last_exec_quantity = msg.executed_shares;
@@ -112,10 +107,11 @@ void FillerITCH_NASDAQ::fill_itch_exec_report(Order &order, const NASDAQ::ITCHEx
 
 void FillerITCH_NASDAQ::fill_itch_delete(Order &order, const NASDAQ::ITCHDeleteMessage &msg) noexcept
 {
-    order.status = Status::Cancelled;
-    order.replaced_quantity = order.remaining_quantity;
+
+    order.status = Status::Deleted;
     order.last_update_time = msg.timestamp;
     order.message_type = msg.message_type;
+    order.cancelled_count++;
 }
 
 void FillerITCH_NASDAQ::fill_itch_replace(Order &order, const NASDAQ::ITCHReplaceMessage &msg, Venue venue) noexcept
@@ -124,7 +120,6 @@ void FillerITCH_NASDAQ::fill_itch_replace(Order &order, const NASDAQ::ITCHReplac
     order.price = msg.price;
     order.quantity = msg.shares;
     order.instrument_id = msg.stock_locate;
-    order.replaced_quantity = order.remaining_quantity;
     order.filled_quantity = 0;
     order.remaining_quantity = msg.shares;
 
@@ -143,6 +138,7 @@ void FillerITCH_NASDAQ::fill_itch_replace(Order &order, const NASDAQ::ITCHReplac
     order.message_type = msg.message_type;
     order.status = Status::Replaced;
     order.protocol = Protocol::ITCH;
+    order.venue = venue;
     order.last_update_time = msg.timestamp;
     order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
 }
@@ -173,5 +169,7 @@ void FillerITCH_NASDAQ::fill_itch_trade(Order &order, const NASDAQ::ITCHTradeMes
 
     order.price = static_cast<int64_t>(msg.price);
     order.status = Status::Filled;
+    order.protocol = Protocol::ITCH;
+    order.venue = venue;
     order.message_type = msg.message_type;
 }

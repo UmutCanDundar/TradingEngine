@@ -295,6 +295,69 @@ private:
         return static_cast<uint8_t>(str[0]);
     }
 
+    template<uint8_t Scale>
+    static inline uint64_t parsePrice(std::string_view price_str) noexcept
+    {
+        static constexpr uint64_t pow10[] = {
+            1ULL, 10ULL, 100ULL, 1000ULL, 10000ULL, 100000ULL, 1000000ULL
+        };
+
+        const char* p   = price_str.data();
+        const char* end = p + price_str.size();
+        uint64_t result = 0;
+
+        while (p < end && *p != '.')
+            result = result * 10 + (*p++ - '0');
+
+        if (UNLIKELY(p == end))
+            return result * pow10[Scale];
+
+        ++p;
+
+        uint8_t frac_digits = 0;
+        const char* frac_end = p + Scale < end ? p + Scale : end;
+
+        while (p < frac_end) {
+            result = result * 10 + (*p++ - '0');
+            ++frac_digits;
+        }
+
+        return result * pow10[Scale - frac_digits];
+    }
 };
 
 
+//  inline uint64_t parsePrice(std::string_view price_str, uint8_t price_scale_shifts) noexcept // price_scale_shifts(only zeros): 4 for 10000
+//     {
+//         static constexpr uint64_t pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000};
+//         uint64_t result = 0;
+       
+//         uint8_t frac_digits = 0;
+//         bool seen_dot = false;
+
+//         for (const auto c : price_str)
+//         {
+//             if (c == '.')
+//             {
+//                 seen_dot = true;
+//                 continue;
+//             }
+
+//             if(seen_dot)
+//             {
+//                 if(frac_digits >= price_scale_shifts)
+//                 break;
+                
+//                 frac_digits++;
+//             }
+                
+//             if (LIKELY(c >= '0' && c <= '9'))
+//             {
+//                 result = result * 10 + (c - '0');
+//             }
+//         }
+
+//         result *= pow10[price_scale_shifts - frac_digits];
+
+//         return result;
+//     }

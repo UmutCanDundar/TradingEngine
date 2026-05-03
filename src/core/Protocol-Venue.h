@@ -5,20 +5,20 @@
 #include <cstdint>
 #include <cstddef>
 
-enum class Protocol : uint8_t
+enum class Protocol : int
 {
 
-   FIX,
-   ITCH,
-   OUCH,
-   Unknown,
+   FIX = 0,
+   ITCH = 1,
+   OUCH = 2,
+   Unknown = 3,
 };
 
-enum class Venue : uint8_t
+enum class Venue : int
 {
-   BIST,
-   NASDAQ,
-   Unknown,
+   BIST = 0,
+   NASDAQ = 1,
+   Unknown = 2,
 };
 
 inline constexpr size_t VENUE_COUNT = 2;

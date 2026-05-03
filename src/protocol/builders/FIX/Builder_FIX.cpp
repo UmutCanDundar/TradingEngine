@@ -36,7 +36,7 @@ char *Builder_FIX::buildHeader(char *buf, size_t body_len, const size_t msg_inde
     auto ts_pair = transact_time();
     body_len += 1 + auth_fix.my_id.size() + auth_fix.venue_id.size() + seqnum_digits + ts_pair.second + 20;
     
-    buf = addTag("8=", 2, "9", 1, buf);
+    buf = addTag("8=", 2, "FIX.4.4", 7, buf);
     buf = addTag("9=", 2, static_cast<uint32_t>(body_len), buf);
     buf = addTag("35=", 3, msg_types[msg_index], 1, buf);
     buf = addTag("49=", 3, auth_fix.my_id.data(), auth_fix.my_id.size(), buf);   
@@ -49,7 +49,7 @@ char *Builder_FIX::buildHeader(char *buf, size_t body_len, const size_t msg_inde
 
 char *Builder_FIX::buildHeader(const Buffer_FIX *org_buf, char *temp, const VenueUserInfo_FIX &auth_fix) noexcept
 {
-    const char* data = org_buf-> data;
+    const char* data = org_buf->data;
     const size_t buf_len = org_buf->len;
    
     auto [type, type_len] = findValue(data, buf_len, "35");
@@ -61,7 +61,7 @@ char *Builder_FIX::buildHeader(const Buffer_FIX *org_buf, char *temp, const Venu
     auto ts_pair = transact_time();
     body_len += 10 + ts_pair.second;
 
-    temp = addTag("8=", 2, "9", 1, temp);
+    temp = addTag("8=", 2, "FIX.4.4", 7, temp);
     temp = addTag("9=", 2, body_len, temp);
     temp = addTag("35=", 3, type, 1, temp);
     temp = addTag("49=", 3, auth_fix.my_id.data(), auth_fix.my_id.size(), temp);
@@ -114,21 +114,21 @@ char* Builder_FIX::buildResendRequest(char *buf, const uint32_t begin_seq, const
 char* Builder_FIX::buildNewOrderSingle(const Order &order, char *buf, uint8_t session_index) noexcept
 {
     auto &fix_auth = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
-
-    buf = addTag("11=", 3, static_cast<uint32_t>(order.client_order_id), buf);
+        
+    buf = addTag("11=", 3, order.client_order_token.data(), 13, buf);
     buf = addTag("1=", 2, fix_auth.account.data(), fix_auth.account.size(), buf);
     buf = addTag("528=", 4, "A", 1, buf);
-    buf = addTag("55=", 3, order.symbol.data(), order.symbol.size(), buf);
+    buf = addTag("55=", 3, order.symbol.data(), order.real_symbol_len, buf);
     buf = addTag("54=", 3, static_cast<uint32_t>(order.side), buf);
 
-    auto ts_pair = transact_time();
+    auto ts_pair = epoch_to_transact_time(order.timestamp);
     buf = addTag("60=", 3, ts_pair.first, ts_pair.second, buf);
 
     buf = addTag("38=", 3, order.quantity, buf);
     buf = addTag("40=", 3, static_cast<uint32_t>(order.order_type), buf);
 
     if (order.order_type == OrderType::Limit)
-        buf = addTag("44=", 3, static_cast<uint32_t>(order.price), buf);
+        buf = addTagPrice<4>("44=", 3, static_cast<uint32_t>(order.price), buf);
 
     buf = addTag("59=", 3, timeinforce[static_cast<size_t>(order.time_in_force)], 1, buf);
 
@@ -139,11 +139,11 @@ char* Builder_FIX::buildCancelRequest(const Order &order, char *buf) noexcept
 {
     buf = addTag("41=", 3, "NONE", 4, buf);
     buf = addTag("37=", 3, order.order_id, buf);
-    buf = addTag("11=", 3, static_cast<uint32_t>(order.client_order_id), buf);
-    buf = addTag("55=", 3, order.symbol.data(), order.symbol.size(), buf);
+    buf = addTag("11=", 3, order.client_order_token.data(), order.real_cl_ord_token_len, buf);
+    buf = addTag("55=", 3, order.symbol.data(), order.real_symbol_len, buf);
     buf = addTag("54=", 3, static_cast<uint32_t>(order.side), buf);
 
-    auto ts_pair = transact_time();
+    auto ts_pair = epoch_to_transact_time(order.timestamp);    
     buf = addTag("60=", 3, ts_pair.first, ts_pair.second, buf);
 
     buf = addTag("38=", 3, order.quantity, buf);
@@ -157,20 +157,20 @@ char* Builder_FIX::buildCancelReplaceRequest(const Order &order, char *buf, uint
 
     buf = addTag("37=", 3, order.order_id, buf);
     buf = addTag("41=", 3, "NONE", 4, buf);
-    buf = addTag("11=", 3, static_cast<uint32_t>(order.client_order_id), buf);
+    buf = addTag("11=", 3, order.client_order_token.data(), order.real_cl_ord_token_len, buf);
     buf = addTag("1=", 2, fix_auth.account.data(), fix_auth.account.size(), buf);
     buf = addTag("528=", 4, "A", 1, buf);
-    buf = addTag("55=", 3, order.symbol.data(), order.symbol.size(), buf);
+    buf = addTag("55=", 3, order.symbol.data(), order.real_symbol_len, buf);
     buf = addTag("54=", 3, static_cast<uint32_t>(order.side), buf);
 
-    auto ts_pair = transact_time();
+    auto ts_pair = epoch_to_transact_time(order.timestamp);
     buf = addTag("60=", 3, ts_pair.first, ts_pair.second, buf);
 
     buf = addTag("38=", 3, order.quantity, buf);
     buf = addTag("40=", 3, static_cast<uint32_t>(order.order_type), buf);
 
     if (order.order_type == OrderType::Limit)
-        buf = addTag("44=", 3, static_cast<uint32_t>(order.price), buf);
+        buf = addTagPrice<4>("44=", 3, static_cast<uint32_t>(order.price), buf);
 
     buf = addTag("59=", 3, timeinforce[static_cast<size_t>(order.time_in_force)], 1, buf);
 
@@ -184,8 +184,8 @@ char* Builder_FIX::finalizeChecksum(char *buf, size_t len) noexcept
         cksum += static_cast<unsigned char>(buf[i]);
     cksum %= 256;
 
-    std::memcpy(buf, "10=", 3);
-    buf += 3;
+    std::memcpy(buf+len, "10=", 3);
+    buf += len + 3;
     buf[0] = '0' + ((cksum / 100) % 10);
     buf[1] = '0' + ((cksum / 10) % 10);
     buf[2] = '0' + (cksum % 10);
@@ -194,25 +194,191 @@ char* Builder_FIX::finalizeChecksum(char *buf, size_t len) noexcept
     return buf;
 }
 
-std::pair<const char *, const size_t> Builder_FIX::transact_time() noexcept
-{
-    static thread_local char ts_buf[24];
-    const auto now = std::chrono::system_clock::now();
-    const std::time_t t = std::chrono::system_clock::to_time_t(now);
-    std::tm tm{};
-    gmtime_r(&t, &tm);
+// std::pair<const char *, const size_t> Builder_FIX::transact_time() noexcept
+// {
+//     static thread_local char ts_buf[32];
 
-    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        now.time_since_epoch()) % 1000;
+//     using namespace std::chrono;
+
+//     const auto now = system_clock::now();
+//     const std::time_t t = system_clock::to_time_t(now);
+
+//     std::tm tm{};
+//     gmtime_r(&t, &tm);
+
+//     const auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
     
-    const int written = std::snprintf(
-        ts_buf, sizeof(ts_buf),
-        "%04d%02d%02d-%02d:%02d:%02d.%03d",
-        tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-        tm.tm_hour, tm.tm_min, tm.tm_sec,
-        static_cast<int>(ms.count()));
+//     const int written = std::snprintf(
+//         ts_buf, sizeof(ts_buf),
+//         "%04d%02d%02d-%02d:%02d:%02d.%03d",
+//         tm.tm_year + 1900, 
+//         tm.tm_mon + 1, 
+//         tm.tm_mday,
+//         tm.tm_hour, 
+//         tm.tm_min, 
+//         tm.tm_sec,
+//         static_cast<int>(ms.count())
+//     );
 
-    return {ts_buf, static_cast<size_t>(written)};
+//     return {ts_buf, static_cast<size_t>(written)};
+// }
+
+// static inline std::pair<const char*, size_t> epoch_to_transact_time(uint64_t ns) noexcept
+// {
+//     static thread_local char ts_buf[32];
+
+//     using namespace std::chrono;
+
+//     const system_clock::time_point tp{nanoseconds(ns)};
+//     const std::time_t t = system_clock::to_time_t(tp);
+
+//     std::tm tm{};
+//     gmtime_r(&t, &tm);
+
+//     const uint32_t ms = (ns / 1'000'000ULL) % 1000;
+
+//     const int written = std::snprintf(
+//         ts_buf, sizeof(ts_buf),
+//         "%04d%02d%02d-%02d:%02d:%02d.%03u",
+//         tm.tm_year + 1900,
+//         tm.tm_mon + 1,
+//         tm.tm_mday,
+//         tm.tm_hour,
+//         tm.tm_min,
+//         tm.tm_sec,
+//         ms
+//     );
+
+//     return {ts_buf, static_cast<size_t>(written)};
+// }
+
+std::pair<const char*, const size_t> Builder_FIX::transact_time() noexcept
+{
+    static thread_local char ts_buf[32];
+
+    using namespace std::chrono;
+
+    const auto now = system_clock::now();
+    const std::time_t t = system_clock::to_time_t(now);
+
+    std::tm tm{};
+    localtime_r(&t, &tm);
+
+    const auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+
+    char* p = ts_buf;
+
+    // YYYY
+    const int y = tm.tm_year + 1900;
+    *p++ = '0' + (y / 1000) % 10;
+    *p++ = '0' + (y / 100) % 10;
+    *p++ = '0' + (y / 10) % 10;
+    *p++ = '0' + (y % 10);
+
+    // MM
+    const int mo = tm.tm_mon + 1;
+    *p++ = '0' + (mo / 10);
+    *p++ = '0' + (mo % 10);
+
+    // DD
+    const int d = tm.tm_mday;
+    *p++ = '0' + (d / 10);
+    *p++ = '0' + (d % 10);
+
+    *p++ = '-';
+
+    // HH
+    const int h = tm.tm_hour;
+    *p++ = '0' + (h / 10);
+    *p++ = '0' + (h % 10);
+
+    *p++ = ':';
+
+    // MM
+    const int m = tm.tm_min;
+    *p++ = '0' + (m / 10);
+    *p++ = '0' + (m % 10);
+
+    *p++ = ':';
+
+    // SS
+    const int s = tm.tm_sec;
+    *p++ = '0' + (s / 10);
+    *p++ = '0' + (s % 10);
+
+    *p++ = '.';
+
+    // mmm
+    const int milli = static_cast<int>(ms.count());
+    *p++ = '0' + (milli / 100);
+    *p++ = '0' + (milli / 10) % 10;
+    *p++ = '0' + (milli % 10);
+
+    return {ts_buf, static_cast<size_t>(p - ts_buf)};
+}
+
+std::pair<const char*, const size_t> Builder_FIX::epoch_to_transact_time(uint64_t ns) noexcept
+{
+    static thread_local char ts_buf[32];
+
+    using namespace std::chrono;
+
+    const system_clock::time_point tp{nanoseconds(ns)};
+    const std::time_t t = system_clock::to_time_t(tp);
+
+    std::tm tm{};
+    localtime_r(&t, &tm);
+
+    const uint32_t ms = (ns / 1'000'000ULL) % 1000;
+
+    char* p = ts_buf;
+
+    // YYYY
+    int y = tm.tm_year + 1900;
+    *p++ = '0' + (y / 1000) % 10;
+    *p++ = '0' + (y / 100) % 10;
+    *p++ = '0' + (y / 10) % 10;
+    *p++ = '0' + (y % 10);
+
+    // MM
+    int mo = tm.tm_mon + 1;
+    *p++ = '0' + (mo / 10);
+    *p++ = '0' + (mo % 10);
+
+    // DD
+    int d = tm.tm_mday;
+    *p++ = '0' + (d / 10);
+    *p++ = '0' + (d % 10);
+
+    *p++ = '-';
+
+    // HH
+    int h = tm.tm_hour;
+    *p++ = '0' + (h / 10);
+    *p++ = '0' + (h % 10);
+
+    *p++ = ':';
+
+    // MM
+    int m = tm.tm_min;
+    *p++ = '0' + (m / 10);
+    *p++ = '0' + (m % 10);
+
+    *p++ = ':';
+
+    // SS
+    int s = tm.tm_sec;
+    *p++ = '0' + (s / 10);
+    *p++ = '0' + (s % 10);
+
+    *p++ = '.';
+
+    // ms
+    *p++ = '0' + (ms / 100);
+    *p++ = '0' + (ms / 10) % 10;
+    *p++ = '0' + (ms % 10);
+
+    return {ts_buf, static_cast<size_t>(p - ts_buf)};
 }
 
 char* Builder_FIX::placeIntValue(uint32_t num, char *buf) noexcept

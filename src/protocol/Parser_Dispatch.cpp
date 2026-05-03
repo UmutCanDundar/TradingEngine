@@ -44,8 +44,9 @@ bool Parser_Dispatch::dispatch() noexcept
       flush_DbQueue();
       PktCount = 1;
    }
-   
+
    (this->*parser_table_[static_cast<size_t>(pkt->protocol)][static_cast<size_t>(pkt->venue)])(pkt);
+   
    if(pkt->release_this_pkt)
       network_io_.releasePacket(pkt);
 

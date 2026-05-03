@@ -79,10 +79,10 @@ bool ErrorHandler::handleError(ErrorName err, uint8_t max_retry) noexcept
    switch (error_strategies[static_cast<uint8_t>(err)])
    {
    case ErrorStrategy::Retry:
-      logError("Retry: {}, Error: {}", error_retry_count, "");
+      logError("Retry: {}, Error: {}", error_retry_count, ErrorHandler::toString(err));
       return BackoffRetry_error(max_retry);
    case ErrorStrategy::Abort:
-      logError("Process Aborted after this error: {}", "");
+      logError("Process Aborted after this error: {}", ErrorHandler::toString(err));
       std::abort();
       break;
    default:

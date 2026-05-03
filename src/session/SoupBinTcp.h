@@ -100,9 +100,11 @@ private:
     __attribute__((always_inline)) 
     inline SBTAction handleLoginAccepted(const char *LoginAcceptedPacket, size_t sess_index) noexcept
     {
-        auto &seq_sbt = sess_mngr_.getSessionState(sess_index)->sbt;
-        seq_sbt.set_sess_id(LoginAcceptedPacket + 3);
-        seq_sbt.set_seq(LoginAcceptedPacket + 13);
+        auto* state = sess_mngr_.getSessionState(sess_index);
+        state->is_logged_in.store(true, std::memory_order_release);
+        state->logged_before.store(true, std::memory_order_release);
+        state->sbt.set_sess_id(LoginAcceptedPacket + 3);
+        state->sbt.set_seq(LoginAcceptedPacket + 13);
         return SBTAction::NotToParser;
     }
     

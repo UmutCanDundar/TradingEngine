@@ -20,7 +20,7 @@ struct MessageWithVenue
     Venue venue;
 
     MessageWithVenue() noexcept = default;
-    MessageWithVenue(T m, Venue ven) noexcept : msg(std::move(m)), venue(ven) {}
+    MessageWithVenue(T m, Venue ven) noexcept : msg(m), venue(ven) {}
 };
 
 inline constexpr size_t MESSAGE_QUEUE_CAPACITY = 1024;

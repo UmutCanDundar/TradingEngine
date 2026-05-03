@@ -269,10 +269,13 @@ struct SessionState
 
     void init(SessionProtocol prot) noexcept 
     {
+        sess_prot = prot;
+        
         switch (prot)
         {
         case SessionProtocol::FIX:
             new (&fix) Sequence_FIX();
+           
             break;
         case SessionProtocol::SBT:
             new (&sbt) Sequence_SBT();

@@ -17,8 +17,8 @@ TradingEngine::TradingEngine() noexcept
       network_io_(
           receiver_to_parser_,
           builder_to_sender_,
-          sbt_,
           session_manager_,
+          sbt_,
           login_,
           inPkt_pool_),
       parser_dispatch_(

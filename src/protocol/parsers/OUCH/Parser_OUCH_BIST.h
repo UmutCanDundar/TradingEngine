@@ -91,9 +91,9 @@ public:
     inline BIST::OUCHMessage parse(const char *data) noexcept
     {
         BIST::OUCHMessage OUCHmsg;
-        size_t index = static_cast<size_t>(BIST::ouchMessageIndex(*data));
+        size_t index = static_cast<size_t>(BIST::ouchMessageIndex(*(data+3)));
         if (index != 99)
-            MessageHandlers[index](*this, data, OUCHmsg);
+            MessageHandlers[index](*this, data+3, OUCHmsg);
         return OUCHmsg;
     }
 };

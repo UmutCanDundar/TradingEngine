@@ -20,7 +20,7 @@ TEST(FixParserTest, NewOrderSingle)
     ASSERT_EQ(msg->seqnum, 1);
 
     ASSERT_EQ(msg->quantity, 100);
-    ASSERT_EQ(msg->price, 1000);
+    ASSERT_EQ(msg->price, 10000);
     ASSERT_EQ(msg->side, 1);
 
     ASSERT_STREQ(msg->symbol, "GARAN");
@@ -63,7 +63,7 @@ TEST(FixParserTest, ExecutionReport)
     ASSERT_EQ(msg->ord_status, '2');
 
     ASSERT_EQ(msg->last_qty, 100);
-    ASSERT_EQ(msg->last_price, 1000);
+    ASSERT_EQ(msg->last_price, 10000);
 
     ASSERT_STREQ(msg->cl_ord_id, "O1");
 

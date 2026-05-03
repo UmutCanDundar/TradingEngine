@@ -42,6 +42,7 @@ std::array<SessionContext, MAX_SESSIONS> SessionManager::initialize_SessionConte
             cxt.tcp_index = context["tcp_index"].get<size_t>();
     
         session_contexts[cxt.socket_index] = std::move(cxt);
+        session_lookup_[static_cast<size_t>(cxt.venue)][static_cast<size_t>(cxt.protocol)][cxt.account_index] = cxt.socket_index;
     }
     return session_contexts;
 }

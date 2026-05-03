@@ -65,7 +65,6 @@ struct SymbolLimit
 struct AccountLimit
 {
     int64_t max_notional; 
-    int64_t max_position; 
     int64_t max_daily_loss;
     int64_t max_unrealized_loss;
     int64_t maker_fee_rate; // in ppm (parts per million)
@@ -77,11 +76,11 @@ struct AccountLimit
 class Limits
 {
     private:
-        std::array<std::vector<SymbolLimit>,VENUE_COUNT> symbol_limits_;
-        std::array<AccountLimit,VENUE_COUNT> account_limits_;
-
         HashTables &hashtables_;
-    
+
+        std::array<std::vector<SymbolLimit>,VENUE_COUNT> symbol_limits_;
+        std::array<AccountLimit, VENUE_COUNT> account_limits_;
+
     public:
         Limits(HashTables &hashtables) noexcept;
 

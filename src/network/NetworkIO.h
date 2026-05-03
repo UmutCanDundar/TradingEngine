@@ -55,6 +55,7 @@ struct SocketState
 class NetworkIO
 {
 private:
+public: // will be removed after test
   static constexpr uint8_t MAX_RETRY_COUNT = 3;
   static constexpr size_t PARTIAL_PACKET_POOL_CAPACITY = 16;
   static constexpr size_t PENDING_CAPACITY = 256;
@@ -65,10 +66,17 @@ private:
   using PartialPacketPool = std::array<OutPacket*, PARTIAL_PACKET_POOL_CAPACITY>;
   size_t next_partialpkt = 0;
   
+  spscOutPacketQueue_t& receiver_to_parser_;
+  spscInPacketQueue_t& builder_to_sender_;
+  SessionManager& sess_mngr_;
+  SoupBinTcp& sbt_;
+  LoginController& login_;
+  InPacketPoolManager& inPkt_pool_;
+
   std::array<uint32_t, MAX_SESSIONS> joined_ips{};
-  std::array<int, MAX_SESSIONS> socks_{};
   int epoll_fd_{-1};
   std::array<SocketState, MAX_SESSIONS> socket_states_;
+  std::array<int, MAX_SESSIONS> socks_{};
 
   PacketPool packet_pool_;
   spscOutPacketQueue_t free_pkt_list_;
@@ -76,15 +84,8 @@ private:
   PendingIN pending_write_;
   PendingOUT pending_read_;
   
-  spscOutPacketQueue_t& receiver_to_parser_;
-  spscInPacketQueue_t& builder_to_sender_;
-  SoupBinTcp& sbt_;
-  SessionManager& sess_mngr_;
-  LoginController& login_;
-  InPacketPoolManager& inPkt_pool_;
-
 public:
-  NetworkIO(spscOutPacketQueue_t &receiver_to_parser, spscInPacketQueue_t &builder_to_sender, SoupBinTcp &sbt, SessionManager &sess_mngr, LoginController &login, InPacketPoolManager &inPkt_pool) noexcept;
+  NetworkIO(spscOutPacketQueue_t &receiver_to_parser, spscInPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool) noexcept;
   ~NetworkIO() noexcept;
 
   void recv_send() noexcept;
@@ -96,6 +97,7 @@ public:
   }
 
   private:
+  public: // will be removed after test
     //COLD 
     std::array<int, MAX_SESSIONS> Init_Sockets() noexcept;
     void makeSocketNonBlocking(int sock) noexcept;
@@ -111,15 +113,20 @@ public:
     void send(InPacket &inPkt, const int sock, const uint8_t index, SocketState &states) noexcept;
     void handleEINPROGRESS(const int sock, SocketState &states, const uint8_t index) noexcept;
     bool SBTPacketHandler(OutPacket* outPkt, const size_t len, PendingQueue<OutPacket *, PENDING_CAPACITY>& pend_read, const size_t index) noexcept;
-
     inline void trySend(InPacket &inPkt) noexcept 
     {
       size_t index = inPkt.sock_index;
       int sock = socks_[index];
       auto &states = socket_states_[index];
 
-      if (UNLIKELY(!sess_mngr_.isSessionLoggedIn(index)) && !inPkt.is_login_msg)
+      if(LIKELY(!states.connection_pending))
       {
+        if (UNLIKELY(!sess_mngr_.isSessionLoggedIn(index)) && !inPkt.is_login_msg)
+          return;
+      }
+      else
+      {
+        pending_write_[index].push(&inPkt);
         return;
       }
 
@@ -137,9 +144,9 @@ public:
     static inline uint64_t epollPackData(size_t socket_index, Venue ven, Protocol prot) noexcept
     {
       uint64_t data = 0;
-      data |= static_cast<uint64_t>(socket_index) & 0xFFFF;
-      data |= (static_cast<uint64_t>(static_cast<uint8_t>(ven)) & 0xFF) << 16;
-      data |= (static_cast<uint64_t>(static_cast<uint8_t>(prot)) & 0xFF) << 24;
+      data |= static_cast<uint64_t>(socket_index);
+      data |= (static_cast<uint64_t>(static_cast<uint8_t>(ven))) << 8;
+      data |= (static_cast<uint64_t>(static_cast<uint8_t>(prot))) << 16;
 
       return data;
     } 
@@ -148,11 +155,11 @@ public:
     static inline T epollUnpackData(uint64_t data) noexcept
     {
       if constexpr (std::is_same_v<T, size_t>)
-        return static_cast<size_t>(data & 0xFFFF);
+        return static_cast<size_t>(data & 0xFF);
       else if constexpr (std::is_same_v<T, Venue>)
-        return static_cast<Venue>((data >> 16) & 0xFF);
+        return static_cast<Venue>((data >> 8) & 0xFF);
       else if constexpr (std::is_same_v<T, Protocol>)
-        return static_cast<Protocol>((data >> 24) & 0xFF);
+        return static_cast<Protocol>((data >> 16) & 0xFF);
       else
         __builtin_unreachable();
       

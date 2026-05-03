@@ -3,7 +3,7 @@
 
 #include <cstring>
 
-#include <iostream>
+
 
 Parser_OUCH_BIST::Parser_OUCH_BIST() noexcept
 {
@@ -25,7 +25,6 @@ const std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MES
       m->pre_trade_qty = Endian::read_u64_be(data + 114);
       m->display_qty = Endian::read_u64_be(data + 122);
       m->order_book_id = Endian::read_u32_be(data + 23);
-      std::cout << "orderbook" <<m->order_book_id;
       m->price = Endian::read_i32_be(data + 44);
       m->message_type = data[0];
       std::memcpy(&m->order_token, data + 9, 14);

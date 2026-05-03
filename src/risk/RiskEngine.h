@@ -58,6 +58,7 @@
 #include <cstddef>
 #include <vector>
 #include <atomic>
+#include <x86intrin.h>
 
 #include <boost/lockfree/spsc_queue.hpp>
 #include <absl/container/flat_hash_map.h>
@@ -105,7 +106,8 @@ enum AccountStatus : uint8_t
 struct alignas(64) AccountRisk // May be refactored after profiling to mitigate false sharing
 {
     std::atomic<int64_t> current_exposure{0}; 
-    std::atomic<int64_t> balance{0};           
+    std::atomic<int64_t> balance{10'000'000};
+    std::atomic<int64_t> positional_exposure{0};            
     std::atomic<int64_t> used_margin{0};       
     std::atomic<int64_t> current_leverage{1};   
     std::atomic<int64_t> daily_realized_pnl{0};
@@ -118,6 +120,12 @@ struct alignas(64) AccountRisk // May be refactored after profiling to mitigate 
     OrderRateLimit orderratelimit;    
     CancelRateLimit cancelratelimit;   
     uint8_t pad2[16]; 
+
+    AccountRisk() noexcept = default;
+    AccountRisk(const AccountRisk&) = delete;
+    AccountRisk& operator=(const AccountRisk&) = delete;
+    AccountRisk(AccountRisk&&) = delete;
+    AccountRisk& operator=(AccountRisk &&) = delete;
 };
 
 // ==========================
@@ -126,15 +134,15 @@ struct alignas(64) AccountRisk // May be refactored after profiling to mitigate 
 struct alignas(64) SymbolRisk // May be refactored after profiling to mitigate false sharing
 {
     // ----- Hot state -----
-    std::atomic<int64_t> net_position_scaled{0};     
+    std::atomic<int64_t> net_position{0};     
     std::atomic<int64_t> cost_basis_scaled{0};       
-    std::atomic<int64_t> unrealized_pnl{0};          
+    std::atomic<int64_t> unrealized_pnl{0};
+    std::atomic<int64_t> realized_pnl{0};
     std::atomic<int64_t> pending_notional_scaled{0}; 
     std::atomic<int64_t> best_bid{0}; 
-    std::atomic<int64_t> best_ask{0}; 
+    std::atomic<int64_t> best_ask{0};
+    std::atomic<int32_t> avg_entry_price{0};
     std::atomic<int32_t> open_orders_count{0};
-
-    uint8_t pad1[12]; 
 
     OrderRateLimit orderratelimit; 
     CancelRateLimit cancelratelimit; 
@@ -143,8 +151,8 @@ struct alignas(64) SymbolRisk // May be refactored after profiling to mitigate f
     SymbolRisk() noexcept = default;
     SymbolRisk(const SymbolRisk&) = delete;
     SymbolRisk& operator=(const SymbolRisk&) = delete;
-    SymbolRisk(SymbolRisk&&) noexcept {}
-    SymbolRisk &operator=(SymbolRisk &&) noexcept { return *this; }
+    SymbolRisk(SymbolRisk&&) = delete;
+    SymbolRisk& operator=(SymbolRisk &&) = delete;
 };
 
 
@@ -153,37 +161,39 @@ struct alignas(64) SymbolRisk // May be refactored after profiling to mitigate f
 // ==========================
 struct alignas(64) OrderRisk // May be refactored after profiling to mitigate false sharing
 {
-    std::atomic<int64_t> price_scaled{0};       
+    std::atomic<int64_t> price{0};       
     uint32_t symbol_index{0};      // immutable
     std::atomic<uint32_t> remaining_qty{0};     
     Side side {Side::Unknown};     // immutable
     std::atomic<Status> status{Status::Unknown};
-    std::atomic<bool> active{false}; 
+    std::atomic<bool> active{false};
+    Venue venue{Venue::Unknown};     // immutable 
     
-    uint8_t pad[45]; // alignment padding
+    uint8_t pad[44]; // alignment padding
 
     OrderRisk() noexcept = default;
     OrderRisk(const OrderRisk&) = delete;
     OrderRisk& operator=(const OrderRisk&) = delete;
-    OrderRisk(OrderRisk&&) noexcept {}
-    OrderRisk& operator=(OrderRisk&&) noexcept { return *this; }
+    OrderRisk(OrderRisk&&) = delete;
+    OrderRisk& operator=(OrderRisk&&) = delete;
 };
 
 struct OrderRiskKey {
     uint32_t symbol_index;
-    int64_t price_scaled;
+    int64_t price;
     uint8_t side;
+    uint8_t venue;
 
     bool operator==(const OrderRiskKey &other) const noexcept 
     {
-        return (symbol_index == other.symbol_index) & (price_scaled == other.price_scaled) & (side == other.side);
+        return (symbol_index == other.symbol_index) & (price == other.price) & (side == other.side) & (venue == other.venue);
     }
 };
 
 struct OrderRiskHash {
     size_t operator()(const OrderRiskKey &k) const noexcept 
     {  
-        uint64_t h = (static_cast<uint64_t>(k.symbol_index) << 48) ^ static_cast<uint64_t>(k.price_scaled << 1) ^ static_cast<uint64_t>(k.side);
+        uint64_t h = (static_cast<uint64_t>(k.symbol_index) << 48) | static_cast<uint64_t>(k.price << 16) | static_cast<uint64_t>(k.side << 8) | static_cast<uint64_t>(k.venue);
         return absl::Hash<uint64_t>()(h);
     }
 };
@@ -197,7 +207,8 @@ struct OrderMetrics
     
    
     OrderMetrics(const Order &order) noexcept
-        : nominal(order.price * static_cast<int64_t>(order.last_exec_quantity)), notional(order.price * static_cast<int64_t>(order.quantity)), 
+        : nominal(order.price * static_cast<int64_t>(order.last_exec_quantity)), 
+          notional(order.price * static_cast<int64_t>(order.quantity)), 
           replaced(order.price * static_cast<int64_t>(order.replaced_quantity)),
           side_mult(order.side == Side::Buy ? 1 : -1) {}
 };
@@ -212,7 +223,7 @@ enum class RiskRejectReason : uint32_t
     MinOrderSizeExceeded = 1 << 2,    // Order quantity is below the minimum allowed order size (lot-based)
     InvalidLotSize = 1 << 3,          // Order quantity does not conform to the required lot / step size
 
-    NotionalOrderValueExceeded = 1 << 4, // Order notional value exceeds per-order notional limit
+    MaxOrderNotionalLimitExceeded = 1 << 4, // Order notional value exceeds per-order notional limit
     MaxNotionalLimitExceeded = 1 << 5,  // Resulting total notional exposure exceeds the maximum allowed limit
 
     MaxOpenOrdersReachedAccount = 1 << 6, // Maximum number of open orders reached at account level
@@ -222,7 +233,7 @@ enum class RiskRejectReason : uint32_t
     PriceTickInvalid = 1 << 8,       // Order price does not conform to the instrument tick size
     InvalidPriceRange = 1 << 9,      // Order price deviates excessively from reference/market price
     FatFingerCheckFailed = 1 << 10,   // Fat-finger protection triggered (abnormal size or price deviation)
-    PriceOutsideMarketBand = 1 << 11, // Order price is outside exchange-defined price bands
+    // PriceOutsideMarketBand = 1 << 11, // Order price is outside exchange-defined price bands
 
     // Order Rate & Frequency Limits
     MaxOrderRateLimitExceededAccount = 1 << 12,  // Account-level order submission rate limit exceeded
@@ -233,7 +244,7 @@ enum class RiskRejectReason : uint32_t
 
     // Self-Trade Prevention & Duplication
     SelfTradeDetected = 1 << 16, // Self-trade detected (crossing orders from same account/strategy)
-    DuplicateOrderID = 1 << 17,  // Order ID has already been used
+    // DuplicateOrderID = 1 << 17,  // Order ID has already been used
 
     // Account & Margin Constraints
     RestrictedAccountStatus = 1 << 18,    // Account is restricted, suspended, or not authorized for trading
@@ -257,8 +268,8 @@ enum class RiskRejectReason : uint32_t
 
 struct OrderWithRejectReason
 {
-    Order &order;
-    uint32_t RejectReason;
+    Order *order = nullptr;
+    uint32_t RejectReason = 0;
 };
 
 inline constexpr size_t REJECTORDER_QUEUE_SIZE = 1024;
@@ -266,8 +277,9 @@ using spscRejectOrderQueue_t = boost::lockfree::spsc_queue<OrderWithRejectReason
 
 class RiskEngine
 {
-private:
-    static constexpr size_t ORDERRISK_POOL_CAPACITY = 65536; 
+public:
+    static constexpr size_t ORDERRISK_POOL_CAPACITY = 65536;
+    static constexpr size_t MAX_SYMBOL_COUNT = 512; 
 
     std::array<OrderRisk, ORDERRISK_POOL_CAPACITY> orderrisk_pool_;
     size_t orderrisk_next_slot = 0;
@@ -278,7 +290,7 @@ private:
     spscOrderQueue_t &risk_to_builder_;
 
     std::array<AccountRisk, VENUE_COUNT> accountrisks_;
-    std::array<std::vector<SymbolRisk>, VENUE_COUNT> symbolrisks_;
+    std::array<std::array<SymbolRisk, MAX_SYMBOL_COUNT>, VENUE_COUNT> symbolrisks_;
     std::array<absl::flat_hash_map<OrderRiskKey, OrderRisk*, OrderRiskHash>, VENUE_COUNT> orderrisks_;
 
     HashTables &hashtables_;
@@ -308,7 +320,7 @@ private:
     bool check_venue_halt_and_circuit(Order &order, const SymbolMeta &symbolmeta) noexcept;
     bool check_order_rate_limit(AccountRisk &accRisk, SymbolRisk &symRisk, Order &order) noexcept;
     bool check_cancel_rate_limit(AccountRisk &accRisk, SymbolRisk &symRisk, Order &order) noexcept;
-    uint32_t check_price_tick_valid(int64_t price_scaled, const SymbolMeta &symbolmeta) noexcept;
+    uint32_t check_price_tick_valid(int64_t price, const SymbolMeta &symbolmeta) noexcept;
 
     inline uint32_t check_quantity_bounds(uint32_t qty, uint32_t min_qty, uint32_t max_qty, uint32_t round_lot_size) noexcept
     {
@@ -336,150 +348,257 @@ private:
         return 0;
     }
 
-    inline uint32_t check_self_trade_order(const auto &orderrisks_, const Order &order, const uint8_t venue_index) noexcept
+    inline uint32_t check_self_trade_order(const Order &order, const uint8_t venue_index) noexcept
     {
-        OrderRiskKey key{order.symbol_index, order.price, !static_cast<uint8_t>(order.side)};
+        OrderRiskKey key{order.symbol_index, order.price, !static_cast<uint8_t>(order.side), venue_index};
         auto it = orderrisks_[venue_index].find(key);    
-
+    
         if(it != orderrisks_[venue_index].end() && it->second->active.load(std::memory_order_acquire))
                     return static_cast<uint32_t>(RiskRejectReason::SelfTradeDetected);
         
         return 0;
     }
 
-    inline uint32_t check_notional_value(int64_t price_scaled, uint32_t qty, int64_t max_notional_scaled) noexcept
+    inline uint32_t check_notional_value(int64_t price, uint32_t qty, int64_t max_notional_scaled) noexcept
     {
-        int64_t notional = price_scaled * qty;
+        int64_t notional = price * qty;
         if (UNLIKELY(notional > max_notional_scaled))
-            return static_cast<uint32_t>(RiskRejectReason::NotionalOrderValueExceeded);
+            return static_cast<uint32_t>(RiskRejectReason::MaxOrderNotionalLimitExceeded);
         return 0;
     }
 
-    inline uint32_t check_max_position_limit(int64_t net_position_scaled, int64_t max_position_scaled) noexcept
+    inline uint32_t check_max_position_limit(int64_t net_position_scaled, int64_t order_qty, Side side, int64_t max_position_scaled) noexcept
     {
-        if (UNLIKELY(std::llabs(net_position_scaled) > std::llabs(max_position_scaled)))
+        const auto side_mult = (side == Side::Buy) ? 1 : -1;
+        const int64_t projected_position = net_position_scaled + (side_mult * order_qty);
+
+        if (UNLIKELY(std::llabs(projected_position) > std::llabs(max_position_scaled)))
             return static_cast<uint32_t>(RiskRejectReason::MaxPositionLimitExceeded);
-
         return 0;
     }
 
-    inline uint32_t check_account_risk(Order &order, AccountRisk &accRisk, const AccountLimit &accLim, const int64_t price_scaled, const uint32_t qty) noexcept
-    {
-        uint32_t reason = 0;
-        
-        auto leverage = accRisk.current_leverage.load(std::memory_order_acquire);
-        
-        reason |=
-            check_acc_status(accRisk.status.load(std::memory_order_acquire)) |
-            check_max_leverage(leverage, accLim.max_leverage) |
-            check_max_drawdown(accRisk.daily_realized_pnl.load(std::memory_order_acquire), accLim.max_daily_loss);
-
-        if (order.price > 0 && order.order_type == OrderType::Limit)
-        {
-            auto balance = accRisk.balance.load(std::memory_order_acquire);
-            int64_t estimated_notional = price_scaled * qty;
-            int64_t estimated_margin_needed = estimated_notional / leverage * 1'000'000ULL; 
-
-            reason |=
-                check_free_margin(balance, accRisk.total_unrealized_pnl.load(std::memory_order_acquire), estimated_margin_needed, accRisk.used_margin.load(std::memory_order_acquire)) |
-                check_balance(balance, estimated_margin_needed) |
-                check_max_notional(accRisk.current_exposure.load(std::memory_order_acquire), estimated_notional, accLim.max_notional);
-        }
-
-        return reason; 
-    }
-
-    inline uint32_t check_market_data_and_price_band_helper(int64_t best_bid_scaled, int64_t best_ask_scaled, int64_t price_scaled, int64_t max_price_deviation) noexcept
+    inline uint32_t check_market_data_and_deviation(int64_t best_bid_scaled, int64_t best_ask_scaled, int64_t price, int64_t max_price_deviation) noexcept
     {
         if (UNLIKELY(best_bid_scaled == 0 && best_ask_scaled == 0))
             return static_cast<uint32_t>(RiskRejectReason::MarketDataUnavailable);
 
         int64_t mid_price = (best_bid_scaled + best_ask_scaled) / 2;
 
-        if (UNLIKELY(max_price_deviation > 0 && std::llabs(price_scaled - mid_price) > max_price_deviation))
+        if (UNLIKELY(max_price_deviation > 0 && std::llabs(price - mid_price) > max_price_deviation))
         {
-            return static_cast<uint32_t>(RiskRejectReason::PriceOutsideMarketBand);
+            return static_cast<uint32_t>(RiskRejectReason::InvalidPriceRange);
         }
 
         return 0; 
     }
 
-    inline uint32_t check_fat_finger_quantity(uint32_t qty, uint32_t fat_finger_qty_threshold) noexcept
+    inline uint32_t check_fat_finger(uint32_t qty, uint32_t fat_finger_qty_threshold, int64_t price, int64_t best_bid_scaled, int64_t best_ask_scaled, int64_t fat_finger_ratio_scaled) noexcept
     {
-        if (UNLIKELY(qty >= fat_finger_qty_threshold))
-            return static_cast<uint32_t>(RiskRejectReason::FatFingerCheckFailed);
+        int64_t mid = (best_bid_scaled + best_ask_scaled) / 2;
 
+        if (LIKELY(mid > 0))
+        {
+            int64_t ratio = (price * 1000) / mid;
+
+            if (UNLIKELY(qty >= fat_finger_qty_threshold && ratio > fat_finger_ratio_scaled))
+                return static_cast<uint32_t>(RiskRejectReason::FatFingerCheckFailed);
+        }
+        
         return 0;
     }
 
-    inline uint32_t check_fat_finger_price_ratio(int64_t price_scaled, int64_t best_bid_scaled, int64_t best_ask_scaled, int64_t fat_finger_ratio_scaled) noexcept
+    inline uint32_t check_account_risk(Order &order, AccountRisk &accRisk, const AccountLimit &accLim, SymbolRisk &symRisk, const int64_t price, const uint32_t qty) noexcept
     {
-        int64_t mid_price = (best_bid_scaled + best_ask_scaled) / 2;
+        uint32_t reason = 0;
 
-        if (UNLIKELY(mid_price > 0))
+        const int64_t balance          = accRisk.balance.load(std::memory_order_acquire);
+        const int64_t current_exposure = accRisk.current_exposure.load(std::memory_order_acquire);
+        const int64_t used_margin      = accRisk.used_margin.load(std::memory_order_acquire);
+        const int64_t unrealized_pnl   = accRisk.total_unrealized_pnl.load(std::memory_order_acquire);
+        const int64_t realized_pnl     = accRisk.daily_realized_pnl.load(std::memory_order_acquire);
+        const int64_t avg              = symRisk.avg_entry_price.load(std::memory_order_acquire);
+        const int64_t best_bid         = symRisk.best_bid.load(std::memory_order_acquire);
+        const int64_t estimated_notional = price * static_cast<int64_t>(qty);
+
+        reason |= check_acc_status(accRisk.status.load(std::memory_order_acquire));
+        reason |= check_max_leverage(balance, current_exposure, estimated_notional, accLim.max_leverage);
+        reason |= check_max_drawdown(realized_pnl, avg, price, qty, order.side, accLim.max_daily_loss);
+        reason |= check_unrealized_loss(unrealized_pnl, best_bid, avg, price, qty, order.side, accLim.max_unrealized_loss);
+
+        if (order.price > 0 && order.order_type == OrderType::Limit)
         {
-            int64_t ratio_check = price_scaled / mid_price;
-            if (UNLIKELY(ratio_check > fat_finger_ratio_scaled))
-                return static_cast<uint32_t>(RiskRejectReason::InvalidPriceRange);
+            reason |= check_free_margin(balance, unrealized_pnl, estimated_notional, used_margin);
+            reason |= check_balance(balance, estimated_notional);
+            reason |= check_max_notional(current_exposure, estimated_notional, accLim.max_notional);
         }
 
-        return 0;
+        return reason;
     }
 
     // Helper functions associated with the other private functions
     void update_unrealized_pnl(SymbolRisk &symRisk, int64_t best_bid, int64_t best_ask) noexcept;
     
+
     inline uint32_t check_acc_status(AccountStatus status) noexcept
-    {
-        if (UNLIKELY(status != AccountStatus::Active))
-            return static_cast<uint32_t>(RiskRejectReason::RestrictedAccountStatus);
+        {
+            if (UNLIKELY(status != AccountStatus::Active))
+                return static_cast<uint32_t>(RiskRejectReason::RestrictedAccountStatus);
 
-        return 0;
-    }
-
-    inline uint32_t check_free_margin(const int64_t balance, const int64_t total_unrealized_pnl, const __int128 &estimated_margin_needed, const int64_t used_margin) noexcept
+            return 0;
+        }
+        inline uint32_t check_free_margin(const int64_t balance, const int64_t total_unrealized_pnl, const int64_t estimated_notional, const int64_t used_margin) noexcept
     {
         const int64_t equity = balance + total_unrealized_pnl;
         const int64_t free_margin = equity - used_margin;
 
-        if (UNLIKELY(free_margin < estimated_margin_needed))
+        if (UNLIKELY(free_margin < estimated_notional))
             return static_cast<uint32_t>(RiskRejectReason::FreeMarginInsufficient);
         
         return 0;
     }
 
-    inline uint32_t check_balance(const int64_t balance, const int64_t &estimated_margin_needed) noexcept
+    inline uint32_t check_balance(const int64_t balance, const int64_t estimated_notional) noexcept
     {
-        if (UNLIKELY(balance < estimated_margin_needed))
+        if (UNLIKELY(balance < estimated_notional))
             return static_cast<uint32_t>(RiskRejectReason::AccountBalanceInsufficient);
         
         return 0;
     }
 
-    inline uint32_t check_max_leverage(const int64_t current_leverage, const int64_t max_leverage) noexcept
+    inline uint32_t check_max_leverage(const int64_t balance, const int64_t current_exposure, const int64_t estimated_notional, const int64_t max_leverage) noexcept
     {
-        if (UNLIKELY(current_leverage > max_leverage))
+        if (UNLIKELY(balance <= 0))
+            return static_cast<uint32_t>(RiskRejectReason::MaxLeverageExceeded);
+
+        const int64_t projected_leverage = (current_exposure + estimated_notional) * 10000 / balance;
+
+        if (UNLIKELY(projected_leverage > max_leverage))
             return static_cast<uint32_t>(RiskRejectReason::MaxLeverageExceeded);
         
         return 0;
     }
 
-    inline uint32_t check_max_notional(const int64_t current_exposure, const int64_t &estimated_notional, const int64_t max_notional) noexcept
+    inline uint32_t check_max_notional(const int64_t current_exposure, const int64_t estimated_notional, const int64_t max_notional) noexcept
     {
         if (UNLIKELY((current_exposure + estimated_notional) > max_notional))
             return static_cast<uint32_t>(RiskRejectReason::MaxNotionalLimitExceeded);
         return 0;
-        
     }
 
-    inline uint32_t check_max_drawdown(const int64_t daily_realized_pnl, const int64_t max_daily_loss) noexcept
+    inline uint32_t check_max_drawdown(const int64_t daily_realized_pnl, const int64_t avg, const int64_t price, const uint32_t qty, const Side side, const int64_t max_daily_loss) noexcept
     {
-        if (UNLIKELY(daily_realized_pnl <= -max_daily_loss))
+        const int64_t projected_realized = daily_realized_pnl + (side == Side::Sell 
+            ? (price - avg) * static_cast<int64_t>(qty) 
+            : 0);
+
+        if (UNLIKELY(projected_realized < -max_daily_loss))
             return static_cast<uint32_t>(RiskRejectReason::RealizedLossLimitExceeded);
         
         return 0;
     }
 
+    inline uint32_t check_unrealized_loss(const int64_t total_unrealized_pnl, const int64_t best_bid, const int64_t avg, const int64_t price, const uint32_t qty, const Side side, const int64_t max_unrealized_loss) noexcept
+    {
+        const int64_t projected_unrealized = side == Side::Buy
+            ? total_unrealized_pnl + (best_bid - price) * static_cast<int64_t>(qty)
+            : total_unrealized_pnl - (best_bid - avg) * static_cast<int64_t>(qty);
+
+        if (UNLIKELY(projected_unrealized < -max_unrealized_loss))
+            return static_cast<uint32_t>(RiskRejectReason::UnrealizedLossLimitExceeded);
+        
+        return 0;
+    }
+
+
+
+//     inline uint32_t check_account_risk(Order &order, AccountRisk &accRisk, const AccountLimit &accLim, SymbolRisk &symRisk, const int64_t price, const uint32_t qty) noexcept
+// {
+//     uint32_t reason = 0;
+//     const int64_t balance = accRisk.balance.load(std::memory_order_acquire);
+//     const int64_t avg = symRisk.avg_entry_price.load(std::memory_order_acquire);
+//     const int64_t best_bid = symRisk.best_bid.load(std::memory_order_acquire);
+
+//     const int64_t projected_realized = accRisk.daily_realized_pnl.load(std::memory_order_acquire)
+//         + (order.side == Side::Sell ? (price - avg) * qty : 0);
+
+//     const int64_t current_unrealized = accRisk.total_unrealized_pnl.load(std::memory_order_acquire);
+//     const int64_t projected_unrealized = order.side == Side::Buy
+//         ? current_unrealized + (best_bid - price) * qty
+//         : current_unrealized - (best_bid - avg) * qty;
+
+//     const int64_t projected_exposure = accRisk.current_exposure.load(std::memory_order_acquire) 
+//         + price * qty;
+//     const int64_t projected_leverage = balance > 0 ? projected_exposure * 10000 / balance : 0;
+
+//     reason |=
+//         check_acc_status(accRisk.status.load(std::memory_order_acquire)) |
+//         check_max_leverage(projected_leverage, accLim.max_leverage) |
+//         check_max_drawdown(projected_realized, accLim.max_daily_loss) |
+//         check_unrealized_loss(projected_unrealized, accLim.max_unrealized_loss);
+
+//     if (order.price > 0 && order.order_type == OrderType::Limit)
+//     {
+//         const int64_t estimated_notional = price * qty;
+//         const int64_t estimated_margin_needed = estimated_notional / projected_leverage * 1'000'000ULL;
+
+//         reason |=
+//             check_free_margin(balance, current_unrealized, estimated_margin_needed, accRisk.used_margin.load(std::memory_order_acquire)) |
+//             check_balance(balance, estimated_margin_needed) |
+//             check_max_notional(accRisk.current_exposure.load(std::memory_order_acquire), estimated_notional, accLim.max_notional);
+//     }
+
+//     return reason;
+// }
+
+    // inline uint32_t check_free_margin(const int64_t balance, const int64_t total_unrealized_pnl, const __int128 &estimated_margin_needed, const int64_t used_margin) noexcept
+    // {
+    //     const int64_t equity = balance + total_unrealized_pnl;
+    //     const int64_t free_margin = equity - used_margin;
+
+    //     if (UNLIKELY(free_margin < estimated_margin_needed))
+    //         return static_cast<uint32_t>(RiskRejectReason::FreeMarginInsufficient);
+        
+    //     return 0;
+    // }
+
+    // inline uint32_t check_balance(const int64_t balance, const int64_t &estimated_margin_needed) noexcept
+    // {
+    //     if (UNLIKELY(balance < estimated_margin_needed))
+    //         return static_cast<uint32_t>(RiskRejectReason::AccountBalanceInsufficient);
+        
+    //     return 0;
+    // }
+
+    // inline uint32_t check_max_leverage(const int64_t projected_leverage, const int64_t max_leverage) noexcept
+    // {
+    //     if (UNLIKELY(current_leverage > max_leverage))
+    //         return static_cast<uint32_t>(RiskRejectReason::MaxLeverageExceeded);
+        
+    //     return 0;
+    // }
+
+    // inline uint32_t check_max_notional(const int64_t projected_exposure, const int64_t max_notional) noexcept
+    // {
+    //     if (UNLIKELY(projected_exposure > max_notional))
+    //         return static_cast<uint32_t>(RiskRejectReason::MaxNotionalLimitExceeded);
+    //     return 0;
+        
+    // }
+
+    // inline uint32_t check_max_drawdown(const int64_t projected_realized_pnl, const int64_t max_daily_loss) noexcept
+    // {
+    //     if (UNLIKELY(projected_realized_pnl <= -max_daily_loss))
+    //         return static_cast<uint32_t>(RiskRejectReason::RealizedLossLimitExceeded);
+        
+    //     return 0;
+    // }
+
+    // inline uint32_t check_unrealized_loss(int64_t projected_unrealized, int64_t max_unrealized_loss) noexcept
+    // {
+    //     if (UNLIKELY(projected_unrealized <= -max_unrealized_loss))
+    //         return static_cast<uint32_t>(RiskRejectReason::UnrealizedLossLimitExceeded);
+    //     return 0;
+    // }
     
 };
 

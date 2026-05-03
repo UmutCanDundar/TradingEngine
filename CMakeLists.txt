@@ -18,7 +18,7 @@ target_compile_options(project_options INTERFACE
     -mavx2
     -mavx
     $<$<NOT:$<CONFIG:Release>>:-fno-omit-frame-pointer>
-    $<$<NOT:$<CONFIG:Release>>:-fno-sized-deallocation>
+    # $<$<NOT:$<CONFIG:Release>>:-fno-sized-deallocation>
     # $<$<NOT:$<CONFIG:Release>>:-fsanitize=address,undefined>
     # $<$<NOT:$<CONFIG:Release>>:-fno-optimize-sibling-calls>
     # $<$<NOT:$<CONFIG:Release>>:-fno-inline>

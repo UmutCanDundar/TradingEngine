@@ -143,6 +143,7 @@ struct ITCHTradeMessage {
     char reserved2[7] = {};               // Reserved | offset: 41, len: 7
     char printable = '\0';                // Printable (Y/N) | offset: 48, len: 1
     char occurred_at_cross = '\0';        // Occurred at cross (Y/N) | offset: 49, len: 1
+    uint8_t order_id = 0;                 // dummy: enables requires{msg->order_id} branch in OrderManager, never read
 };
 
 struct ITCHEquilibriumPriceUpdateMessage {

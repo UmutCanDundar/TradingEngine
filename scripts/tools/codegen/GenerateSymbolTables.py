@@ -1,5 +1,5 @@
 
-venue_symbols = [ { "BIST": ["A","B","C"]}, {"NASDAQ": ["AAPL", "MSFT", "GOOG"]} ]
+venue_symbols = [ { "BIST": ["GARAN"]}, {"NASDAQ": ["AAPL"]} ]
 
 def next_pow2(x: int) -> int:
     return 1 if x <= 1 else 1 << (x - 1).bit_length()

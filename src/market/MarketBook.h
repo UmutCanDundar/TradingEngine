@@ -57,9 +57,12 @@ public:
     {
         if (UNLIKELY(order.isOurOrder))
             return;
-
-        auto &symBook = get_symBook(order);
-        auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
+        
+        auto* symBook = get_symBook(order);
+        if(!symBook)
+            return;
+        
+        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
 
         auto it = tree.find(order.price);
         if (it == tree.end())
@@ -72,8 +75,12 @@ public:
         if (UNLIKELY(order.isOurOrder))
             return;
 
-        auto &symBook = get_symBook(order);
-        auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
+        auto* symBook = get_symBook(order);
+        if(!symBook)
+            return;
+        
+        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
+
 
         int64_t diff = static_cast<int64_t>(newQuantity) - static_cast<int64_t>(order.quantity);
 
@@ -95,8 +102,32 @@ public:
         if (UNLIKELY(order.isOurOrder))
             return;
 
-        auto &symBook = get_symBook(order);
-        auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
+        auto* symBook = get_symBook(order);
+        if(!symBook)
+            return;
+
+        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
+
+
+        auto it = tree.find(order.price);
+        if (LIKELY(it != tree.end()))
+        {
+            if (it->second <= order.replaced_quantity)
+                tree.erase(it);
+            else
+                it->second -= order.replaced_quantity;
+        }
+    }
+    inline void delete_order(const Order &order) noexcept
+    {
+        if (UNLIKELY(order.isOurOrder))
+            return;
+
+        auto* symBook = get_symBook(order);
+        if(!symBook)
+            return;
+        
+        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
 
         auto it = tree.find(order.price);
         if (LIKELY(it != tree.end()))
@@ -107,32 +138,17 @@ public:
                 it->second -= order.remaining_quantity;
         }
     }
-    inline void delete_order(const Order &order) noexcept
-    {
-        if (UNLIKELY(order.isOurOrder))
-            return;
-
-        auto &symBook = get_symBook(order);
-        auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
-
-        uint32_t remaining_qty = order.quantity - order.filled_quantity;
-
-        auto it = tree.find(order.price);
-        if (LIKELY(it != tree.end()))
-        {
-            if (it->second <= remaining_qty)
-                tree.erase(it);
-            else
-                it->second -= remaining_qty;
-        }
-    }
     inline void exec_order(const Order &order) noexcept
     {
         if (UNLIKELY(order.isOurOrder))
             return;
 
-        auto &symBook = get_symBook(order);
-        auto &tree = symBook.bid_ask_trees_[static_cast<uint8_t>(order.side)];
+        auto* symBook = get_symBook(order);
+        if(!symBook)
+            return;
+        
+        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
+
 
         auto it = tree.find(order.price);
         if (LIKELY(it != tree.end()))
@@ -144,19 +160,29 @@ public:
         }
     }
 
-    inline SymbolBook &get_symBook(const Order &order) noexcept
+    inline SymbolBook* get_symBook(const Order &order) noexcept
     {
-        auto venue_index = static_cast<std::underlying_type_t<Venue>>(order.venue);
-        return symbolbooks_[venue_index][hashtables_.getIndex(venue_index, order.symbol)];
+        auto venue_index = static_cast<size_t>(order.venue);
+        auto sym_index = order.symbol_index;
+        return (sym_index != UINT32_MAX) ? &symbolbooks_[venue_index][sym_index] : nullptr;
     }
 
     inline int64_t best_bid(const SymbolBook &symBook) const noexcept
     {
-        return symBook.bid_ask_trees_[0].empty() ? 0LL : symBook.bid_ask_trees_[0].rbegin()->first;
+        return symBook.bid_ask_trees_[0].empty() ? 0 : symBook.bid_ask_trees_[0].rbegin()->first;
     }
     inline int64_t best_ask(const SymbolBook &symBook) const noexcept
     {
-        return symBook.bid_ask_trees_[1].empty() ? 0LL : symBook.bid_ask_trees_[1].begin()->first;
+        return symBook.bid_ask_trees_[1].empty() ? 0 : symBook.bid_ask_trees_[1].begin()->first;
+    }
+
+    inline uint32_t best_bid_qty(const SymbolBook &symBook) const noexcept
+    {
+        return symBook.bid_ask_trees_[0].empty() ? 0 : symBook.bid_ask_trees_[0].rbegin()->second;
+    }
+    inline uint32_t best_ask_qty(const SymbolBook &symBook) const noexcept
+    {
+        return symBook.bid_ask_trees_[1].empty() ? 0 : symBook.bid_ask_trees_[1].begin()->second;
     }
 
     void flush(const uint8_t venue_index, const uint32_t symbol_index) noexcept;

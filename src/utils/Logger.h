@@ -39,12 +39,14 @@
 class Logger
 {
 private:
-    static inline std::unique_ptr<spdlog::logger> instance_{nullptr};
+    static inline std::shared_ptr<spdlog::logger> instance_{nullptr};
 
     Logger() = delete;
 
 public:
     static void Init(const std::string &filename = "logs/system_log.txt");
+ 
+    static inline void Shutdown() { spdlog::shutdown(); }
 
     template <typename... Args>
     static void Info( const spdlog::source_loc &loc, spdlog::string_view_t msg, Args &&...args) 

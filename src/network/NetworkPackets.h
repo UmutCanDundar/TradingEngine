@@ -68,15 +68,14 @@ struct OutPacket // To be received from exchange
 
     // SBTHandler field
     std::array<uint16_t, MAX_APP_MSG_IN_ONE_DATA> offsets; // used by OUCH Parser
-    uint16_t last_pkt_remaining_len = 0;
+    int16_t last_pkt_remaining_len = 0;
     uint8_t msg_count = 0;
     bool partial = false;
     bool is_len_received = true;
     bool release_this_pkt = true;
     // SBTHandler field
     
-    bool consumed = false; // used by FIX Parser
-    
+    bool consumed = false;
     Venue venue;
     Protocol protocol;
     

@@ -9,9 +9,11 @@ TEST(OUCHBISTParserTest, Accepted)
 {
     Parser_OUCH_BIST parser;
     auto variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::ouch_bist_pkt1.data())
+        reinterpret_cast<const char*>(test_data::ouch_bist_pkt1.data()-3)
     );
+
     auto* msg = std::get<BIST::OUT::OUCHOrderAcceptedMessage*>(variant_msg);
+    
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->message_type, 'A');
     EXPECT_EQ(msg->timestamp, 1);
@@ -41,9 +43,11 @@ TEST(OUCHBISTParserTest, Cancelled)
 {
     Parser_OUCH_BIST parser;
     auto variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::ouch_bist_pkt2.data())
+        reinterpret_cast<const char*>(test_data::ouch_bist_pkt2.data()-3)
     );
+
     auto* msg = std::get<BIST::OUT::OUCHOrderCancelledMessage*>(variant_msg);
+
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->message_type, 'C');
     EXPECT_EQ(msg->timestamp, 2);
@@ -59,9 +63,11 @@ TEST(OUCHBISTParserTest, Executed)
 {
     Parser_OUCH_BIST parser;
     auto variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::ouch_bist_pkt3.data())
+        reinterpret_cast<const char*>(test_data::ouch_bist_pkt3.data()-3)
     );
+
     auto* msg = std::get<BIST::OUT::OUCHOrderExecutedMessage*>(variant_msg);
+    
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->message_type, 'E');
     EXPECT_EQ(msg->timestamp, 3);

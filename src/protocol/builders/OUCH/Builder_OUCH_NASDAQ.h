@@ -53,12 +53,15 @@
 
 class SoupBinTcp;
 
-struct Buffer_ONQ
+struct Buffer_ONQ // May be separated per msg type after observing real traffic to avoid unnecessary set to all fields
 {
     static constexpr size_t MAX_MSG_SIZE = 128;
 
     char msg[MAX_MSG_SIZE];
     uint16_t len;
+
+    Buffer_ONQ() { std::memset(msg, ' ', MAX_MSG_SIZE); }
+
 };
 
 class Builder_OUCH_NASDAQ
@@ -84,14 +87,14 @@ private:
         Endian::write_u32_be(buf + 1, user_ref_num);
         *(buf + 5) = order.side == Side::Buy ? 'B' : 'S';
         Endian::write_u32_be(buf + 6, order.quantity);
-        std::memcpy(buf + 10, &order.symbol, 8);
+        std::memcpy(buf + 10, &order.symbol, order.real_symbol_len);
         Endian::write_u64_be(buf + 18, static_cast<uint64_t>(order.price));
         *(buf + 26) = static_cast<uint8_t>(order.time_in_force);
         *(buf + 27) = 'Y';
         *(buf + 28) = 'A';
         *(buf + 29) = 'N';
         *(buf + 30) = 'N';
-        std::memcpy(buf + 31, &order.client_order_token, 14);
+        std::memcpy(buf + 31, &order.client_order_token, order.real_cl_ord_token_len);
         Endian::write_u16_be(buf + 45, 0);
 
         order.user_ref_num = user_ref_num++;
@@ -109,7 +112,7 @@ private:
         *(buf + 21) = static_cast<uint8_t>(order.time_in_force);
         *(buf + 22) = 'Y';
         *(buf + 23) = 'N';
-        std::memcpy(buf + 24, &order.client_order_token, 14);
+        std::memcpy(buf + 24, &order.client_order_token, order.real_cl_ord_token_len);
         Endian::write_u16_be(buf + 38, 0);
 
         order.pre_user_ref_num = order.user_ref_num;

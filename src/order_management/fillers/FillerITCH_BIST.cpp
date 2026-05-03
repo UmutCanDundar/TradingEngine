@@ -36,6 +36,7 @@ void FillerITCH_BIST::fill_itch_add(Order &order, const BIST::ITCHAddOrderMessag
     order.last_update_time = order.timestamp;
     order.message_type = msg.message_type;
     order.protocol = Protocol::ITCH;
+    order.venue = venue;
     order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
     order.cancelled_count = 0;
 }
@@ -62,8 +63,7 @@ void FillerITCH_BIST::fill_itch_exec_report(Order &order, const BIST::ITCHOrderE
 
 void FillerITCH_BIST::fill_itch_delete(Order &order, const BIST::ITCHOrderDeleteMessage &msg) noexcept
 {
-    order.status = Status::Cancelled;
-    order.replaced_quantity = -1 * order.quantity;
+    order.status = Status::Deleted;
     order.last_update_time = msg.timestamp_ns;
     order.cancelled_count++;
     order.message_type = msg.message_type;
@@ -101,5 +101,6 @@ void FillerITCH_BIST::fill_itch_trade(Order &order, const BIST::ITCHTradeMessage
         order.side = (msg.side == 'B') ? Side::Buy : Side::Sell;
 
     order.protocol = Protocol::ITCH;
+    order.venue = venue;
     order.message_type = msg.message_type;
 }

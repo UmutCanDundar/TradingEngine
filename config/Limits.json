@@ -1,51 +1,73 @@
 {
   
-  "symbol_limit_order": ["max_position", "max_notional_scaled", "max_price_deviation", "fat_finger_ratio", "min_qty", "max_qty", "price_scale_factor", "qty_scale_factor", "max_open_orders", "fat_finger_qty_threshold", "max_orders_per_interval", "order_rate_interval_ns", "max_cancels_per_sec"],
-
   "symbol_limits": {
     "BIST": {
-      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      "GARAN": {
+        "max_position": 1000,
+        "max_notional_scaled": 30000000,
+        "max_price_deviation": 15000,
+        "fat_finger_ratio": 2000,
+        "min_qty": 10,
+        "max_qty": 200,
+        "price_scale_factor": 10000,
+        "qty_scale_factor": 1,
+        "max_open_orders": 3,
+        "fat_finger_qty_threshold": 100,
+        "max_orders_per_interval": 15,
+        "order_rate_interval_ns": 1000000000,
+        "max_cancels_per_sec": 5
+      }
     },
     "NASDAQ": {
-      "Symbolname1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "Symbolname2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      "AAPL": {
+        "max_position": 1000,
+        "max_notional_scaled": 55000000,
+        "max_price_deviation": 5000,
+        "fat_finger_ratio": 3000,
+        "min_qty": 10,
+        "max_qty": 500,
+        "price_scale_factor": 10000,
+        "qty_scale_factor": 1,
+        "max_open_orders": 5,
+        "fat_finger_qty_threshold": 3000,
+        "max_orders_per_interval": 10,
+        "order_rate_interval_ns": 1000000000,
+        "max_cancels_per_sec": 10
+      }
     }
   },
 
   "account_limits": {
     "BIST": {
-       "max_notional": 0,
-       "max_position": 0,
-       "max_daily_loss": 0,
-       "max_unrealized_loss": 0,
-       "max_leverage": 0,   
-       "max_open_orders": 0
+       "max_notional": 50000000,
+       "max_daily_loss": 1500000,
+       "max_unrealized_loss": 1500000,
+       "max_leverage": 100000,   
+       "max_open_orders": 5
     },
     "NASDAQ": {
-       "max_notional": 0,
-       "max_position": 0,
-       "max_daily_loss": 0,
-       "max_unrealized_loss": 0,
-       "max_leverage": 0,   
-       "max_open_orders": 0
+       "max_notional": 10000000,
+       "max_daily_loss": 2000000,
+       "max_unrealized_loss": 3000000,
+       "max_leverage": 200000,   
+       "max_open_orders": 10
     }
   },
 
   "venue_limits": {
      "BIST": {
-       "max_order_per_interval": 0,
-       "order_rate_interval_ns": 0,
-       "max_cancels_per_sec": 0,
-       "maker_fee_rate": 0,
-       "taker_fee_rate": 0
+       "max_orders_per_interval": 15,
+       "order_rate_interval_ns": 1000000000,
+       "max_cancels_per_sec": 5,
+       "maker_fee_rate": 10,
+       "taker_fee_rate": 20
     },
     "NASDAQ": {
-       "max_orders_per_interval": 0,
-       "order_rate_interval_ns": 0,
-       "max_cancels_per_sec": 0,
-       "maker_fee_rate": 0,
-       "taker_fee_rate": 0
+       "max_orders_per_interval": 10,
+       "order_rate_interval_ns": 1000000000,
+       "max_cancels_per_sec": 10,
+       "maker_fee_rate": 5,
+       "taker_fee_rate": 15
     }
   }
 

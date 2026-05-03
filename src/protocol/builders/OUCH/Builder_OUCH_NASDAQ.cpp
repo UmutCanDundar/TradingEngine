@@ -11,6 +11,7 @@ Buffer_ONQ* Builder_OUCH_NASDAQ::build(Order &order) noexcept
     char *buf = buffer->msg;
     buffer->len = msg_sizes[order.message_type];
     buf = sbt_.WriteSBTHeaderForDataPacket(buf, buffer->len);
+    buffer->len += 3;
     (this->*OuchMessageBuilders[order.message_type])(order, buf);
 
     return buffer;

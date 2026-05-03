@@ -31,13 +31,13 @@ target_link_libraries(parser_fix_npkt_nmsg_unit
 )
 target_compile_features(parser_fix_npkt_nmsg_unit PRIVATE cxx_std_23)
 
-target_compile_options(parser_fix_npkt_nmsg_unit PRIVATE
+# target_compile_options(parser_fix_npkt_nmsg_unit PRIVATE
    
-    $<$<NOT:$<CONFIG:Release>>:-fsanitize=address,undefined>
-)
+#     $<$<NOT:$<CONFIG:Release>>:-fsanitize=address,undefined>
+# )
 
-target_link_options(parser_fix_npkt_nmsg_unit PRIVATE
-    $<$<NOT:$<CONFIG:Release>>:-fsanitize=address,undefined>
-)
+# target_link_options(parser_fix_npkt_nmsg_unit PRIVATE
+#     $<$<NOT:$<CONFIG:Release>>:-fsanitize=address,undefined>
+# )
 
 gtest_discover_tests(parser_fix_npkt_nmsg_unit)

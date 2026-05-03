@@ -81,7 +81,7 @@ private:
 
     static constexpr auto timeinforce = []
     {
-        std::array<const char* , 128> arr = {};
+        std::array<const char*, 128> arr = {};
         arr[static_cast<size_t>(TimeInForce::DAY)] = "0";
         arr[static_cast<size_t>(TimeInForce::GTC)] = "1";
         arr[static_cast<size_t>(TimeInForce::IOC)] = "3";
@@ -113,7 +113,8 @@ public:
         
         char* buf_end_ptr = buildHeader(buffer->data, hotdata_len, static_cast<size_t>(T), auth_fix, seq_fix);
         std::memcpy(buf_end_ptr, hotdata_temp, hotdata_len);
-        buffer->len = static_cast<size_t>(buf_end_ptr + hotdata_len - buffer->data);
+        buf_end_ptr += hotdata_len;
+        buffer->len = static_cast<size_t>(buf_end_ptr - buffer->data);
         
         buffer->hotdata_start = buf_end_ptr;
         buffer->hotdata_len = hotdata_len;
@@ -200,6 +201,9 @@ private:
 
     // -------------------  UTIL FUNC --------------------
     static std::pair<const char *, const size_t> transact_time() noexcept;
+public:
+    static std::pair<const char*, const size_t> epoch_to_transact_time(uint64_t ns) noexcept;
+private:
     static char findType(const char *data) noexcept;
     static std::pair<const char *, size_t> findValue(const char *data, size_t len, std::string_view wantTag) noexcept;
     static char* placeIntValue(uint32_t num, char* buf) noexcept;
@@ -237,6 +241,30 @@ private:
         std::memcpy(buf, tag, taglen);
         buf += taglen;
         buf = placeIntValue(val, buf);
+        *buf++ = SOH;
+
+        return buf;
+    }
+    template<uint8_t Scale>
+    static inline char* addTagPrice(const char *tag, const size_t taglen, uint32_t val, char *buf) noexcept
+    {
+        char temp[16];
+
+        std::memcpy(buf, tag, taglen);
+        buf += taglen;
+
+        auto* temp_end = placeIntValue(val, temp);
+        
+        const auto int_part_size =  static_cast<size_t>((temp_end-Scale)-temp);
+        std::memcpy(buf, temp, int_part_size);
+        buf += int_part_size;
+        
+        *buf++ = '.';
+        
+        const auto frac_part_size =  static_cast<size_t>(temp_end-(temp + int_part_size));
+        std::memcpy(buf, temp + int_part_size, frac_part_size);
+        buf += frac_part_size;
+
         *buf++ = SOH;
 
         return buf;

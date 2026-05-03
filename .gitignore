@@ -9,6 +9,8 @@
 # Custom Folders
 build/
 third-party/
+Testing/
+logs/
 
 # CMake Files
 CMakeFiles/

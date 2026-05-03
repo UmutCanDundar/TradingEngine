@@ -55,6 +55,7 @@ int main()
     }
 
     engine->stop();
+    Logger::Shutdown();
 
     return 0;
 }

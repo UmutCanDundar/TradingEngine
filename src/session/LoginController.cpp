@@ -20,6 +20,8 @@ void LoginController::LoginAttempt(InPacket &login_pkt, const uint8_t index, Ses
             sbt_.buildFirstLoginRequest(login_pkt.data.data(), index);
         else
             sbt_.buildReLoginRequest(login_pkt.data.data(), index);
+
+        login_pkt.len = 47;
     }
     else
     {
@@ -32,8 +34,10 @@ void LoginController::LoginAttempt(InPacket &login_pkt, const uint8_t index, Ses
 
         std::memcpy(buffer->data, login_pkt.data.data(), buffer->len);
         login_pkt.len = buffer->len;
-        login_pkt.sock_index = index;
     }
+    
+    login_pkt.sock_index = index;
+    login_pkt.is_login_msg = true;
 
     state.last_login_attempt_ns = NowNs();
     state.login_retry_count++;

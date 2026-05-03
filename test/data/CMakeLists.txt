@@ -1,15 +1,16 @@
-file(GLOB DATASET CONFIGURE_DEPENDS *.cpp)
 
-add_library(test_data STATIC ${DATASET})
+add_library(test_data INTERFACE)
 
 target_include_directories(test_data
-    PUBLIC
+    INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(test_data
-    PUBLIC
+    INTERFACE
         network
+        core
+        generated_headers
+        ab_hash
 )
 
-target_compile_features(test_data PRIVATE cxx_std_23)

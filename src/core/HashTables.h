@@ -29,6 +29,8 @@
 #include <vector>      
 #include <string_view> 
 
+
+
 struct SymbolIndex;
 
 class HashTables
@@ -65,7 +67,7 @@ public:
     {
         size_t size = hashtables_[venue_index].size();
         uint32_t hash_val = hash_symbol(symbol.data(), size);
-
+        
         while (hashtables_[venue_index][hash_val].valid)
         {
             if (*reinterpret_cast<const uint64_t *>(hashtables_[venue_index][hash_val].symbol) ==
@@ -75,7 +77,6 @@ public:
             }
             hash_val = (hash_val + 1) & (size - 1);
         }
-
         return UINT32_MAX;
     }
 

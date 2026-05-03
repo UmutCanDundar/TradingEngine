@@ -9,7 +9,7 @@ void Logger::Init(const std::string &filename)
 
    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, false);
 
-   instance_ = std::make_unique<spdlog::async_logger>(
+   instance_ = std::make_shared<spdlog::async_logger>(
        "async_logger",                               // logger's name
        file_sink,                                    // single sink
        spdlog::thread_pool(),                        // thread pool (global)

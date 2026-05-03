@@ -90,9 +90,9 @@ public:
     inline NASDAQ::OUCHMessage parse(const char *data) noexcept
     {
         NASDAQ::OUCHMessage OUCHmsg;
-        size_t index = static_cast<size_t>(NASDAQ::ouchMessageIndex(*data));
+        size_t index = static_cast<size_t>(NASDAQ::ouchMessageIndex(*(data+3)));
         if (index != 99)
-            MessageHandlers[index](*this, data, OUCHmsg);
+            MessageHandlers[index](*this, data+3, OUCHmsg);
         return OUCHmsg;
     }
 };
