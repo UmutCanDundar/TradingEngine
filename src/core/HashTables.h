@@ -36,6 +36,7 @@ struct SymbolIndex;
 class HashTables
 {
 private:
+public:///
     struct HashEntry
     {
         char symbol[32] = {};

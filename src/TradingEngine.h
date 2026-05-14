@@ -60,6 +60,7 @@
 #include "RiskEngine.h"
 #include "Builder_Dispatch.h"
 #include "Builder_FIX.h"
+#include "Parser_FIX.h"
 
 // ===== FLOWS =====
 #include "NetworkFlow.h"
@@ -80,6 +81,7 @@ public:
     void stop() noexcept;
 
 private:
+public:///
     // =========================
     // CORE (LAYER 0)
     // =========================
@@ -88,6 +90,7 @@ private:
     Limits limits_;
     SessionManager session_manager_;
     InPacketPoolManager inPkt_pool_;
+    Parser_FIX parser_fix_;
     Builder_FIX builder_fix_;
     SoupBinTcp sbt_;
     LoginController login_;

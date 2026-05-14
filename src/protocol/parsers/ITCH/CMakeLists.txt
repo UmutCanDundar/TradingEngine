@@ -11,6 +11,7 @@ target_link_libraries(parser_itch
     PUBLIC 
         types_itch
         core
+        network
     PRIVATE
         utils
         project_options

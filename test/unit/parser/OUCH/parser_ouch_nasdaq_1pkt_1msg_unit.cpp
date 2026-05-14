@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
 
 #include "Parser_OUCH_NASDAQ.h"
-#include "dataset.h"
+#include "dataset_parser.h"
 
 TEST(OUCHNASDAQParserTest, Accepted)
 {
     Parser_OUCH_NASDAQ parser;
-    auto variant_msg = parser.parse(reinterpret_cast<const char*>(test_data::ouch_nasdaq_pkt1.data()));
+    auto variant_msg = parser.parse(reinterpret_cast<const char*>(test_data_parser::ouch_nasdaq_pkt1.data()));
 
     auto* msg = std::get<NASDAQ::OUT::OUCHOrderAcceptedMessage*>(variant_msg);
 
@@ -32,7 +32,7 @@ TEST(OUCHNASDAQParserTest, Accepted)
 TEST(OUCHNASDAQParserTest, Cancelled)
 {
     Parser_OUCH_NASDAQ parser;
-    auto variant_msg = parser.parse(reinterpret_cast<const char*>(test_data::ouch_nasdaq_pkt2.data()));
+    auto variant_msg = parser.parse(reinterpret_cast<const char*>(test_data_parser::ouch_nasdaq_pkt2.data()));
 
     auto* msg = std::get<NASDAQ::OUT::OUCHOrderCancelledMessage*>(variant_msg);
 
@@ -48,7 +48,7 @@ TEST(OUCHNASDAQParserTest, Cancelled)
 TEST(OUCHNASDAQParserTest, Replaced)
 {
     Parser_OUCH_NASDAQ parser;
-    auto variant_msg = parser.parse(reinterpret_cast<const char*>(test_data::ouch_nasdaq_pkt3.data()));
+    auto variant_msg = parser.parse(reinterpret_cast<const char*>(test_data_parser::ouch_nasdaq_pkt3.data()));
 
     auto* msg = std::get<NASDAQ::OUT::OUCHOrderReplacedMessage*>(variant_msg);
 

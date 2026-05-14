@@ -20,14 +20,3 @@ target_link_libraries(session
 
 target_compile_features(session PRIVATE cxx_std_23)
 
-add_executable(sess 
-    sess.main.cpp
-)
-
-target_link_libraries(sess
-    PRIVATE 
-        session 
-    
-)
-
-target_compile_features(sess PRIVATE cxx_std_23)

@@ -1,13 +1,13 @@
 #include <gtest/gtest.h>
 
 #include "Parser_ITCH_BIST.h"
-#include "dataset.h"
+#include "dataset_parser.h"
 
 TEST(ITCHBISTParserTest, OrderBookDirectory)
 {
     Parser_ITCH_BIST parser;
     BIST::ITCHMessage variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::itch_bist_pkt1.data())
+        reinterpret_cast<const char*>(test_data_parser::itch_bist_pkt1.data())
     );
 
     auto* msg = std::get<BIST::ITCHOrderBookDirectoryMessage*>(variant_msg);
@@ -47,7 +47,7 @@ TEST(ITCHBISTParserTest, AddOrder)
 {
     Parser_ITCH_BIST parser;
     BIST::ITCHMessage variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::itch_bist_pkt2.data())
+        reinterpret_cast<const char*>(test_data_parser::itch_bist_pkt2.data())
     );
 
     auto* msg = std::get<BIST::ITCHAddOrderMessage*>(variant_msg);
@@ -70,7 +70,7 @@ TEST(ITCHBISTParserTest, OrderExecuted)
 {
     Parser_ITCH_BIST parser;
     BIST::ITCHMessage variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::itch_bist_pkt3.data())
+        reinterpret_cast<const char*>(test_data_parser::itch_bist_pkt3.data())
     );
 
     auto* msg = std::get<BIST::ITCHOrderExecutedMessage*>(variant_msg);

@@ -4,4 +4,8 @@ target_include_directories(bench_utils
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_subdirectory(FIX)
+add_subdirectory(parser)
+add_subdirectory(order_manager)
+add_subdirectory(risk)
+add_subdirectory(builder)
+

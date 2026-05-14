@@ -65,6 +65,7 @@ class Builder_FIX;
 class LoginController;
 class SessionManager;
 class OrderManager;
+class Parser_FIX;
 
 class Builder_Dispatch
 {
@@ -84,13 +85,14 @@ private:
     InPacketPoolManager &inPkt_pool_;
     Builder_FIX& fixBuilder_;
     OrderManager& ord_mngr_;
+    Parser_FIX &fixParser_;
 
     Builder_OUCH_BIST ouchBuilder_bist_{sbt_, sess_mngr_};
     Builder_OUCH_NASDAQ ouchBuilder_nasdaq_{sbt_};
 
 public:
     Builder_Dispatch(spscInPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, 
-                     SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr) noexcept;
+                     SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr, Parser_FIX& fixParser) noexcept;
 
     bool dispatch() noexcept;
 

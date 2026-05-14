@@ -1,9 +1,9 @@
 #include <x86intrin.h>
-#include <algorithm>
-#include <numeric>
 #include <sched.h>
 #include <emmintrin.h>
-#include <vector>
+#include <algorithm>
+#include <numeric>
+// #include <vector>
 
 static void pin_to_cpu(int cpu_id)
 {
@@ -30,22 +30,22 @@ static inline uint64_t rdtsc_end()
     return t;
 }
 
-// ==========================
-// CACHE FLUSH (approx)
-// ==========================
-static void flush_cache()
-{
-   static std::vector<char> buffer(32 * 1024 * 1024);
+// // ==========================
+// // CACHE FLUSH (approx)
+// // ==========================
+// static void flush_cache()
+// {
+//    static std::vector<char> buffer(32 * 1024 * 1024);
 
-    for (size_t i = 0; i < buffer.size(); i += 64)
-        _mm_clflush(&buffer[i]);
-}
+//     for (size_t i = 0; i < buffer.size(); i += 64)
+//         _mm_clflush(&buffer[i]);
+// }
 
-// ==========================
-// CORE BENCH FUNCTION
-// ==========================
-enum class CacheState
-{
-    Warm = 0,
-    Cold = 1
-};
+// // ==========================
+// // CORE BENCH FUNCTION
+// // ==========================
+// enum class CacheState
+// {
+//     Warm = 0,
+//     Cold = 1
+// };

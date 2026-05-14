@@ -1,7 +1,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dataset.h"
+#include "dataset_builder.h"
 #include "SessionManager.h"
 #include "SoupBinTcp.h"
 #include "Builder_OUCH_NASDAQ.h"
@@ -12,7 +12,7 @@
 
 TEST(OUCHNasdaqBuilderTest, OuchNewOrder)
 {
-    Order* order = test_data::NQouch_new_order;
+    Order* order = test_data_builder::NQouch_new_order;
 
     auto sess_mngr   = std::make_unique<SessionManager>();
     auto sbt         = std::make_unique<SoupBinTcp>(*sess_mngr);
@@ -56,7 +56,7 @@ TEST(OUCHNasdaqBuilderTest, OuchNewOrder)
 
     EXPECT_EQ(p[33], 'N');
 
-    EXPECT_EQ(std::string_view(p + 34, 14), std::string_view("CLIENT0000001 ", 14));
+    EXPECT_EQ(std::string_view(p + 34, 14), std::string_view("CLIENT0000008 ", 14));
 
     EXPECT_EQ(p[48], 0x00);
     EXPECT_EQ(p[49], 0x00);

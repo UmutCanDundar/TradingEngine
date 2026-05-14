@@ -5,13 +5,16 @@
 #include "LoginController.h"
 #include "SoupBinTcp.h"
 #include "Builder_FIX.h"
+#include "Parser_FIX.h"
 #include "NetworkIO.h"
-#include "dataset.h"
+#include "dataset_parser.h"
 
 #include <memory>
 
 TEST(ParserDispatchTest, MixedProtocolTraffic)
 {
+    std::atomic<bool> running{true};
+
     auto inPkt_pool = std::make_unique<InPacketPoolManager>();
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
     spscOutPacketQueue_t receiver_to_parser;
@@ -23,8 +26,9 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
-    auto network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *inPkt_pool);
-    
+    auto network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *inPkt_pool, running);
+    auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
+
     auto parser_dispatch = std::make_unique<Parser_Dispatch>(
                                         receiver_to_parser,
                                         parser_to_store,
@@ -32,7 +36,8 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
                                         parser_to_fixbuilder_in,
                                         *sess_mngr,
                                         db_to_parser,
-                                        *network_io
+                                        *network_io,
+                                        *parser_fix
     );
     uint8_t sess_index = sess_mngr->getSessionIndex(Venue::BIST, Protocol::OUCH);
     auto* sess_state = sess_mngr->getSessionState(sess_index);
@@ -45,19 +50,19 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
 //       v TRAFFIC FOR PARSING DISPATCH v 
     
     std::array<OutPacket*, 13> pkts = {
-        &test_data::ouch_bist_outpacket_partial_1, 
-        &test_data::ouch_bist_outpacket_partial_2,
-        &test_data::itch_bist_outpacket_full_1,
-        &test_data::fix_outpacket_partial_1, 
-        &test_data::fix_outpacket_partial_2,
-        &test_data::ouch_bist_outpacket_partial_3,
-        &test_data::ouch_bist_outpacket_partial_4,  
-        &test_data::fix_outpacket_partial_3,
-        &test_data::fix_outpacket_partial_4,
-        &test_data::ouch_bist_outpacket_partial_5,
-        &test_data::itch_nasdaq_outpacket_full_1,  
-        &test_data::fix_outpacket_partial_5, 
-        &test_data::fix_outpacket_partial_6,   
+        &test_data_parser::ouch_bist_outpacket_partial_1, 
+        &test_data_parser::ouch_bist_outpacket_partial_2,
+        &test_data_parser::itch_bist_outpacket_single_1,
+        &test_data_parser::fix_outpacket_partial_1, 
+        &test_data_parser::fix_outpacket_partial_2,
+        &test_data_parser::ouch_bist_outpacket_partial_3,
+        &test_data_parser::ouch_bist_outpacket_partial_4,  
+        &test_data_parser::fix_outpacket_partial_3,
+        &test_data_parser::fix_outpacket_partial_4,
+        &test_data_parser::ouch_bist_outpacket_partial_5,
+        &test_data_parser::itch_nasdaq_outpacket_single_1,  
+        &test_data_parser::fix_outpacket_partial_5, 
+        &test_data_parser::fix_outpacket_partial_6,   
     };
     
     for (auto pkt : pkts) 

@@ -4,6 +4,7 @@
 #include "MarketBook.h"
 
 #include <type_traits>
+#include <iostream>
 
 // ============================
 // Constructor & Public Methods
@@ -30,6 +31,7 @@ OrderManager::OrderManager(spscMessageQueue_t &parser_to_store, spscOrderQueue_t
 
 bool OrderManager::store() noexcept
 {
+   
    MessageWithVenue<MessageTypes_t> msgWithVenue;
 
    if (!pending_to_strategy_.empty() && ((pending_to_strategy_.front().order->canModify.load(std::memory_order_relaxed)) == (STRATEGY_DONE | RISK_DONE | BUILDER_DONE)))
@@ -44,22 +46,22 @@ bool OrderManager::store() noexcept
          return false;
    }
 
-   
    const bool is_fix_session_msg =
-       std::visit([this](const auto &inner_msg) -> bool
+       std::visit([this, msgWithVenue](const auto &inner_msg) -> bool
                   {
           using MsgType = std::decay_t<decltype(inner_msg)>;
 
-          if constexpr (std::is_same_v<MsgType, FIXSessionMessage>)
+          if constexpr (std::is_same_v<MsgType, FIXSessionMessage*>)
           {
-             store_to_db_.push(inner_msg);
+             auto msgWvenue = MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue};
+             store_to_db_.push(msgWvenue);
              return true; 
           }
           return false; }, msgWithVenue.msg);
 
    if (is_fix_session_msg)
       return false;
-static int storevisit = 1;
+
    std::visit([this, &msgWithVenue](const auto &inner_msg)
    {        
       using MsgType = std::decay_t<decltype(inner_msg)>;
@@ -86,13 +88,14 @@ Order* OrderManager::add_our_order(Order *order, const OrderKey& order_key) noex
       if(!(triggered++ & (ORDER_MAP_CAPACITY -1))) 
          our_next_slot = MARKETORDER_LAST_INDEX;
 
-      Order* order_to_release = &order_pool_[our_next_slot];
+      Order* order_to_release = &order_pool_[our_next_slot++];
       auto& orderhistory_for_a_venue = our_orders_all_venue_[static_cast<size_t>(order_to_release->venue)];
       auto& orderhistory_for_a_symbol = orderhistory_for_a_venue[order_to_release->symbol_index];
 
       release_order(orderhistory_for_a_symbol, *order_to_release);
+      std::cerr << "order release oldu ";
    }
-
+   
    our_orders_[order_key] = order;
 
    auto &orderhistory_for_a_venue = our_orders_all_venue_[static_cast<size_t>(order->venue)];
@@ -241,9 +244,11 @@ void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) no
    // order->canModify = 0x00;
    awaitingAck_orders_.erase(client_order_id); // In FIX, ClOrdID is unique for every action (New/Replace/Cancel).
 
+   if (!store_to_risk_.push(order))
+    std::cerr << "RISK QUEUE DOLU!\n";
    store_to_db_.push(fixMsg);
    store_to_db_.push(order);
-   store_to_risk_.push(order);
+   // store_to_risk_.push(order);
    store_to_strategy_.push(order);
 }
 
@@ -609,7 +614,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
 
                      if (!order)
                      {
-                        uint64_t client_order_id = absl::Hash<std::string_view>{}(msg->cl_ord_id);
+                        uint64_t client_order_id = absl::Hash<std::string_view>{}(std::string_view{msg->cl_ord_id, 14});
                         order = get_order_from_awaitingAck_orders(client_order_id);
                         
                         if (UNLIKELY(!order))
@@ -626,7 +631,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
 
                         if (order->pre_user_ref_num) 
                            nq_ouch_refnum_ordkey_.erase(order->pre_user_ref_num);
-                        nq_ouch_refnum_ordkey_.emplace(order->user_ref_num, order_key);
+                        nq_ouch_refnum_ordkey_.insert_or_assign(order->user_ref_num, order_key);
 
                         awaitingAck_orders_.erase(client_order_id);
                      }
@@ -656,7 +661,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                  {
                     if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderRejectedMessage>) 
                     {
-                        uint64_t client_order_id = absl::Hash<std::string_view>{}(msg->cl_ord_id);
+                        uint64_t client_order_id = absl::Hash<std::string_view>{}(std::string_view{msg->cl_ord_id, 14});
                         order = get_order_from_awaitingAck_orders(client_order_id);
                         
                         if (UNLIKELY(!order))

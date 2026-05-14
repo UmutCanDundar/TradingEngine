@@ -62,7 +62,7 @@ struct OutPacket // To be received from exchange
 {
     static constexpr size_t DATA_SIZE = 2048;
     static constexpr size_t MAX_APP_MSG_IN_ONE_DATA = 32;
-
+    
     std::array<char, DATA_SIZE> data;
     uint16_t len;
 
@@ -78,6 +78,7 @@ struct OutPacket // To be received from exchange
     bool consumed = false;
     Venue venue;
     Protocol protocol;
+    
     
 };
 

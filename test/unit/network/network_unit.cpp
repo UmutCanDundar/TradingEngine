@@ -4,7 +4,8 @@
 #include "MarketBook.h"
 #include "HashTables.h"
 #include "Order.h"
-#include "dataset.h"
+#include "dataset_network.h"
+#include "dataset_builder.h"
 #include "SessionManager.h"
 #include "LoginController.h"
 #include "SoupBinTcp.h"
@@ -14,6 +15,7 @@
 #include "Builder_Dispatch.h"
 #include "Logger.h"
 #include "NetworkIO.h"
+#include "Parser_FIX.h"
 
 #include <memory>
 #include <thread>
@@ -27,7 +29,7 @@
 // ============================================================
 //                      FAKE SERVER PORTS
 // ============================================================
-    static constexpr uint16_t FAKE_FIX_PORT   = 9876;  // session 0 - FIX TCP
+    static constexpr uint16_t FAKE_FIX_PORT       = 9876;  // session 0 - FIX TCP
     static constexpr uint16_t FAKE_OUCH_BIST_PORT = 1234;  // session 1 - OUCH TCP
     static constexpr uint16_t FAKE_OUCH_NQ_PORT   = 4321;  // session 2 - OUCH TCP
     static constexpr uint16_t FAKE_ITCH_BIST_PORT = 5000;  // session 3 - ITCH UDP
@@ -45,7 +47,7 @@
         std::atomic<bool> stop{false};
 
         std::atomic<bool> listening{false};
-        std::mutex listen_mutex;  
+        std::mutex listen_mutex;
         std::condition_variable listening_cv;
 
         std::atomic<bool> accepted{false};
@@ -76,12 +78,14 @@
 
 
         FakeTCPServer(uint16_t port, std::mutex& mutex, std::condition_variable& cv) : port(port), packet_mutex(mutex), packets_ready_cv(cv) {}
-        
-        void wait_listening() 
-        {
-            std::unique_lock<std::mutex> lk(listen_mutex);
-            listening_cv.wait(lk, [this]{return listening.load(std::memory_order_acquire);  });
-        }
+    
+        // void wait_listening() 
+        // {
+        //     std::unique_lock<std::mutex> lk(listen_mutex);
+        //     listening_cv.wait(lk, [this]{
+        //         return listening.load(std::memory_order_acquire);
+        //     });
+        // }
 
         void wait_accepting() 
         {
@@ -119,10 +123,10 @@
             addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
             ::bind(server_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
             ::listen(server_fd, 5);
-        
-            listening.store(true, std::memory_order_release);
-            listening_cv.notify_all();  
-        
+            
+            // listening.store(true, std::memory_order_release);
+            // listening_cv.notify_all();
+
             accept_thread = std::thread([this]() {
        
                 sockaddr_in client_addr{};
@@ -271,7 +275,9 @@ TEST(NetworkIOTest, NetworkIOTestAll)
 
     //NetworkIO queues
     // spscInPacketQueue_t builder_to_sender;
-    spscOutPacketQueue_t receiver_to_parser;        
+    spscOutPacketQueue_t receiver_to_parser;    
+    
+    std::atomic<bool> running{true};
     
     auto hashtables    = std::make_unique<HashTables>();
     auto marketbook    = std::make_unique<MarketBook>(*hashtables);
@@ -279,7 +285,8 @@ TEST(NetworkIOTest, NetworkIOTestAll)
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
-
+    auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
+    
     auto order_manager = std::make_unique<OrderManager>(
                                         parser_to_store,
                                         store_to_strategy,
@@ -300,7 +307,8 @@ TEST(NetworkIOTest, NetworkIOTestAll)
                                         *login,
                                         *inPkt_pool,
                                         *builder_fix,
-                                        *order_manager        
+                                        *order_manager,
+                                        *parser_fix        
     );
 
     std::mutex packet_mutex;
@@ -316,10 +324,10 @@ TEST(NetworkIOTest, NetworkIOTestAll)
     ouch_bist_server.start();
     ouch_nq_server.start();
     
-    fix_server.wait_listening();
-    ouch_bist_server.wait_listening();
-    ouch_nq_server.wait_listening();
-    // Wait until all server sockets listen the port
+    // fix_server.wait_listening();
+    // ouch_bist_server.wait_listening();
+    // ouch_nq_server.wait_listening();
+    // //Wait until all server listen the ports 
 
     auto network_io = std::make_unique<NetworkIO>(
                                         receiver_to_parser,
@@ -327,7 +335,8 @@ TEST(NetworkIOTest, NetworkIOTestAll)
                                         *sess_mngr,
                                         *sbt,
                                         *login,
-                                        *inPkt_pool
+                                        *inPkt_pool,
+                                        running
     );
 
     EXPECT_TRUE(network_io->socket_states_[0].connection_pending);
@@ -374,8 +383,8 @@ TEST(NetworkIOTest, NetworkIOTestAll)
     // Wait until all login messages arrived to the servers
 
     sess_mngr->setSessionLoggedIn(0, true); // FIX SessionMessages(Login Ack) is handled by Parser_FIX, so FIX SessionState is updated manually 
-    ouch_bist_server.send_to_client(test_data::sbt_login_accepted_bist);
-    ouch_nq_server.send_to_client(test_data::sbt_login_accepted_nq);
+    ouch_bist_server.send_to_client(test_data_network::sbt_login_accepted_bist);
+    ouch_nq_server.send_to_client(test_data_network::sbt_login_accepted_nq);
     // Imitating Login Ack from servers
    
     EXPECT_TRUE(fix_server.wait_logging(*sess_mngr, 0));
@@ -386,9 +395,9 @@ TEST(NetworkIOTest, NetworkIOTestAll)
     // ====================================================
     //       v TRAFFIC FOR NETWORK IO SENDER v 
         std::array<Order*, 3> orders = {
-            test_data::fix_new_order, 
-            test_data::ouch_new_order,
-            test_data::NQouch_new_order
+            test_data_builder::fix_new_order, 
+            test_data_builder::ouch_new_order,
+            test_data_builder::NQouch_new_order
         };
         
         for (auto ord : orders) 
@@ -417,11 +426,11 @@ TEST(NetworkIOTest, NetworkIOTestAll)
     // ====================================================
     //       v TRAFFIC FOR NETWORK IO RECEIVER v 
         std::array<const std::vector<uint8_t>*, 5> msgs = {
-            &test_data::fix_order_ack, 
-            &test_data::ouch_bist_order_ack,
-            &test_data::ouch_nq_order_ack,
-            &test_data::itch_bist_add_order,
-            &test_data::itch_nq_add_order
+            &test_data_network::fix_order_ack, 
+            &test_data_network::ouch_bist_order_ack,
+            &test_data_network::ouch_nq_order_ack,
+            &test_data_network::itch_bist_add_order,
+            &test_data_network::itch_nq_add_order
         };
 
         fix_server.send_to_client(*msgs[0]);
@@ -542,8 +551,8 @@ TEST(NetworkIOTest, NetworkIOTestAll)
     ouch_bist_server.stop_server();
     ouch_nq_server.stop_server();
     
-    nio_thread.detach();
-    network_io.release();
+    running.store(false, std::memory_order_release);
+    if(nio_thread.joinable()) nio_thread.join();
 
     Logger::Shutdown();  
 }

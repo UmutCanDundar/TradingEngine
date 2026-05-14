@@ -53,6 +53,7 @@
 
 #include "ITCHTypes_BIST.h"
 #include "MessagePool.h"
+#include "NetworkPackets.h"
 
 #include <cstddef>
 #include <array>
@@ -92,9 +93,22 @@ public:
     inline BIST::ITCHMessage parse(const char *data) noexcept
     {
         BIST::ITCHMessage ITCHmsg;
-        size_t index = static_cast<size_t>(BIST::itchMessageIndex(*data));
+        size_t index = BIST::itchMessageIndex(*data);
         if (index != 99)
             MessageHandlers[index](*this, data, ITCHmsg);
         return ITCHmsg;
+    }
+
+    inline void ItchPacketHandler(OutPacket *pkt) noexcept 
+    {
+        size_t offset = 0;
+        auto* data = pkt->data.data();
+
+        while(offset < pkt->len)
+        {
+            size_t msg_size = BIST::ITCHSizeOfs[BIST::itchMessageIndex(*(data+offset))];
+            pkt->offsets[pkt->msg_count++] = offset;
+            offset += msg_size;
+        }
     }
 };

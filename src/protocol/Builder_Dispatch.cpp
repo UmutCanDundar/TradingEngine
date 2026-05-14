@@ -1,4 +1,5 @@
 #include "Builder_Dispatch.h"
+#include "Parser_FIX.h"
 #include "Builder_FIX.h"
 #include "SessionManager.h"
 #include "LoginController.h"
@@ -9,9 +10,10 @@
 #include <cstddef>
 
 Builder_Dispatch::Builder_Dispatch(spscInPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in,
-                                   SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr) noexcept
+                                   SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr, Parser_FIX &fixParser) noexcept
                                    : builder_table_(makeBuilderLookUpTable()), builder_to_sender_(builder_to_sender), risk_to_builder_(risk_to_builder), parser_to_fixbuilder_out_(parser_to_fixbuilder_out), 
-                                   parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), sbt_(sbt), login_(login), inPkt_pool_(inPkt_pool), fixBuilder_(fixBuilder), ord_mngr_(ord_mngr)
+                                   parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), sbt_(sbt), login_(login), inPkt_pool_(inPkt_pool), fixBuilder_(fixBuilder), ord_mngr_(ord_mngr),
+                                   fixParser_(fixParser)
 {}
 
 std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> Builder_Dispatch::makeBuilderLookUpTable() noexcept
@@ -56,10 +58,10 @@ void Builder_Dispatch::buildFIX(Order *order) noexcept
    order->canModify.fetch_or(BUILDER_DONE, std::memory_order_release);
 }
 
-void Builder_Dispatch::buildOUCH_BIST(Order *order) noexcept
+void Builder_Dispatch::buildOUCH_BIST(Order *order) noexcept 
 {
-   uint8_t session_index = sess_mngr_.getSessionIndex(Venue::BIST, Protocol::OUCH);
-   auto *buffer = ouchBuilder_bist_.build(*order);
+   uint8_t session_index = sess_mngr_.getSessionIndex(Venue::BIST, Protocol::OUCH); 
+   auto* buffer = ouchBuilder_bist_.build(*order);
    InPacket *inPkt = inPkt_pool_.get_inpkt();
    inPkt->fillPacket(buffer->msg, buffer->len, session_index);
    builder_to_sender_.push(inPkt);
@@ -100,15 +102,18 @@ void Builder_Dispatch::buildFIX_ses_in(FIXSessionMessage &fixSesMsg, uint8_t ses
       InPacket *inPkt = inPkt_pool_.get_inpkt();
       inPkt->fillPacket(buffer->data, buffer->len, session_index, true);
       builder_to_sender_.push(inPkt);
+      fixParser_.releaseFIX(&fixSesMsg);
       return;
    }
    default:
+      fixParser_.releaseFIX(&fixSesMsg);
       return;
    }
 
    InPacket *inPkt = inPkt_pool_.get_inpkt();
    inPkt->fillPacket(buffer->data, buffer->len, session_index);
    builder_to_sender_.push(inPkt);
+   fixParser_.releaseFIX(&fixSesMsg);
 }
 
 void Builder_Dispatch::buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t session_index) noexcept
@@ -132,6 +137,7 @@ void Builder_Dispatch::buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t se
          inPkt->fillPacket(buffer->data, buffer->len, session_index);
          builder_to_sender_.push(inPkt);
       }
+      fixParser_.releaseFIX(&fixSesMsg);
       return;
    }
    case FIXTypes::Reject:
@@ -156,24 +162,28 @@ void Builder_Dispatch::buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t se
          InPacket *inPkt = inPkt_pool_.get_inpkt();
          inPkt->fillPacket(buffer->data, buffer->len, session_index, true);
          builder_to_sender_.push(inPkt);
+         fixParser_.releaseFIX(&fixSesMsg);
          return;
       }
       else
       {
          LOG_ERROR("Login failed after {} attempts for session {}",
                    ALLOWED_LOGIN_ATTEMPT, session_index);
+         fixParser_.releaseFIX(&fixSesMsg);
          return;
       }
 
       break;
    }
    default:
+      fixParser_.releaseFIX(&fixSesMsg);
       return;
    }
 
    InPacket *inPkt = inPkt_pool_.get_inpkt();
    inPkt->fillPacket(buffer->data, buffer->len, session_index);
    builder_to_sender_.push(inPkt);
+   fixParser_.releaseFIX(&fixSesMsg);
 }
 
 void Builder_Dispatch::buildFIX_app(Order *order, uint8_t session_index) noexcept

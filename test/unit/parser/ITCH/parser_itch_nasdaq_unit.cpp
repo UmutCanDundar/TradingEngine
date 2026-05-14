@@ -1,13 +1,13 @@
 #include <gtest/gtest.h>
 
 #include "Parser_ITCH_NASDAQ.h"
-#include "dataset.h"
+#include "dataset_parser.h"
 
 TEST(ITCHNASDAQParserTest, StockDirectory)
 {
     Parser_ITCH_NASDAQ parser;
     NASDAQ::ITCHMessage variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::itch_nasdaq_pkt1.data())
+        reinterpret_cast<const char*>(test_data_parser::itch_nasdaq_pkt1.data())
     );
 
     auto* msg = std::get<NASDAQ::ITCHStockDirectoryMessage*>(variant_msg);
@@ -41,7 +41,7 @@ TEST(ITCHNASDAQParserTest, AddOrder)
 {
     Parser_ITCH_NASDAQ parser;
     NASDAQ::ITCHMessage variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::itch_nasdaq_pkt2.data())
+        reinterpret_cast<const char*>(test_data_parser::itch_nasdaq_pkt2.data())
     );
     
     auto* msg = std::get<NASDAQ::ITCHAddOrderMessage*>(variant_msg);
@@ -65,7 +65,7 @@ TEST(ITCHNASDAQParserTest, OrderExecuted)
 {
     Parser_ITCH_NASDAQ parser;
     NASDAQ::ITCHMessage variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::itch_nasdaq_pkt3.data())
+        reinterpret_cast<const char*>(test_data_parser::itch_nasdaq_pkt3.data())
     );
 
     auto* msg = std::get<NASDAQ::ITCHExecutedMessage*>(variant_msg);

@@ -1,13 +1,13 @@
 #include "Logger.h"
 
-void Logger::Init(const std::string &filename)
+void Logger::Init(const std::filesystem::path& filename)
 {
    if (instance_ != nullptr)
       return;
 
    spdlog::init_thread_pool(8192, 1); // Queue: 8192, 1 background thread
 
-   auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, false);
+   auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename.string(), false);
 
    instance_ = std::make_shared<spdlog::async_logger>(
        "async_logger",                               // logger's name

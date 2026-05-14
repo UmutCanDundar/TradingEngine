@@ -79,7 +79,6 @@ struct PartialFIXBuffer
     size_t existing_len = 0; // Partial FIX Buffer data offset
     size_t remaining_len = 0; // Remaining length of the FIX message to be received
     size_t body_len = 0;    
-    size_t pkt_data_offset = 0; // Copied data from the packet, parser will process again the same packet from this offset until the all data is consumed.
     bool active = false;
     BodyLenState bodylen_state = BodyLenState::None;
 };
@@ -91,6 +90,7 @@ class Sequence_FIX;
 class Parser_FIX
 {
 private:
+public: ///
     static constexpr char SOH = '\x01';
     static constexpr size_t MAX_TAG = 512;
     static constexpr size_t MAX_SESTAG = 2048;
@@ -102,9 +102,11 @@ private:
     using FIXSesMessagePool_t = std::array<FIXSessionMessage, FIX_POOL_CAPACITY>;
     using spscFIXSesQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage *, boost::lockfree::capacity<FIX_POOL_CAPACITY>>;
     
+    using PartialFIXBufferPool_t = std::array<PartialFIXBuffer, FIX_POOL_CAPACITY>;
+
     using FIXPendingMap_t = absl::btree_map<uint32_t, std::variant<FIXMessage *, FIXSessionMessage *>>;
-    std::map<uint32_t, std::variant<FIXMessage *, FIXSessionMessage *>> pending_to_store_map_;
-    // FIXPendingMap_t pending_to_store_map_;
+    // std::map<uint32_t, std::variant<FIXMessage *, FIXSessionMessage *>> pending_to_store_map_;
+    FIXPendingMap_t pending_to_store_map_;
     spscFIXQueue_t free_fixMsg_list_;
     spscFIXSesQueue_t free_fixSesMsg_list_;
     
@@ -112,7 +114,7 @@ private:
     FIXSesMessagePool_t fixSesMsg_pool_;
 
     PartialFIXBuffer partial_fix_msg_;
-   
+
     using TagHandlerFunc = void (*)(std::string_view, FIXMessage *) noexcept;
     static const std::array<TagHandlerFunc, MAX_TAG> makeTagHandlersLookup() noexcept;
     static const std::array<TagHandlerFunc, MAX_TAG> tagHandlers;
@@ -141,14 +143,7 @@ public:
             free_fixMsg_list_.pop(msg);
         else
             free_fixSesMsg_list_.pop(msg);
-
-/* //-----------------------------------DEBUG_ONLY-----------------------------------------------
-IF_NOT_RELEASE (
-   if(msg == nullptr) 
-        return nullptr;
-);
-//-------------------------------------------------------------------------------------------- */
-       
+        
         auto const &handlers = []() -> auto const &
         {
             if constexpr (std::is_same_v<T, FIXMessage>)

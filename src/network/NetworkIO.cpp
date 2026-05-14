@@ -17,7 +17,9 @@
 #include <cerrno>
 #include <cstring>
 
-NetworkIO::NetworkIO(spscOutPacketQueue_t &receiver_to_parser, spscInPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool) noexcept
+#include <iostream>
+
+NetworkIO::NetworkIO(spscOutPacketQueue_t &receiver_to_parser, spscInPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, const std::atomic<bool>& running_engine) noexcept
    :  receiver_to_parser_(receiver_to_parser),
       builder_to_sender_(builder_to_sender),
       sess_mngr_(sess_mngr),
@@ -25,7 +27,8 @@ NetworkIO::NetworkIO(spscOutPacketQueue_t &receiver_to_parser, spscInPacketQueue
       login_(login),
       inPkt_pool_(inPkt_pool),
       epoll_fd_(createEpoll()),  
-      socks_(Init_Sockets())
+      socks_(Init_Sockets()),
+      running_engine_(running_engine)
 {
       for (size_t i = 0; i < PACKET_QUEUE_CAPACITY; i++)
          free_pkt_list_.push(&packet_pool_[i]);
@@ -384,7 +387,7 @@ void NetworkIO::recv_send() noexcept
    constexpr int MAX_EVENTS = 10;
    epoll_event events[MAX_EVENTS];
    
-   while (true)
+   while (running_engine_.load(std::memory_order_acquire))
    {
       InPacket* inPkt;
       while (builder_to_sender_.pop(inPkt))
@@ -401,6 +404,7 @@ void NetworkIO::recv_send() noexcept
 
       for (int i = 0; i < nfds; ++i)
       {
+         std::cerr << "NETWORK epoll geldi ";
          uint64_t epoll_data = events[i].data.u64;
          size_t index = epollUnpackData<size_t>(epoll_data);
          int sock = socks_[index];
@@ -439,6 +443,7 @@ void NetworkIO::recv_send() noexcept
          // outPacket receiving
          if (events[i].events & EPOLLIN)
          {
+            std::cerr << " pkt handling başladı";
             auto& pend_read = pending_read_[index];  
 
             while (true)
@@ -477,11 +482,13 @@ void NetworkIO::recv_send() noexcept
                   outPkt->len = len;
                }
 
+               std::cerr << " pkt recv ile alındı: " << outPkt->len << " ";
 
                if (len < 0)
                {
                   if (errno == EAGAIN || errno == EWOULDBLOCK)
                   {
+                     releasePacket(outPkt);
                      break;
                   }
                   else if (errno == EINTR)
@@ -509,11 +516,12 @@ void NetworkIO::recv_send() noexcept
                   {
                      pend_read.push(outPkt);
                      
-                     if (pend_read.back() && !(*pend_read.back())->partial)
+                     if (pend_read.back() && !(pend_read.back())->partial)
                        pend_read.swap_last_two();
                      
                      break;
                   }
+                  std::cerr << "NETWORK PUSHED ";
                }
             }
          }
@@ -546,6 +554,7 @@ void NetworkIO::handleEINPROGRESS(const int sock, SocketState& states, const uin
 
       if (error != 0)
       {
+         std::cerr << "error: " << error;
          LOG_ERROR("Connection failed for index {} with error {}", index, error);
          states.connection_pending = false;
 

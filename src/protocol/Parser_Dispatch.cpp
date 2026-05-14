@@ -1,12 +1,14 @@
 #include "Parser_Dispatch.h"
 #include "NetworkIO.h"
+#include "Parser_FIX.h"
+#include "SessionManager.h"
 
 #include <type_traits>
 
 Parser_Dispatch::Parser_Dispatch(spscOutPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in,
-                                 SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io) noexcept
+                                 SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX& fixparser) noexcept
                                  : parser_table_(makeParserLookUpTable()), receiver_to_parser_(receiver_to_parser), parser_to_store_(parser_to_store), parser_to_fixbuilder_out_(parser_to_fixbuilder_out), 
-                                 parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), db_to_parser_(db_to_parser), network_io_(network_io)
+                                 parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), db_to_parser_(db_to_parser), network_io_(network_io), fixparser_(fixparser)
 {}
 
 std::array<std::array<Parser_Dispatch::ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> Parser_Dispatch::makeParserLookUpTable() noexcept
@@ -33,22 +35,24 @@ bool Parser_Dispatch::dispatch() noexcept
    {
       return false;
    }
-   else if (pkt->len <= 0) 
-   {
-      network_io_.releasePacket(pkt);
-      return true;
-   }
-
+   // else if (pkt->len <= 0)
+   // {
+   //    network_io_.releasePacket(pkt);
+   //    return true;
+   // }
+   std::cerr << "pkt_len:" << pkt->len << " ";
    if (UNLIKELY((PktCount++ & (DB_QUEUE_THRESHOLD - 1u)) == 0))
    {
+      std::cerr << "flushed";
       flush_DbQueue();
       PktCount = 1;
    }
-
    (this->*parser_table_[static_cast<size_t>(pkt->protocol)][static_cast<size_t>(pkt->venue)])(pkt);
    
    if(pkt->release_this_pkt)
       network_io_.releasePacket(pkt);
+
+   std::cerr << "ENTER PARSER ";
 
    return true;
 }
@@ -143,18 +147,6 @@ void Parser_Dispatch::parseFIX(OutPacket *pkt) noexcept
 
             fixMsg = fixparser_.parse<FIXMessage>(pair.first, pair.second);
 
-   //-----------------------------------DEBUG_ONLY-----------------------------------------------
-   /* IF_NOT_RELEASE (
-      if(fixMsg == nullptr) 
-      {
-         parser_to_store_.push(MessageWithVenue<MessageTypes_t>(fixMsg, Venue::BIST));
-         seq_fix.increase_expected_seq();
-         offset += pair.second;
-         return;
-      }
-   ); */
-   //--------------------------------------------------------------------------------------------
-         
             if (seq_fix.get_expected() == fixMsg->seqnum)   
             {
                parser_to_store_.push(MessageWithVenue<MessageTypes_t>(fixMsg, Venue::BIST));
@@ -168,7 +160,7 @@ void Parser_Dispatch::parseFIX(OutPacket *pkt) noexcept
             }
             else if(seq_fix.get_expected() < fixMsg->seqnum)
             {
-               fixparser_.resend_logic(fixMsg->seqnum, seq_fix);
+               // fixparser_.resend_logic(fixMsg->seqnum, seq_fix);
                fixparser_.push_pending(fixMsg);
             }
          }
@@ -216,19 +208,41 @@ void Parser_Dispatch::parseFIX(OutPacket *pkt) noexcept
 
 void Parser_Dispatch::parseITCH_BIST(OutPacket *pkt) noexcept
 {
-   BIST::ITCHMessage itchMsg{itchparser_bist_.parse(pkt->data.data())};
-   parser_to_store_.push(MessageWithVenue<MessageTypes_t>(itchMsg, Venue::BIST));
+   itchparser_bist_.ItchPacketHandler(pkt);
+
+   for (size_t msg_index = 0; msg_index < pkt->msg_count; ++msg_index)
+   {
+      BIST::ITCHMessage itchMsg{itchparser_bist_.parse(pkt->data.data() + pkt->offsets[msg_index])};
+      parser_to_store_.push(MessageWithVenue<MessageTypes_t>(itchMsg, Venue::BIST));
+   }
 }
 
 void Parser_Dispatch::parseITCH_NASDAQ(OutPacket *pkt) noexcept
 {
-   NASDAQ::ITCHMessage itchMsg{itchparser_nasdaq_.parse(pkt->data.data())};
-   parser_to_store_.push(MessageWithVenue<MessageTypes_t>(itchMsg, Venue::NASDAQ));
+   itchparser_nasdaq_.ItchPacketHandler(pkt);
+
+   for (size_t msg_index = 0; msg_index < pkt->msg_count; ++msg_index)
+   {
+      NASDAQ::ITCHMessage itchMsg{itchparser_nasdaq_.parse(pkt->data.data() + pkt->offsets[msg_index])};
+      parser_to_store_.push(MessageWithVenue<MessageTypes_t>(itchMsg, Venue::NASDAQ));
+      
+      // std::array<MessageWithVenue<MessageTypes_t>, 3> batch;
+      // size_t count = 0;
+
+      // for (size_t i = 0; i < pkt->msg_count; ++i)
+      //    batch[count++] = {itchparser_nasdaq_.parse(pkt->data.data() + pkt->offsets[i]), Venue::NASDAQ};
+
+      // // tek seferde push
+      // for (size_t i = 0; i < count; ++i)
+      //    parser_to_store_.push(batch[i]);
+
+      // itchparser_nasdaq_.releaseITCH(itchMsg);
+   }
 }
 
 void Parser_Dispatch::parseOUCH_BIST(OutPacket *pkt) noexcept
 {
-   for (uint8_t msg_index = 0; msg_index < pkt->msg_count; ++msg_index)
+   for (size_t msg_index = 0; msg_index < pkt->msg_count; ++msg_index)
    {
       BIST::OUCHMessage ouchMsg{ouchparser_bist_.parse(pkt->data.data() + pkt->offsets[msg_index])};
       parser_to_store_.push(MessageWithVenue<MessageTypes_t>(ouchMsg, Venue::BIST));
@@ -237,7 +251,7 @@ void Parser_Dispatch::parseOUCH_BIST(OutPacket *pkt) noexcept
 
 void Parser_Dispatch::parseOUCH_NASDAQ(OutPacket *pkt) noexcept
 {
-   for (uint8_t msg_index = 0; msg_index < pkt->msg_count; ++msg_index)
+   for (size_t msg_index = 0; msg_index < pkt->msg_count; ++msg_index)
    {
       NASDAQ::OUCHMessage ouchMsg{ouchparser_nasdaq_.parse(pkt->data.data() + pkt->offsets[msg_index])};
       parser_to_store_.push(MessageWithVenue<MessageTypes_t>(ouchMsg, Venue::NASDAQ));

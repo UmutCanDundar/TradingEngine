@@ -14,6 +14,7 @@ target_link_libraries(network_unit
     protocol
     utils
     session
+    parser_fix
     network
 )
 

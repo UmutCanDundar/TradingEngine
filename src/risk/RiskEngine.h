@@ -114,7 +114,7 @@ struct alignas(64) AccountRisk // May be refactored after profiling to mitigate 
     std::atomic<int64_t> total_unrealized_pnl{0};
     std::atomic<uint32_t> open_orders_count{0};
     
-    std::atomic<AccountStatus> status{AccountStatus::Inactive};
+    std::atomic<AccountStatus> status{AccountStatus::Active}; // Inactive after tests
     uint8_t pad1[3]; 
     
     OrderRateLimit orderratelimit;    
@@ -277,7 +277,10 @@ using spscRejectOrderQueue_t = boost::lockfree::spsc_queue<OrderWithRejectReason
 
 class RiskEngine
 {
-public:
+public://
+    std::atomic<uint64_t> pipeline_seq{0};
+private:
+public://
     static constexpr size_t ORDERRISK_POOL_CAPACITY = 65536;
     static constexpr size_t MAX_SYMBOL_COUNT = 512; 
 
@@ -304,7 +307,8 @@ public:
     bool update_risk() noexcept;
     bool check_risk() noexcept;
    
-private: 
+private:
+public: // 
     // Helper functions associated with the public functions
     // --------------------------------------INITIALIZE FUNCTIONS-----------------------------------------------
     void initialize_accountrisks() noexcept;

@@ -23,6 +23,7 @@ target_link_libraries(parser_ouch_npkt_nmsg_unit
     project_options
     network
     session
+    parser_fix
     builder_fix
     protocol
 )

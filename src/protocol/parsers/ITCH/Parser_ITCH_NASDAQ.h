@@ -53,6 +53,7 @@
 
 #include "ITCHTypes_NASDAQ.h"
 #include "MessagePool.h"
+#include "NetworkPackets.h"
 
 #include <cstddef>
 #include <array>
@@ -91,9 +92,22 @@ public:
     inline NASDAQ::ITCHMessage parse(const char *data) noexcept
     {
         NASDAQ::ITCHMessage ITCHmsg;
-        size_t index = static_cast<size_t>(NASDAQ::itchMessageIndex(*data));
+        size_t index = NASDAQ::itchMessageIndex(*data);
         if (index != 99)
             MessageHandlers[index](*this, data, ITCHmsg);
         return ITCHmsg;
+    }
+
+    inline void ItchPacketHandler(OutPacket *pkt) noexcept 
+    {
+        size_t offset = 0;
+        auto* data = pkt->data.data();
+
+        while(offset < pkt->len)
+        {
+            size_t msg_size = NASDAQ::ITCHSizeOfs[NASDAQ::itchMessageIndex(*(data+offset))];
+            pkt->offsets[pkt->msg_count++] = offset;
+            offset += msg_size;
+        }
     }
 };

@@ -215,6 +215,8 @@ def generate_file(messages):
         "#pragma once",
         "",
         "#include <cstdint>",
+        "#include <array>",
+        "#include <cstddef>",
         "",
         "namespace BIST {\n",
     ]
@@ -228,7 +230,7 @@ def messagetype_index(msg):
         return i  
 
 def generate_enum(messages):
-     line = [f"\nenum class ITCHTypes : uint8_t {{ "]
+     line = [f"\nenum class ITCHTypes : size_t {{ "]
      for i, msg in enumerate(messages):
          messagetype = messagetype_index(msg)
          default = msg["fields"][messagetype][1]  
@@ -238,14 +240,48 @@ def generate_enum(messages):
      line.append(f"}};")
      return" ".join(line)
 
+def msg_size(msg, msg_idx):
+    size = 0
+    for field in msg["fields"]:
+        if "t64" in field[0]:
+            size += 8
+        elif "t32" in field[0]:
+            size += 4
+        elif "t16" in field[0]:
+            size += 2
+        elif '[' in field[0]:
+            result = 0
+            idx = field[0].find('[')
+            idx += 1
+            while field[0][idx] != ']':
+                result = (result * 10) + (int)(field[0][idx])
+                idx += 1
+            size += result
+        else:
+            size += 1
+
+    if (msg_idx == 12):
+        size -= 1
+
+    return size
+       
+def generate_arr(messages):
+     all_msg_count = len(messages)
+     line = [f"\n\ninline std::array<size_t, {all_msg_count}> ITCHSizeOfs = {{ "]
+     for i, msg in enumerate(messages):
+         msg_bytes = msg_size(msg, i)
+         line.append(f"{msg_bytes},")
+     line.append(f"}};")
+     return" ".join(line)
+
 def generate_func(messages):
-    line = [f"\n\ninline constexpr ITCHTypes itchMessageIndex(char type) {{\n"]
+    line = [f"\n\ninline constexpr size_t itchMessageIndex(char type) {{\n"]
     line.append("   switch(type) {")
     for i, msg in enumerate(messages):
         messagetype = messagetype_index(msg)
         default = msg["fields"][messagetype][1]  
-        line.append(f"      case {default}: return ITCHTypes::{default.strip("'")};")
-    line.append(f"      default: return ITCHTypes::unknownITCHtype;")
+        line.append(f"      case {default}: return static_cast<size_t>(ITCHTypes::{default.strip("'")});")
+    line.append(f"      default: return static_cast<size_t>(ITCHTypes::unknownITCHtype);")
     line.append("   }")
     line.append("}")
     return "\n".join(line) 
@@ -254,6 +290,7 @@ file = generate_file(messages)
 with open("../../generated/GeneratedITCHMessages_BIST.h", "w") as f:
     f.write(file)
     f.write(generate_enum(messages))
+    f.write(generate_arr(messages))
     f.write(generate_func(messages))
     f.write("\n\n}\n")  
 

@@ -3,7 +3,7 @@
 #include "SessionManager.h"
 #include "Builder_FIX.h"
 #include "Order.h"
-#include "dataset.h"
+#include "dataset_builder.h"
 
 #include <memory>
 #include <unordered_map>
@@ -41,7 +41,7 @@ std::unordered_map<int, std::string_view> make_tag_map(const char* data, size_t 
 
 TEST(FixBuilderTest, FixNewOrder)
 {
-    Order* order = test_data::fix_new_order;
+    Order* order = test_data_builder::fix_new_order;
 
     auto sess_mngr   = std::make_unique<SessionManager>();
     auto builder_fix = std::make_unique<Builder_FIX>(*sess_mngr);

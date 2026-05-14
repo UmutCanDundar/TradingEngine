@@ -4,19 +4,23 @@
 #include "MarketBook.h"
 #include "HashTables.h"
 #include "Order.h"
-#include "dataset.h"
+#include "dataset_builder.h"
 #include "SessionManager.h"
 #include "LoginController.h"
 #include "SoupBinTcp.h"
 #include "Builder_FIX.h"
+#include "Parser_FIX.h"
 #include "NetworkPackets.h"
 #include "FIXMessage.h"
+#include "Logger.h"
 #include "Builder_Dispatch.h"
 
 #include <memory>
 
 TEST(BuilderDispatchTest, MixedMessageTraffic)
 {
+    Logger::Init();
+
     auto inPkt_pool = std::make_unique<InPacketPoolManager>();
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
@@ -35,6 +39,7 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
+    auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
     auto order_manager = std::make_unique<OrderManager>(
                                         parser_to_store,
                                         store_to_strategy,
@@ -55,7 +60,8 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
                                         *login,
                                         *inPkt_pool,
                                         *builder_fix,
-                                        *order_manager        
+                                        *order_manager,
+                                        *parser_fix        
     );
 
    
@@ -63,9 +69,9 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
 //       v TRAFFIC FOR BUILDING DISPATCH v 
     
     std::array<Order*, 3> orders = {
-        test_data::fix_new_order, 
-        test_data::ouch_new_order,
-        test_data::NQouch_new_order
+        test_data_builder::fix_new_order, 
+        test_data_builder::ouch_new_order,
+        test_data_builder::NQouch_new_order
     };
     
     for (auto ord : orders) 
@@ -96,5 +102,6 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
     EXPECT_EQ(inPkt->sock_index, 2);  
     EXPECT_FALSE(inPkt->is_login_msg); 
 
+    Logger::Shutdown();
 }
 

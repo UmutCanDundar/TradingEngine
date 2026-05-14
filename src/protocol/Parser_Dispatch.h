@@ -51,7 +51,6 @@
 #include "DbTypes.h"
 #include "NetworkPackets.h"
 
-#include "Parser_FIX.h"
 #include "Parser_ITCH_BIST.h"
 #include "Parser_ITCH_NASDAQ.h"
 #include "Parser_OUCH_BIST.h"
@@ -66,8 +65,10 @@
 
 struct OutPacket;
 struct Order;
+struct SessionState;
 class NetworkIO;
 class SessionManager;
+class Parser_FIX;
 
 class Parser_Dispatch
 {
@@ -88,7 +89,7 @@ public:
     spscDbQueue_t &db_to_parser_;
     NetworkIO &network_io_;
 
-    Parser_FIX fixparser_{parser_to_fixbuilder_in_};
+    Parser_FIX& fixparser_;
     Parser_ITCH_BIST itchparser_bist_;
     Parser_ITCH_NASDAQ itchparser_nasdaq_;
     Parser_OUCH_BIST ouchparser_bist_;
@@ -96,7 +97,7 @@ public:
 
 public:
     Parser_Dispatch(spscOutPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, 
-                    SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io) noexcept;
+                    SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX &fixparser) noexcept;
 
     bool dispatch() noexcept;
    

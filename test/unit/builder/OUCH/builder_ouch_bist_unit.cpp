@@ -1,7 +1,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dataset.h"
+#include "dataset_builder.h"
 #include "SessionManager.h"
 #include "SoupBinTcp.h"
 #include "Builder_OUCH_BIST.h"
@@ -12,7 +12,7 @@
 
 TEST(OUCHBISTBuilderTest, OuchNewOrder)
 {
- Order* order = test_data::ouch_new_order;
+ Order* order = test_data_builder::ouch_new_order;
 
     auto sess_mngr   = std::make_unique<SessionManager>();
     auto sbt         = std::make_unique<SoupBinTcp>(*sess_mngr);
@@ -28,7 +28,7 @@ TEST(OUCHBISTBuilderTest, OuchNewOrder)
     
     EXPECT_EQ(p[3], 'O');
     
-    EXPECT_EQ(std::string_view(p + 4, 14), std::string_view("CLIENT0000001 ", 14));
+    EXPECT_EQ(std::string_view(p + 4, 14), std::string_view("CLIENT0000005 ", 14));
     
     EXPECT_EQ(p[18], 0x00);
     EXPECT_EQ(p[19], 0x00);

@@ -68,9 +68,9 @@ public:
         return buf;
     }
 
-    inline char* WriteSBTHeaderForDataPacket(char *buf, uint16_t OUCHmsg_len) noexcept
+    inline char* WriteSBTHeaderForDataPacket(char *buf, uint16_t OUCHpkt_len) noexcept
     {
-        Endian::write_u16_be(buf, OUCHmsg_len + 1);
+        Endian::write_u16_be(buf, OUCHpkt_len - 2);
         *(buf + 2) = 'U';
 
         return buf + 3;

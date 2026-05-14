@@ -31,6 +31,7 @@
 
 #include <memory>
 #include <utility>
+#include <filesystem>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -44,7 +45,7 @@ private:
     Logger() = delete;
 
 public:
-    static void Init(const std::string &filename = "logs/system_log.txt");
+    static void Init(const std::filesystem::path& filename = std::filesystem::path(PROJECT_ROOT)/"logs"/"system_log.txt");
  
     static inline void Shutdown() { spdlog::shutdown(); }
 

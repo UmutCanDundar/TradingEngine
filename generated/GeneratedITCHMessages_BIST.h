@@ -3,6 +3,8 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
+#include <cstddef>
 
 namespace BIST {
 
@@ -159,26 +161,28 @@ struct ITCHEquilibriumPriceUpdateMessage {
     char message_type = 'Z';                    // Message Type (Z = Equilibrium Price) | offset: 0, len: 1
 };
 
-enum class ITCHTypes : uint8_t {   T = 0,  R = 1,  M = 2,  L = 3,  V = 4,  S = 5,  O = 6,  A = 7,  E = 8,  C = 9,  D = 10,  Y = 11,  P = 12,  Z = 13,  unknownITCHtype = 99 };
+enum class ITCHTypes : size_t {   T = 0,  R = 1,  M = 2,  L = 3,  V = 4,  S = 5,  O = 6,  A = 7,  E = 8,  C = 9,  D = 10,  Y = 11,  P = 12,  Z = 13,  unknownITCHtype = 99 };
 
-inline constexpr ITCHTypes itchMessageIndex(char type) {
+inline std::array<size_t, 14> ITCHSizeOfs = {  5, 130, 18, 25, 10, 6, 29, 45, 52, 58, 18, 9, 50, 53, };
+
+inline constexpr size_t itchMessageIndex(char type) {
 
    switch(type) {
-      case 'T': return ITCHTypes::T;
-      case 'R': return ITCHTypes::R;
-      case 'M': return ITCHTypes::M;
-      case 'L': return ITCHTypes::L;
-      case 'V': return ITCHTypes::V;
-      case 'S': return ITCHTypes::S;
-      case 'O': return ITCHTypes::O;
-      case 'A': return ITCHTypes::A;
-      case 'E': return ITCHTypes::E;
-      case 'C': return ITCHTypes::C;
-      case 'D': return ITCHTypes::D;
-      case 'Y': return ITCHTypes::Y;
-      case 'P': return ITCHTypes::P;
-      case 'Z': return ITCHTypes::Z;
-      default: return ITCHTypes::unknownITCHtype;
+      case 'T': return static_cast<size_t>(ITCHTypes::T);
+      case 'R': return static_cast<size_t>(ITCHTypes::R);
+      case 'M': return static_cast<size_t>(ITCHTypes::M);
+      case 'L': return static_cast<size_t>(ITCHTypes::L);
+      case 'V': return static_cast<size_t>(ITCHTypes::V);
+      case 'S': return static_cast<size_t>(ITCHTypes::S);
+      case 'O': return static_cast<size_t>(ITCHTypes::O);
+      case 'A': return static_cast<size_t>(ITCHTypes::A);
+      case 'E': return static_cast<size_t>(ITCHTypes::E);
+      case 'C': return static_cast<size_t>(ITCHTypes::C);
+      case 'D': return static_cast<size_t>(ITCHTypes::D);
+      case 'Y': return static_cast<size_t>(ITCHTypes::Y);
+      case 'P': return static_cast<size_t>(ITCHTypes::P);
+      case 'Z': return static_cast<size_t>(ITCHTypes::Z);
+      default: return static_cast<size_t>(ITCHTypes::unknownITCHtype);
    }
 }
 

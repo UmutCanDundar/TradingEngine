@@ -10,15 +10,11 @@ Parser_FIX::Parser_FIX(spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcep
 {
   for (size_t i = 0; i < FIX_QUEUE_CAPACITY; i++) {
     auto* msg = &fixMsg_pool_[i];
-    msg->seqnum = 0;
-    (void)msg->seqnum;
     free_fixMsg_list_.push(msg);
 }
 
 for (size_t i = 0; i < FIX_QUEUE_CAPACITY; i++) {
     auto* sesMsg = &fixSesMsg_pool_[i];
-    sesMsg->seqnum = 0;
-    (void)sesMsg->seqnum;
     free_fixSesMsg_list_.push(sesMsg);
 }
 }
@@ -210,9 +206,9 @@ std::pair<char*, size_t> Parser_FIX::nextFixMsg(OutPacket *pkt, size_t& data_off
 {
    if (data_offset >= pkt->len)
       return {nullptr, 0};
-
-   auto *partial_data = partial_fix_msg_.data;
-
+   
+   auto* partial_data = partial_fix_msg_.data;
+   
    // Partial Packet Handler, Start
    if (partial_fix_msg_.active == true && pkt->consumed == false)
    {
@@ -292,7 +288,6 @@ std::pair<char*, size_t> Parser_FIX::nextFixMsg(OutPacket *pkt, size_t& data_off
 
       existing_len += copy_len;
       remaining_len -= copy_len;
-      partial_fix_msg_.pkt_data_offset += copy_len;
       pkt->consumed = true;
 
       if(copy_len < pkt->len)
@@ -306,6 +301,7 @@ std::pair<char*, size_t> Parser_FIX::nextFixMsg(OutPacket *pkt, size_t& data_off
             const size_t msg_len = existing_len;
             existing_len = 0;
             partial_fix_msg_.active = false;
+            partial_fix_msg_.body_len = 0;
             partial_fix_msg_.bodylen_state = BodyLenState::None;
 
             return {partial_data, msg_len};
@@ -403,6 +399,7 @@ std::pair<char*, size_t> Parser_FIX::nextFixMsg(OutPacket *pkt, size_t& data_off
          data_offset += msg_len;
          partial_fix_msg_.remaining_len = 0;
          partial_fix_msg_.active = false;
+         partial_fix_msg_.body_len = 0;
          partial_fix_msg_.existing_len = existing_len - msg_len;
          partial_fix_msg_.bodylen_state = BodyLenState::None;
          
@@ -411,6 +408,8 @@ std::pair<char*, size_t> Parser_FIX::nextFixMsg(OutPacket *pkt, size_t& data_off
       else
       {
          pkt->consumed = true;
+         partial_fix_msg_.active = false;
+         partial_fix_msg_.body_len = 0;
          partial_fix_msg_.bodylen_state = BodyLenState::None;
          return {pkt->data.data() + data_offset, msg_len};
       }

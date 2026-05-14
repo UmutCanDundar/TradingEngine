@@ -12,7 +12,7 @@ ClickhouseWriter::ClickhouseWriter(spscDbQueue_t &store_to_db, spscDbQueue_t &db
    clickhouse::ClientOptions options;
    options.SetHost(host);
    options.SetPort(port);
-   client_ = std::make_unique<clickhouse::Client>(options);
+   // client_ = std::make_unique<clickhouse::Client>(options);
 
 }
 
@@ -22,10 +22,11 @@ bool ClickhouseWriter::store() noexcept
    if (!store_to_db_.pop(data))
       return false;
 
-   std::visit([this](const auto &type)
-              { this->insert(type); },
-              data);
+   // std::visit([this](const auto &type)
+   //            { this->insert(type); },
+   //            data);
 
+   db_to_parser_.push(data);
    return true;
 }
 

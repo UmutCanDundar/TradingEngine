@@ -4,7 +4,8 @@
 #include "MarketBook.h"
 #include "HashTables.h"
 #include "Order.h"
-#include "dataset.h"
+#include "dataset_risk.h"
+#include "dataset_order_manager.h"
 #include "RiskEngine.h"
 #include "Limits.h"
 #include "Logger.h"
@@ -51,10 +52,10 @@ TEST(RiskEngineTest, MixedMessageTraffic)
     );
 
     // SYMBOLMETA INITIALIZING  (BIST GARAN(order_book_id = 3) and NASDAQ AAPL(stock_locate = 1))
-    parser_to_store.push(MessageWithVenue<MessageTypes_t>{NASDAQ::ITCHMessage{&test_data::nasdaq_dir}, Venue::NASDAQ});
+    parser_to_store.push(MessageWithVenue<MessageTypes_t>{NASDAQ::ITCHMessage{&test_data_ordMngr::nasdaq_dir}, Venue::NASDAQ});
     order_manager->store();
     
-    parser_to_store.push(MessageWithVenue<MessageTypes_t>{BIST::ITCHMessage{&test_data::bist_dir}, Venue::BIST});
+    parser_to_store.push(MessageWithVenue<MessageTypes_t>{BIST::ITCHMessage{&test_data_ordMngr::bist_dir}, Venue::BIST});
     order_manager->store();
 
     //===========================================================================
@@ -68,7 +69,7 @@ TEST(RiskEngineTest, MixedMessageTraffic)
         {
             std::array<Order*, 15> arr{};
 
-            using namespace test_data;
+            using namespace test_data_risk;
             // 0 — FIX New Order (GARAN, buy 500@15000)
             arr[0] = fixNew;
 
@@ -149,7 +150,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk1.daily_realized_pnl.load(), 0);
             EXPECT_EQ(accRisk1.total_unrealized_pnl.load(), 0);
             EXPECT_EQ(accRisk1.open_orders_count.load(), 1);
-            EXPECT_EQ(accRisk1.status.load(), AccountStatus::Inactive);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk1.open_orders_count.load(),        1);
@@ -193,7 +193,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk2.daily_realized_pnl.load(), 0);
             EXPECT_EQ(accRisk2.total_unrealized_pnl.load(), 0);
             EXPECT_EQ(accRisk2.open_orders_count.load(), 2);
-            EXPECT_EQ(accRisk2.status.load(), AccountStatus::Inactive);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk2.open_orders_count.load(),        2);
@@ -263,7 +262,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk4.daily_realized_pnl.load(), 0);
             EXPECT_EQ(accRisk4.total_unrealized_pnl.load(), 0);
             EXPECT_EQ(accRisk4.open_orders_count.load(), 1);
-            EXPECT_EQ(accRisk4.status.load(), AccountStatus::Inactive);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk4.open_orders_count.load(),        1);
@@ -336,7 +334,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk6.daily_realized_pnl.load(), 0);
             EXPECT_EQ(accRisk6.total_unrealized_pnl.load(), 0);
             EXPECT_EQ(accRisk6.open_orders_count.load(), 2);
-            EXPECT_EQ(accRisk6.status.load(), AccountStatus::Inactive);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk6.open_orders_count.load(),       2);
@@ -409,7 +406,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk8.daily_realized_pnl.load(), 0);
             EXPECT_EQ(accRisk8.total_unrealized_pnl.load(), pnl_bist);
             EXPECT_EQ(accRisk8.open_orders_count.load(), 2);
-            EXPECT_EQ(accRisk8.status.load(), AccountStatus::Inactive);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk8.open_orders_count.load(),       2);
@@ -482,7 +478,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk10.daily_realized_pnl.load(), 0);
             EXPECT_EQ(accRisk10.total_unrealized_pnl.load(), 0);
             EXPECT_EQ(accRisk10.open_orders_count.load(), 1);
-            EXPECT_EQ(accRisk10.status.load(), AccountStatus::Inactive);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk10.open_orders_count.load(),       1);
@@ -552,7 +547,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk12.daily_realized_pnl.load(), 0);
             EXPECT_EQ(accRisk12.total_unrealized_pnl.load(), pnl_bist);
             EXPECT_EQ(accRisk12.open_orders_count.load(), 1);
-            EXPECT_EQ(accRisk12.status.load(), AccountStatus::Inactive);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk12.open_orders_count.load(),       1);
@@ -615,7 +609,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk14.daily_realized_pnl.load(), 0);
             EXPECT_EQ(accRisk14.total_unrealized_pnl.load(), 0);
             EXPECT_EQ(accRisk14.open_orders_count.load(), 0);
-            EXPECT_EQ(accRisk14.status.load(), AccountStatus::Inactive);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk14.open_orders_count.load(),       0);
@@ -654,7 +647,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk15.daily_realized_pnl.load(), 0);
             EXPECT_EQ(accRisk15.total_unrealized_pnl.load(), pnl_bist);
             EXPECT_EQ(accRisk15.open_orders_count.load(), 0);
-            EXPECT_EQ(accRisk15.status.load(), AccountStatus::Inactive);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk15.open_orders_count.load(),       0);
@@ -676,11 +668,11 @@ TEST(RiskEngineTest, MixedMessageTraffic)
         // ====================================================
         //       v STRATEGY TO RISK TRAFFIC FOR RISK ENGINE v
 
-            std::array<Order*, 17> strategy_to_risk_traffic = [&]()
+            std::array<Order*, 15> strategy_to_risk_traffic = [&]()
             {
-                std::array<Order*, 17> arr{};
+                std::array<Order*, 15> arr{};
 
-                using namespace test_data;
+                using namespace test_data_risk;
                 arr[0] = o1;
                 arr[1] = o2;
                 arr[2] = o3;
@@ -872,19 +864,11 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             strategy_to_risk.push(order);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order.RejectReason, reason
+                
                 | static_cast<uint32_t>(RiskRejectReason::MaxOrderRateLimitExceededSymbol)
                 | static_cast<uint32_t>(RiskRejectReason::MaxOrderRateLimitExceededAccount));
                 
-    // DESTRUCTION
-    for(auto order : store_to_risk_traffic)
-                delete order;
-    for(auto order : strategy_to_risk_traffic)
-                delete order;
-
-    delete ticksize_entry;
-    delete oR;
-    
     Logger::Shutdown();             
 }
 

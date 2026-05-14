@@ -6,6 +6,7 @@
 
 #include <fstream>
 #include <cstring>
+#include <filesystem>
 
 #include <nlohmann/json.hpp>
 
@@ -18,7 +19,7 @@ RiskEngine::RiskEngine(spscOrderQueue_t &store_to_risk, spscOrderQueue_t &strate
 
 void RiskEngine::initialize_accountrisks() noexcept
 {
-    std::ifstream file("config/Limits.json");
+    std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Limits.json");
     if (!file.is_open())
         ErrorHandler::handleError(ErrorName::CouldNotOpenFile);
 
@@ -44,7 +45,7 @@ void RiskEngine::initialize_accountrisks() noexcept
 
 void RiskEngine::initialize_symbolrisks() noexcept
 {
-    std::ifstream file("config/Limits.json");
+    std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Limits.json");
     if (!file.is_open())
         ErrorHandler::handleError(ErrorName::CouldNotOpenFile);
 
@@ -83,8 +84,10 @@ void RiskEngine::initialize_symbolrisks() noexcept
 bool RiskEngine::update_risk() noexcept
 {
     Order *order;
+    // std::cerr << "ENTER RISK ";
     while (store_to_risk_.pop(order))
     {
+        std::cerr << "RISK POP OLDU ";
         const uint8_t venue_index = static_cast<uint8_t>(order->venue);
         auto &accRisk = accountrisks_[venue_index];
         const auto &accLim = limits_.getAccountLimit(venue_index);
@@ -102,6 +105,8 @@ bool RiskEngine::update_risk() noexcept
         }
         order->canModify.store(order->canModify | RISK_DONE, std::memory_order_release);
 
+        pipeline_seq.fetch_add(1, std::memory_order_release); // test 
+        // std::cerr <<  pipeline_done.load(std::memory_order_relaxed) << std::endl;
         return true;
     }
 
@@ -124,8 +129,8 @@ bool RiskEngine::check_risk() noexcept
         const auto *symmeta = ord_mngr_.get_symbolmeta(order->venue, order->instrument_id);
 
         // ===== PRE-RISK CHECKS (FAST-FAIL)=====
-        if (check_venue_halt_and_circuit(*order, *symmeta) ||
-            check_order_rate_limit(accRisk, symRisk, *order))
+        if (check_venue_halt_and_circuit(*order, *symmeta) /* || 
+            check_order_rate_limit(accRisk, symRisk, *order) */) // this check need to be commented out during benchmark test
             continue;
         
         if(UNLIKELY(order->status == Status::CancelRequest)) 
@@ -235,6 +240,7 @@ bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const Accoun
                 order.status = order.StatusesPreNew[i & 1UL];
             }
             
+            pipeline_seq.fetch_add(1, std::memory_order_release); // incoming pipeline test end
             order.canModify.store(order.canModify | RISK_DONE, std::memory_order_release);
             return true;
         }

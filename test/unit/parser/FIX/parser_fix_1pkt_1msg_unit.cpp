@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "Parser_FIX.h"
-#include "dataset.h"
+#include "dataset_parser.h"
 
 
 TEST(FixParserTest, NewOrderSingle)
@@ -10,8 +10,8 @@ TEST(FixParserTest, NewOrderSingle)
     Parser_FIX parser1{parser_to_fixbuilder_in};
 
     FIXMessage* msg = parser1.parse<FIXMessage>(
-        reinterpret_cast<const char*>(test_data::single_fix_pkt1.data()),
-        test_data::single_fix_pkt1.size()
+        reinterpret_cast<const char*>(test_data_parser::single_fix_pkt1.data()),
+        test_data_parser::single_fix_pkt1.size()
     );
 
     ASSERT_NE(msg, nullptr);
@@ -50,8 +50,8 @@ TEST(FixParserTest, ExecutionReport)
     Parser_FIX parser2{parser_to_fixbuilder_in};
 
     FIXMessage* msg = parser2.parse<FIXMessage>(
-        reinterpret_cast<const char*>(test_data::single_fix_pkt2.data()),
-        test_data::single_fix_pkt2.size()
+        reinterpret_cast<const char*>(test_data_parser::single_fix_pkt2.data()),
+        test_data_parser::single_fix_pkt2.size()
     );
 
     ASSERT_NE(msg, nullptr);

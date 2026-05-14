@@ -36,6 +36,8 @@
 #include <cstdint>
 #include <cstddef>
 
+#include <iostream>
+
 class LoginController;
 class SoupBinTcp;
 template <typename T, size_t Capacity>
@@ -83,15 +85,18 @@ public: // will be removed after test
   PartialPacketPool partial_packet_pool_;
   PendingIN pending_write_;
   PendingOUT pending_read_;
+
+  const std::atomic<bool> &running_engine_;
   
 public:
-  NetworkIO(spscOutPacketQueue_t &receiver_to_parser, spscInPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool) noexcept;
+  NetworkIO(spscOutPacketQueue_t &receiver_to_parser, spscInPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, const std::atomic<bool>& running_engine) noexcept;
   ~NetworkIO() noexcept;
 
   void recv_send() noexcept;
   
   inline void releasePacket(OutPacket *pkt) noexcept
   {
+    std::cerr << "networke pkt iade edildi ";
     pkt->msg_count = 0;
     free_pkt_list_.push(pkt);
   }

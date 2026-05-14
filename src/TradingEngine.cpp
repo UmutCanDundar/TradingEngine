@@ -9,6 +9,7 @@ TradingEngine::TradingEngine() noexcept
       limits_(hashtables_),
       session_manager_(),
       inPkt_pool_(),
+      parser_fix_(parser_to_fixbuilder_in_),
       builder_fix_(session_manager_),
       sbt_(session_manager_),
       login_(sbt_, builder_fix_, session_manager_),
@@ -20,7 +21,8 @@ TradingEngine::TradingEngine() noexcept
           session_manager_,
           sbt_,
           login_,
-          inPkt_pool_),
+          inPkt_pool_,
+          running_),
       parser_dispatch_(
           receiver_to_parser_,
           parser_to_store_,
@@ -28,7 +30,8 @@ TradingEngine::TradingEngine() noexcept
           parser_to_fixbuilder_in_,
           session_manager_,
           db_to_parser_,
-          network_io_),
+          network_io_,
+          parser_fix_),
       ord_mngr_(
           parser_to_store_,
           store_to_risk_,
@@ -59,7 +62,8 @@ TradingEngine::TradingEngine() noexcept
           login_,
           inPkt_pool_,
           builder_fix_, 
-          ord_mngr_),
+          ord_mngr_,
+          parser_fix_),
 
       // ----- FLOWS -----
       network_flow_(network_io_),
@@ -96,3 +100,4 @@ void TradingEngine::stop() noexcept
     risk_flow_.stop();
     builder_flow_.stop();
 }
+

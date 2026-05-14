@@ -1,6 +1,5 @@
-# EXECUTABLE
-add_executable(TradingEngine
-    main.cpp
+#LIBRARY
+add_library(TradingEngine
     TradingEngine.cpp
 )
 
@@ -8,8 +7,12 @@ set_property(TARGET TradingEngine PROPERTY INTERPROCEDURAL_OPTIMIZATION
     $<$<CONFIG:Release>:TRUE>
 )
 
+target_include_directories(TradingEngine
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
 target_link_libraries(TradingEngine  
-    PRIVATE
+    PUBLIC
         utils
         core
         database
@@ -22,12 +25,22 @@ target_link_libraries(TradingEngine
         #strategy
         flows
         builder_fix
+        parser_fix
         project_options
 )
-
 target_compile_features(TradingEngine PRIVATE cxx_std_23)
-
 add_dependencies(TradingEngine GeneratedFiles SetupSqlTables)
+
+#EXECUTABLE
+add_executable(main
+    main.cpp
+)
+target_link_libraries(main
+    PUBLIC
+    TradingEngine
+    utils
+)
+target_compile_features(main PRIVATE cxx_std_23)
 
 # SUBMODULES
 add_subdirectory(utils)

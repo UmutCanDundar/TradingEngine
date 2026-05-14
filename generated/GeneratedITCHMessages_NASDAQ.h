@@ -3,6 +3,8 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
+#include <array>
 
 namespace NASDAQ {
 
@@ -134,23 +136,25 @@ struct ITCHTradingStateMessage {
     char reason[4] = {};                 // Reason | offset: 21, len: 4
 };
 
-enum class ITCHTypes : uint8_t {   A = 0,  F = 1,  X = 2,  E = 3,  C = 4,  D = 5,  U = 6,  P = 7,  S = 8,  R = 9,  H = 10,  unknownITCHtype = 99 };
+enum class ITCHTypes : size_t {   A = 0,  F = 1,  X = 2,  E = 3,  C = 4,  D = 5,  U = 6,  P = 7,  S = 8,  R = 9,  H = 10,  unknownITCHtype = 99 };
 
-inline constexpr ITCHTypes itchMessageIndex(char type) {
+inline std::array<size_t, 11> ITCHSizeOfs = {  36, 40, 23, 31, 36, 19, 35, 37, 12, 39, 25, };
+
+inline constexpr size_t itchMessageIndex(char type) {
 
    switch(type) {
-      case 'A': return ITCHTypes::A;
-      case 'F': return ITCHTypes::F;
-      case 'X': return ITCHTypes::X;
-      case 'E': return ITCHTypes::E;
-      case 'C': return ITCHTypes::C;
-      case 'D': return ITCHTypes::D;
-      case 'U': return ITCHTypes::U;
-      case 'P': return ITCHTypes::P;
-      case 'S': return ITCHTypes::S;
-      case 'R': return ITCHTypes::R;
-      case 'H': return ITCHTypes::H;
-      default: return ITCHTypes::unknownITCHtype;
+      case 'A': return static_cast<size_t>(ITCHTypes::A);
+      case 'F': return static_cast<size_t>(ITCHTypes::F);
+      case 'X': return static_cast<size_t>(ITCHTypes::X);
+      case 'E': return static_cast<size_t>(ITCHTypes::E);
+      case 'C': return static_cast<size_t>(ITCHTypes::C);
+      case 'D': return static_cast<size_t>(ITCHTypes::D);
+      case 'U': return static_cast<size_t>(ITCHTypes::U);
+      case 'P': return static_cast<size_t>(ITCHTypes::P);
+      case 'S': return static_cast<size_t>(ITCHTypes::S);
+      case 'R': return static_cast<size_t>(ITCHTypes::R);
+      case 'H': return static_cast<size_t>(ITCHTypes::H);
+      default: return static_cast<size_t>(ITCHTypes::unknownITCHtype);
    }
 }
 

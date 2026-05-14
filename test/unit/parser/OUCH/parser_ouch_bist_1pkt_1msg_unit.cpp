@@ -2,14 +2,14 @@
 #include <gtest/gtest.h>
 
 #include "Parser_OUCH_BIST.h"
-#include "dataset.h"
+#include "dataset_parser.h"
 
 
 TEST(OUCHBISTParserTest, Accepted)
 {
     Parser_OUCH_BIST parser;
     auto variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::ouch_bist_pkt1.data()-3)
+        reinterpret_cast<const char*>(test_data_parser::ouch_bist_pkt1.data()-3)
     );
 
     auto* msg = std::get<BIST::OUT::OUCHOrderAcceptedMessage*>(variant_msg);
@@ -43,7 +43,7 @@ TEST(OUCHBISTParserTest, Cancelled)
 {
     Parser_OUCH_BIST parser;
     auto variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::ouch_bist_pkt2.data()-3)
+        reinterpret_cast<const char*>(test_data_parser::ouch_bist_pkt2.data()-3)
     );
 
     auto* msg = std::get<BIST::OUT::OUCHOrderCancelledMessage*>(variant_msg);
@@ -63,7 +63,7 @@ TEST(OUCHBISTParserTest, Executed)
 {
     Parser_OUCH_BIST parser;
     auto variant_msg = parser.parse(
-        reinterpret_cast<const char*>(test_data::ouch_bist_pkt3.data()-3)
+        reinterpret_cast<const char*>(test_data_parser::ouch_bist_pkt3.data()-3)
     );
 
     auto* msg = std::get<BIST::OUT::OUCHOrderExecutedMessage*>(variant_msg);

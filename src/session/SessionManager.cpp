@@ -2,6 +2,7 @@
 #include "ErrorHandler.h"
 
 #include <fstream>
+#include <filesystem>
 
 #include <arpa/inet.h>
 #include <nlohmann/json.hpp>
@@ -15,7 +16,7 @@ std::array<SessionContext, MAX_SESSIONS> SessionManager::initialize_SessionConte
 {
     std::array<SessionContext, MAX_SESSIONS> session_contexts{};
 
-    std::ifstream file("config/Sessions.json");
+    std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Sessions.json");
     
     if (!file.is_open())
         ErrorHandler::handleError(ErrorName::CouldNotOpenFile);
@@ -50,7 +51,7 @@ std::array<SessionContext, MAX_SESSIONS> SessionManager::initialize_SessionConte
 void SessionManager::initialize_SessionState() noexcept 
 {
 
-    std::ifstream file("config/Sessions.json");
+    std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Sessions.json");
     if (!file.is_open())
         ErrorHandler::handleError(ErrorName::CouldNotOpenFile);
             
@@ -77,7 +78,7 @@ std::array<SessionAuth, MAX_TCP_SESSIONS> SessionManager::initialize_SessionAuth
 {
     std::array<SessionAuth, MAX_TCP_SESSIONS> session_auths{};
 
-    std::ifstream file("config/Sessions.json");
+    std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Sessions.json");
     if (!file.is_open())
         ErrorHandler::handleError(ErrorName::CouldNotOpenFile);
 

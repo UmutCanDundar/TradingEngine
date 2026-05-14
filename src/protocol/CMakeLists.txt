@@ -21,7 +21,6 @@ target_link_libraries(protocol
         core
         network
         session 
-        parser_fix
         parser_itch
         parser_ouch
         builder_ouch
@@ -29,6 +28,7 @@ target_link_libraries(protocol
         types_fix
         database
     PRIVATE
+        parser_fix
         utils
         builder_fix
         order_management

@@ -1,0 +1,32 @@
+#-------------------BIST---------------------
+
+add_executable(order_manager_itch_bist_perf
+    order_manager_itch_bist_perf.cpp
+)
+target_link_libraries(order_manager_itch_bist_perf 
+    PRIVATE
+    perf_utils
+    test_data
+    project_options
+    order_management
+    market
+    core
+)
+target_compile_features(order_manager_itch_bist_perf PRIVATE cxx_std_23)
+
+
+#-------------------NASDAQ---------------------
+
+add_executable(order_manager_itch_nasdaq_perf
+    order_manager_itch_nasdaq_perf.cpp
+)
+target_link_libraries(order_manager_itch_nasdaq_perf 
+    PRIVATE
+    perf_utils
+    test_data
+    project_options
+    order_management
+    market
+    core
+)
+target_compile_features(order_manager_itch_nasdaq_perf PRIVATE cxx_std_23)

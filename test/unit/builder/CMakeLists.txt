@@ -13,6 +13,7 @@ target_link_libraries(builder_dispatch_unit
     session
     market
     protocol
+    parser_fix
     builder_fix
 )
 target_compile_features(builder_dispatch_unit PRIVATE cxx_std_23)

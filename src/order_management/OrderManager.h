@@ -282,6 +282,7 @@ class OrderManager
     FillerOUCH_NASDAQ filler_ouch_nq_{*this};
    
 private:
+public:
     static constexpr size_t MARKETORDER_LAST_INDEX = 32768;
     static constexpr size_t TICKSIZE_POOL_CAPACITY = 65536; 
     static constexpr size_t TICKSIZE_CAPACITY_FOR_BIST = 32768;
@@ -338,6 +339,7 @@ public:
     template <typename T>
     inline void store(const MessageWithVenue<T> &msg) noexcept
     {
+        std::cerr << "ENTER ORD manager ";
         this->update_order(msg);
     }
 

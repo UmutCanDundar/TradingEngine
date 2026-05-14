@@ -6,6 +6,7 @@
 #include <string>
 #include <cstring>
 #include <cstddef>
+#include <filesystem>
 
 #include <nlohmann/json.hpp>
 
@@ -15,7 +16,7 @@ std::array<std::vector<SymbolLimit>, VENUE_COUNT> Limits::initialize_symbollimit
 {
     std::array<std::vector<SymbolLimit>, VENUE_COUNT> SymbolLimits{};
 
-    std::ifstream file("config/Limits.json");
+    std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Limits.json");
     if (!file.is_open())
         ErrorHandler::handleError(ErrorName::CouldNotOpenFile);
 
@@ -67,7 +68,7 @@ std::array<AccountLimit, VENUE_COUNT> Limits::initialize_accountlimits() noexcep
 {
     std::array<AccountLimit, VENUE_COUNT> AccountLimits{};
 
-    std::ifstream file("config/Limits.json");
+    std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Limits.json");
     if (!file.is_open())
         ErrorHandler::handleError(ErrorName::CouldNotOpenFile);
 

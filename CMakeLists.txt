@@ -8,6 +8,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(USE_SYSTEM_DEPS "Use system dependencies if available" ON)
 
+add_compile_definitions(PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+
 add_library(project_options INTERFACE)
 target_compile_options(project_options INTERFACE
     -Wall -Wextra -Wno-pedantic 

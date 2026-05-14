@@ -57,13 +57,21 @@ public:
         return head == tail;
     }
 
-    inline T *back() noexcept
+    inline T back() noexcept
     {
         if (head == tail)
             return nullptr; // empty
 
-        size_t back = (tail == 0) ? (N - 1) : (tail - 1);
-        return &buf[back];
+        size_t back = (head == 0) ? head : (tail - 1);
+        return buf[back];
+    }
+
+    inline T front() noexcept
+    {
+        if (head == tail)
+            return nullptr; // empty
+
+        return buf[head];
     }
 
     inline void swap_last_two() noexcept
