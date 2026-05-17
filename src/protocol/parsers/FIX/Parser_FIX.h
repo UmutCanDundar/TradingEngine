@@ -83,7 +83,7 @@ struct PartialFIXBuffer
     BodyLenState bodylen_state = BodyLenState::None;
 };
     
-struct OutPacket;
+struct RxPacket;
 struct SessionState;
 class Sequence_FIX;
 
@@ -132,7 +132,7 @@ public:
     char find_type(const char *data) noexcept;
     void resend_logic(uint32_t msg_seqnum, Sequence_FIX &seq_fix) noexcept;
     void resend_logic_logon(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix) noexcept;
-    std::pair<char *, size_t> nextFixMsg(OutPacket *pkt, size_t &data_offset) noexcept;
+    std::pair<char *, size_t> nextFixMsg(RxPacket *pkt, size_t &data_offset) noexcept;
 
     template <typename T>
     T* parse(const char* data, size_t len) noexcept
@@ -144,6 +144,8 @@ public:
         else
             free_fixSesMsg_list_.pop(msg);
         
+        // static int pick = 0;
+
         auto const &handlers = []() -> auto const &
         {
             if constexpr (std::is_same_v<T, FIXMessage>)
@@ -238,7 +240,8 @@ public:
     }
 
     inline void releaseFIX(FIXMessage* fixMsg) noexcept
-    {
+    {       
+        // static int rel = 0;
         free_fixMsg_list_.push(fixMsg);
     }
     inline void releaseFIX(FIXSessionMessage* fixSesMsg) noexcept

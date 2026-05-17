@@ -1,3 +1,3 @@
 add_subdirectory(benchmark)
-# add_subdirectory(perf)
+add_subdirectory(perf)
 

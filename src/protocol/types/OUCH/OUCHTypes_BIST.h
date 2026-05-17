@@ -7,16 +7,16 @@ namespace BIST
 {
 
     using OUCHMessageTypes = std::tuple<
-        BIST::OUT::OUCHOrderAcceptedMessage,
-        BIST::OUT::OUCHOrderRejectedMessage,
-        BIST::OUT::OUCHOrderReplacedMessage,
-        BIST::OUT::OUCHOrderCancelledMessage,
-        BIST::OUT::OUCHOrderExecutedMessage>;
+        BIST::RX::OUCHOrderAcceptedMessage,
+        BIST::RX::OUCHOrderRejectedMessage,
+        BIST::RX::OUCHOrderReplacedMessage,
+        BIST::RX::OUCHOrderCancelledMessage,
+        BIST::RX::OUCHOrderExecutedMessage>;
 
     using OUCHMessage = std::variant<
-        BIST::OUT::OUCHOrderAcceptedMessage *,
-        BIST::OUT::OUCHOrderRejectedMessage *,
-        BIST::OUT::OUCHOrderReplacedMessage *,
-        BIST::OUT::OUCHOrderCancelledMessage *,
-        BIST::OUT::OUCHOrderExecutedMessage *>;
+        BIST::RX::OUCHOrderAcceptedMessage *,
+        BIST::RX::OUCHOrderRejectedMessage *,
+        BIST::RX::OUCHOrderReplacedMessage *,
+        BIST::RX::OUCHOrderCancelledMessage *,
+        BIST::RX::OUCHOrderExecutedMessage *>;
 }

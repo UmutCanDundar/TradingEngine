@@ -32,7 +32,7 @@
 
 #include <boost/lockfree/spsc_queue.hpp>
 
-struct InPacket // To be sent to exchange
+struct TxPacket // To be sent to exchange
 {
     static constexpr size_t DATA_SIZE = 2048;
 
@@ -42,8 +42,8 @@ struct InPacket // To be sent to exchange
     uint8_t sock_index;
     bool is_login_msg = false;
 
-    InPacket() noexcept = default;
-    InPacket(char *msg, size_t len, uint8_t sock_index, bool is_login = false) noexcept : len(len), offset(0), sock_index(sock_index), is_login_msg(is_login)
+    TxPacket() noexcept = default;
+    TxPacket(char *msg, size_t len, uint8_t sock_index, bool is_login = false) noexcept : len(len), offset(0), sock_index(sock_index), is_login_msg(is_login)
     {
         std::memcpy(data.data(), msg, len);
     }
@@ -58,7 +58,7 @@ struct InPacket // To be sent to exchange
     }
 };
 
-struct OutPacket // To be received from exchange
+struct RxPacket // To be received from exchange
 {
     static constexpr size_t DATA_SIZE = 2048;
     static constexpr size_t MAX_APP_MSG_IN_ONE_DATA = 32;
@@ -83,22 +83,22 @@ struct OutPacket // To be received from exchange
 };
 
 inline constexpr size_t PACKET_QUEUE_CAPACITY = 1024;
-using spscInPacketQueue_t = boost::lockfree::spsc_queue<InPacket *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
-using spscOutPacketQueue_t = boost::lockfree::spsc_queue<OutPacket *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
+using spscTxPacketQueue_t = boost::lockfree::spsc_queue<TxPacket *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
+using spscRxPacketQueue_t = boost::lockfree::spsc_queue<RxPacket *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
 
 
 inline constexpr size_t PACKET_POOL_CAPACITY = 1024;
-class InPacketPoolManager
+class TxPacketPoolManager
 {
 private:
-    std::array<InPacket, PACKET_POOL_CAPACITY> pool{};
-    size_t next_inpkt{0};
+    std::array<TxPacket, PACKET_POOL_CAPACITY> pool{};
+    size_t next_txPkt{0};
     
 public:
 
-    InPacket *get_inpkt() noexcept
+    TxPacket *get_txPkt() noexcept
     {
-        return &pool[next_inpkt++ & (PACKET_POOL_CAPACITY - 1)];
+        return &pool[next_txPkt++ & (PACKET_POOL_CAPACITY - 1)];
     }
 
 };

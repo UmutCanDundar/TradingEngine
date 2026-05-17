@@ -23,7 +23,7 @@ void OrderFlow::start() noexcept
     ch_writer_thread_ = std::thread([this]
                                       {
    
-    configure_realtime(sched_get_priority_max(SCHED_FIFO) / 3); 
+    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
     configure_affinity(15);        
 
     run_clickhouse_writer(); });

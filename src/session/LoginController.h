@@ -44,7 +44,7 @@ class SessionManager;
 class SoupBinTcp;
 class Builder_FIX;
 struct SessionState;
-struct InPacket;
+struct TxPacket;
 
 enum class LoginDecision : uint8_t 
 {
@@ -69,7 +69,7 @@ private:
 public:
     LoginController(SoupBinTcp &sbt, Builder_FIX &builder_fix, SessionManager &sess_mngr) noexcept;
     
-    void LoginAttempt(InPacket& login_pkt, const uint8_t index, SessionState& state) noexcept;
+    void LoginAttempt(TxPacket& login_pkt, const uint8_t index, SessionState& state) noexcept;
     LoginDecision LoginDecider(SessionState* state) noexcept;
    
     static inline uint64_t NowNs() noexcept

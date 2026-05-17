@@ -9,10 +9,10 @@
 #include <atomic>
 #include <cstddef>
 
-Builder_Dispatch::Builder_Dispatch(spscInPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in,
-                                   SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr, Parser_FIX &fixParser) noexcept
+Builder_Dispatch::Builder_Dispatch(spscTxPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in,
+                                   SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr, Parser_FIX &fixParser) noexcept
                                    : builder_table_(makeBuilderLookUpTable()), builder_to_sender_(builder_to_sender), risk_to_builder_(risk_to_builder), parser_to_fixbuilder_out_(parser_to_fixbuilder_out), 
-                                   parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), sbt_(sbt), login_(login), inPkt_pool_(inPkt_pool), fixBuilder_(fixBuilder), ord_mngr_(ord_mngr),
+                                   parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), sbt_(sbt), login_(login), txPkt_pool_(txPkt_pool), fixBuilder_(fixBuilder), ord_mngr_(ord_mngr),
                                    fixParser_(fixParser)
 {}
 
@@ -62,9 +62,9 @@ void Builder_Dispatch::buildOUCH_BIST(Order *order) noexcept
 {
    uint8_t session_index = sess_mngr_.getSessionIndex(Venue::BIST, Protocol::OUCH); 
    auto* buffer = ouchBuilder_bist_.build(*order);
-   InPacket *inPkt = inPkt_pool_.get_inpkt();
-   inPkt->fillPacket(buffer->msg, buffer->len, session_index);
-   builder_to_sender_.push(inPkt);
+   TxPacket *txPkt = txPkt_pool_.get_txPkt();
+   txPkt->fillPacket(buffer->msg, buffer->len, session_index);
+   builder_to_sender_.push(txPkt);
    order->canModify.fetch_or(BUILDER_DONE, std::memory_order_release);
 }
 
@@ -72,9 +72,9 @@ void Builder_Dispatch::buildOUCH_NASDAQ(Order *order) noexcept
 {
    uint8_t session_index = sess_mngr_.getSessionIndex(Venue::NASDAQ, Protocol::OUCH);
    auto *buffer = ouchBuilder_nasdaq_.build(*order);
-   InPacket *inPkt = inPkt_pool_.get_inpkt();
-   inPkt->fillPacket(buffer->msg, buffer->len, session_index);
-   builder_to_sender_.push(inPkt);
+   TxPacket *txPkt = txPkt_pool_.get_txPkt();
+   txPkt->fillPacket(buffer->msg, buffer->len, session_index);
+   builder_to_sender_.push(txPkt);
    order->canModify.fetch_or(BUILDER_DONE, std::memory_order_release);
 }
 
@@ -99,9 +99,9 @@ void Builder_Dispatch::buildFIX_ses_in(FIXSessionMessage &fixSesMsg, uint8_t ses
       else
          buffer = fixBuilder_.build<FIXTypes::Logon>(session_index, false);
 
-      InPacket *inPkt = inPkt_pool_.get_inpkt();
-      inPkt->fillPacket(buffer->data, buffer->len, session_index, true);
-      builder_to_sender_.push(inPkt);
+      TxPacket *txPkt = txPkt_pool_.get_txPkt();
+      txPkt->fillPacket(buffer->data, buffer->len, session_index, true);
+      builder_to_sender_.push(txPkt);
       fixParser_.releaseFIX(&fixSesMsg);
       return;
    }
@@ -110,9 +110,9 @@ void Builder_Dispatch::buildFIX_ses_in(FIXSessionMessage &fixSesMsg, uint8_t ses
       return;
    }
 
-   InPacket *inPkt = inPkt_pool_.get_inpkt();
-   inPkt->fillPacket(buffer->data, buffer->len, session_index);
-   builder_to_sender_.push(inPkt);
+   TxPacket *txPkt = txPkt_pool_.get_txPkt();
+   txPkt->fillPacket(buffer->data, buffer->len, session_index);
+   builder_to_sender_.push(txPkt);
    fixParser_.releaseFIX(&fixSesMsg);
 }
 
@@ -133,9 +133,9 @@ void Builder_Dispatch::buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t se
       for (auto i = begin; i > end; i++)
       {
          auto *buffer = fixBuilder_.build_resend(sess_mngr_.getSessionState(session_index)->fix.get_buffer(i), session_index);
-         InPacket *inPkt = inPkt_pool_.get_inpkt();
-         inPkt->fillPacket(buffer->data, buffer->len, session_index);
-         builder_to_sender_.push(inPkt);
+         TxPacket *txPkt = txPkt_pool_.get_txPkt();
+         txPkt->fillPacket(buffer->data, buffer->len, session_index);
+         builder_to_sender_.push(txPkt);
       }
       fixParser_.releaseFIX(&fixSesMsg);
       return;
@@ -159,9 +159,9 @@ void Builder_Dispatch::buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t se
          state->last_login_attempt_ns = LoginController::NowNs();
          ++state->login_retry_count;
 
-         InPacket *inPkt = inPkt_pool_.get_inpkt();
-         inPkt->fillPacket(buffer->data, buffer->len, session_index, true);
-         builder_to_sender_.push(inPkt);
+         TxPacket *txPkt = txPkt_pool_.get_txPkt();
+         txPkt->fillPacket(buffer->data, buffer->len, session_index, true);
+         builder_to_sender_.push(txPkt);
          fixParser_.releaseFIX(&fixSesMsg);
          return;
       }
@@ -180,9 +180,9 @@ void Builder_Dispatch::buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t se
       return;
    }
 
-   InPacket *inPkt = inPkt_pool_.get_inpkt();
-   inPkt->fillPacket(buffer->data, buffer->len, session_index);
-   builder_to_sender_.push(inPkt);
+   TxPacket *txPkt = txPkt_pool_.get_txPkt();
+   txPkt->fillPacket(buffer->data, buffer->len, session_index);
+   builder_to_sender_.push(txPkt);
    fixParser_.releaseFIX(&fixSesMsg);
 }
 
@@ -207,9 +207,9 @@ void Builder_Dispatch::buildFIX_app(Order *order, uint8_t session_index) noexcep
       return;
    }
 
-   InPacket *inPkt = inPkt_pool_.get_inpkt();
-   inPkt->fillPacket(buffer->data, buffer->len, session_index);
-   builder_to_sender_.push(inPkt);
+   TxPacket *txPkt = txPkt_pool_.get_txPkt();
+   txPkt->fillPacket(buffer->data, buffer->len, session_index);
+   builder_to_sender_.push(txPkt);
 }
 
 

@@ -15,10 +15,10 @@ TEST(FixParserDispatchTest, MultFixPkt)
 {
     std::atomic<bool> running{true};
 
-    auto inPkt_pool = std::make_unique<InPacketPoolManager>();
+    auto txPkt_pool = std::make_unique<TxPacketPoolManager>();
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
-    spscOutPacketQueue_t receiver_to_parser;
-    spscInPacketQueue_t builder_to_sender;
+    spscRxPacketQueue_t receiver_to_parser;
+    spscTxPacketQueue_t builder_to_sender;
     spscMessageQueue_t parser_to_store; 
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
     spscDbQueue_t db_to_parser; 
@@ -26,7 +26,7 @@ TEST(FixParserDispatchTest, MultFixPkt)
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
-    auto network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *inPkt_pool, running);
+    auto network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *txPkt_pool, running);
     auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
 
     auto parser_dispatch = std::make_unique<Parser_Dispatch>(
@@ -49,25 +49,25 @@ TEST(FixParserDispatchTest, MultFixPkt)
 
 
 // SCENARIO 1: ONE PACKET WITH THREE COMPLETE FIX MESSAGES IN ORDER 
-    OutPacket* pkt1 = &test_data_parser::fix_outpacket_full_1;
+    RxPacket* pkt1 = &test_data_parser::fix_RxPacket_full_1;
     parser_dispatch->parseFIX(pkt1);
 
     seq_fix.set_expected_seq(1);
 
 // SCENARIO 2: THREE PACKETS CONTAINING PARTIAL FIX MESSAGES IN ORDER
-    std::array<OutPacket*, 3> pkts2 = {
-        &test_data_parser::fix_outpacket_partial_1, 
-        &test_data_parser::fix_outpacket_partial_2, 
-        &test_data_parser::fix_outpacket_partial_3 
+    std::array<RxPacket*, 3> pkts2 = {
+        &test_data_parser::fix_RxPacket_partial_1, 
+        &test_data_parser::fix_RxPacket_partial_2, 
+        &test_data_parser::fix_RxPacket_partial_3 
     };
     for (auto pkt2 : pkts2) 
         parser_dispatch->parseFIX(pkt2);
 
 // SCENARIO 3: THREE PACKETS CONTAINING PARTIAL FIX MESSAGES NOT IN ORDER
-    std::array<OutPacket*, 3> pkts3 = {
-        &test_data_parser::fix_outpacket_partial_4, 
-        &test_data_parser::fix_outpacket_partial_5, 
-        &test_data_parser::fix_outpacket_partial_6 
+    std::array<RxPacket*, 3> pkts3 = {
+        &test_data_parser::fix_RxPacket_partial_4, 
+        &test_data_parser::fix_RxPacket_partial_5, 
+        &test_data_parser::fix_RxPacket_partial_6 
     };
     //seq_fix.set_expected_seq(4);
     
@@ -262,6 +262,6 @@ for(int test = 0; test < scenario; test++)
     builder_fix.reset();
     sbt.reset();
     sess_mngr.reset();
-    inPkt_pool.reset();
+    txPkt_pool.reset();
 }
 

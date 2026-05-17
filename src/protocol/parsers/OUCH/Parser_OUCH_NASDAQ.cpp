@@ -14,8 +14,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[0] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHSystemEventMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHSystemEventMessage>().acquire(m);
+      NASDAQ::RX::OUCHSystemEventMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHSystemEventMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->message_type = data[0];
@@ -26,8 +26,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
    
    handlers[1] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHOrderAcceptedMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHOrderAcceptedMessage>().acquire(m);
+      NASDAQ::RX::OUCHOrderAcceptedMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHOrderAcceptedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->user_ref_num = Endian::read_u32_be(data + 9);
@@ -51,8 +51,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[2] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHOrderReplacedMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHOrderReplacedMessage>().acquire(m);
+      NASDAQ::RX::OUCHOrderReplacedMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHOrderReplacedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->price = Endian::read_i64_be(data + 30);
@@ -77,8 +77,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[3] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHOrderCancelledMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHOrderCancelledMessage>().acquire(m);
+      NASDAQ::RX::OUCHOrderCancelledMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHOrderCancelledMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->user_ref_num = Endian::read_u32_be(data + 9);
@@ -92,8 +92,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[4] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHOrderExecutedMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHOrderExecutedMessage>().acquire(m);
+      NASDAQ::RX::OUCHOrderExecutedMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHOrderExecutedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->price = Endian::read_i64_be(data + 17);
@@ -109,8 +109,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[5] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHOrderRejectedMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHOrderRejectedMessage>().acquire(m);
+      NASDAQ::RX::OUCHOrderRejectedMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHOrderRejectedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->user_ref_num = Endian::read_u32_be(data + 9);
@@ -124,8 +124,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[6] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHBrokenTradeMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHBrokenTradeMessage>().acquire(m);
+      NASDAQ::RX::OUCHBrokenTradeMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHBrokenTradeMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->match_number = Endian::read_u64_be(data + 13);
@@ -140,8 +140,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[7] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHOrderModifiedMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHOrderModifiedMessage>().acquire(m);
+      NASDAQ::RX::OUCHOrderModifiedMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHOrderModifiedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->user_ref_num = Endian::read_u32_be(data + 9);
@@ -155,8 +155,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[8] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHCancelPendingMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHCancelPendingMessage>().acquire(m);
+      NASDAQ::RX::OUCHCancelPendingMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHCancelPendingMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->user_ref_num = Endian::read_u32_be(data + 9);
@@ -168,8 +168,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[9] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHCancelRejectMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHCancelRejectMessage>().acquire(m);
+      NASDAQ::RX::OUCHCancelRejectMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHCancelRejectMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->user_ref_num = Endian::read_u32_be(data + 9);
@@ -181,8 +181,8 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
 
    handlers[10] = [](Parser_OUCH_NASDAQ &parser, const char *data, NASDAQ::OUCHMessage &msg) noexcept
    {
-      NASDAQ::OUT::OUCHAccountQueryResponse *m = nullptr;
-      parser.ouch_pools_.get_pool<NASDAQ::OUT::OUCHAccountQueryResponse>().acquire(m);
+      NASDAQ::RX::OUCHAccountQueryResponse *m = nullptr;
+      parser.ouch_pools_.get_pool<NASDAQ::RX::OUCHAccountQueryResponse>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->next_user_ref_num = Endian::read_u32_be(data + 9);

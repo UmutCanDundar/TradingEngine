@@ -202,7 +202,7 @@ void Parser_FIX::resend_logic_logon(FIXSessionMessage *fixSesMsg, Sequence_FIX &
    push_pending(fixSesMsg);
 }
 
-std::pair<char*, size_t> Parser_FIX::nextFixMsg(OutPacket *pkt, size_t& data_offset) noexcept
+std::pair<char*, size_t> Parser_FIX::nextFixMsg(RxPacket *pkt, size_t& data_offset) noexcept
 {
    if (data_offset >= pkt->len)
       return {nullptr, 0};

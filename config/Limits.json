@@ -4,8 +4,9 @@
     "BIST": {
       "GARAN": {
         "max_position": 1000,
-        "max_notional_scaled": 30000000,
+        "max_order_notional_scaled": 30000000,
         "max_price_deviation": 15000,
+        "max_exposure_scaled": 50000000,
         "fat_finger_ratio": 2000,
         "min_qty": 10,
         "max_qty": 200,
@@ -21,8 +22,9 @@
     "NASDAQ": {
       "AAPL": {
         "max_position": 1000,
-        "max_notional_scaled": 55000000,
+        "max_order_notional_scaled": 55000000,
         "max_price_deviation": 5000,
+        "max_exposure_scaled": 100000000,
         "fat_finger_ratio": 3000,
         "min_qty": 10,
         "max_qty": 500,

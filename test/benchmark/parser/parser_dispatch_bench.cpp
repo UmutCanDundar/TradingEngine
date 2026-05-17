@@ -20,7 +20,7 @@
 class BM_Parser : public benchmark::Fixture
 {
 public:
-    std::unique_ptr<InPacketPoolManager> inPkt_pool;
+    std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<SessionManager> sess_mngr;
     std::unique_ptr<SoupBinTcp> sbt;
     std::unique_ptr<Builder_FIX> builder_fix;
@@ -30,8 +30,8 @@ public:
     std::unique_ptr<Parser_Dispatch> parser_dispatch;
 
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
-    spscOutPacketQueue_t receiver_to_parser;
-    spscInPacketQueue_t builder_to_sender;
+    spscRxPacketQueue_t receiver_to_parser;
+    spscTxPacketQueue_t builder_to_sender;
     spscMessageQueue_t parser_to_store; 
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
     spscDbQueue_t db_to_parser; 
@@ -44,10 +44,10 @@ public:
     std::atomic<bool> trigger_network{false};
     std::atomic<bool> running{true};
     
-    std::vector<OutPacket*> pkts;
+    std::vector<RxPacket*> pkts;
     size_t sess_index_fix;
     size_t sess_index_ouch;
-    PendingQueue<OutPacket *, 256> pend_read;
+    PendingQueue<RxPacket *, 256> pend_read;
     
 public:
     
@@ -56,12 +56,12 @@ public:
         stop.store(false, std::memory_order_release);
         stop2.store(false, std::memory_order_relaxed);
         
-        inPkt_pool = std::make_unique<InPacketPoolManager>();
+        txPkt_pool = std::make_unique<TxPacketPoolManager>();
         sess_mngr     = std::make_unique<SessionManager>();
         sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
         builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
         login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
-        network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *inPkt_pool, running);
+        network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *txPkt_pool, running);
         parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
 
         parser_dispatch = std::make_unique<Parser_Dispatch>(
@@ -79,19 +79,19 @@ public:
         sess_index_ouch = sess_mngr->getSessionIndex(Venue::BIST, Protocol::OUCH);
 
         pkts = {
-            &test_data_parser::ouch_bist_outpacket_partial_1, 
-            &test_data_parser::ouch_bist_outpacket_partial_2,
-            &test_data_parser::itch_bist_outpacket_single_1,
-            &test_data_parser::fix_outpacket_partial_1, 
-            &test_data_parser::fix_outpacket_partial_2,
-            &test_data_parser::ouch_bist_outpacket_partial_3,
-            &test_data_parser::ouch_bist_outpacket_partial_4,  
-            &test_data_parser::fix_outpacket_partial_3,
-            &test_data_parser::fix_outpacket_partial_4,
-            &test_data_parser::ouch_bist_outpacket_partial_5,
-            &test_data_parser::itch_nasdaq_outpacket_single_1,  
-            &test_data_parser::fix_outpacket_partial_5, 
-            &test_data_parser::fix_outpacket_partial_6,   
+            &test_data_parser::ouch_bist_RxPacket_partial_1, 
+            &test_data_parser::ouch_bist_RxPacket_partial_2,
+            &test_data_parser::itch_bist_RxPacket_single_1,
+            &test_data_parser::fix_RxPacket_partial_1, 
+            &test_data_parser::fix_RxPacket_partial_2,
+            &test_data_parser::ouch_bist_RxPacket_partial_3,
+            &test_data_parser::ouch_bist_RxPacket_partial_4,  
+            &test_data_parser::fix_RxPacket_partial_3,
+            &test_data_parser::fix_RxPacket_partial_4,
+            &test_data_parser::ouch_bist_RxPacket_partial_5,
+            &test_data_parser::itch_nasdaq_RxPacket_single_1,  
+            &test_data_parser::fix_RxPacket_partial_5, 
+            &test_data_parser::fix_RxPacket_partial_6,   
         };
 
         network_thread = std::thread([&]()
@@ -109,11 +109,11 @@ public:
                         
                         if(pkt->protocol == Protocol::OUCH) 
                         {
-                            bool ouch_outpkt_ready = false; 
+                            bool ouch_rxPkt_ready = false; 
                                     
-                            ouch_outpkt_ready = network_io->SBTPacketHandler(pkt, pkt->len, pend_read, sess_index_ouch);
+                            ouch_rxPkt_ready = network_io->SBTPacketHandler(pkt, pkt->len, pend_read, sess_index_ouch);
                             
-                            if(ouch_outpkt_ready)
+                            if(ouch_rxPkt_ready)
                             {
                                 receiver_to_parser.push(pkt);
                             }
@@ -124,7 +124,6 @@ public:
                         }
                     }
 
-                    // std::atomic_thread_fence(std::memory_order_seq_cst);
                     trigger_network.store(false, std::memory_order_release);
                 }
                 else
@@ -166,7 +165,7 @@ public:
                         }
                     },
                     local_msg.msg);
-                      
+
                 }
                 else if(parser_to_fixbuilder_in.pop(sesMsg))
                 {
@@ -195,7 +194,7 @@ public:
         builder_fix.reset();
         sbt.reset();
         sess_mngr.reset();
-        inPkt_pool.reset();    
+        txPkt_pool.reset();    
     }
 };
 
@@ -235,8 +234,7 @@ BENCHMARK_DEFINE_F(BM_Parser, MixedTraffic)(benchmark::State& state)
         benchmark::ClobberMemory();
         latencies.push_back(end - start);
 
-        while(!parser_to_store.empty() || !receiver_to_parser.empty()) 
-            _mm_pause();
+        while(!parser_to_store.empty() || !receiver_to_parser.empty()) _mm_pause();
     }
    
     if (latencies.empty()) return;

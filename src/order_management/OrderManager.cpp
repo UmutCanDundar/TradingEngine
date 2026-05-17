@@ -4,7 +4,6 @@
 #include "MarketBook.h"
 
 #include <type_traits>
-#include <iostream>
 
 // ============================
 // Constructor & Public Methods
@@ -93,7 +92,6 @@ Order* OrderManager::add_our_order(Order *order, const OrderKey& order_key) noex
       auto& orderhistory_for_a_symbol = orderhistory_for_a_venue[order_to_release->symbol_index];
 
       release_order(orderhistory_for_a_symbol, *order_to_release);
-      std::cerr << "order release oldu ";
    }
    
    our_orders_[order_key] = order;
@@ -169,7 +167,7 @@ Order* OrderManager::get_order_from_our_map_wtokenkey(uint64_t client_order_id) 
 // ================= BIST FIX ===================
 void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept
 {
-   const auto *msg = fixMsg.msg;
+   const auto* msg = fixMsg.msg;
 
    constexpr auto allowed_exec_type = []
    {
@@ -244,11 +242,9 @@ void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) no
    // order->canModify = 0x00;
    awaitingAck_orders_.erase(client_order_id); // In FIX, ClOrdID is unique for every action (New/Replace/Cancel).
 
-   if (!store_to_risk_.push(order))
-    std::cerr << "RISK QUEUE DOLU!\n";
    store_to_db_.push(fixMsg);
    store_to_db_.push(order);
-   // store_to_risk_.push(order);
+   store_to_risk_.push(order);
    store_to_strategy_.push(order);
 }
 
@@ -505,7 +501,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
                                        side
                      };
                      
-                     if constexpr (!std::is_same_v<MsgType, BIST::OUT::OUCHOrderAcceptedMessage>)
+                     if constexpr (!std::is_same_v<MsgType, BIST::RX::OUCHOrderAcceptedMessage>)
                         order = this->get_order_from_our_map(order_key);
                      
                      if (!order)
@@ -525,16 +521,16 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
                         return;
                      }
 
-                     if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderAcceptedMessage>)
+                     if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderAcceptedMessage>)
                      {
                         filler_ouch_bist_.fill_ouch_accepted(*order, *msg);
                      }
-                     else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderReplacedMessage>)
+                     else if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderReplacedMessage>)
                                           
                      {
                         filler_ouch_bist_.fill_ouch_replaced(*order, *msg);
                      }
-                     else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderCancelledMessage>)
+                     else if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderCancelledMessage>)
                      {
                         filler_ouch_bist_.fill_ouch_cancelled(*order, *msg);
                      }
@@ -564,7 +560,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
                        return;
                     }
 
-                    if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderExecutedMessage>)
+                    if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderExecutedMessage>)
                     {
                        filler_ouch_bist_.fill_ouch_executed(*order, *msg);
 
@@ -574,7 +570,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
                        this->store_to_strategy_.push(order);
                        this->store_to_db_.push(order);
                     }
-                    else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderRejectedMessage>)
+                    else if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderRejectedMessage>)
                     {
                        filler_ouch_bist_.fill_ouch_rejected(*order, *msg);
                     }
@@ -598,7 +594,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                      uint64_t order_id = msg->order_reference_number;
                      auto side = static_cast<std::underlying_type_t<Side>>((msg->side == 'B') ? Side::Buy : Side::Sell);
 
-                     if constexpr (!std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderAcceptedMessage>)
+                     if constexpr (!std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderAcceptedMessage>)
                      {
                         uint64_t symbol_pack;
                         std::memcpy(&symbol_pack, msg->symbol, 8);
@@ -642,11 +638,11 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                         return;
                      }
 
-                     if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderAcceptedMessage>)
+                     if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderAcceptedMessage>)
                      {
                         filler_ouch_nq_.fill_ouch_accepted(*order, *msg);
                      }
-                     else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderReplacedMessage>)                 
+                     else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderReplacedMessage>)                 
                      {
                         filler_ouch_nq_.fill_ouch_replaced(*order, *msg);
                      }
@@ -659,7 +655,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                  }
                  else if constexpr (requires { msg->user_ref_num; })
                  {
-                    if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderRejectedMessage>) 
+                    if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderRejectedMessage>) 
                     {
                         uint64_t client_order_id = absl::Hash<std::string_view>{}(std::string_view{msg->cl_ord_id, 14});
                         order = get_order_from_awaitingAck_orders(client_order_id);
@@ -683,15 +679,15 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                            return;
                         }
 
-                        if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderCancelledMessage>) 
+                        if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderCancelledMessage>) 
                         {
                            filler_ouch_nq_.fill_ouch_cancelled(*order, *msg);
                         }
-                        else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderExecutedMessage>)
+                        else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderExecutedMessage>)
                         {
                            filler_ouch_nq_.fill_ouch_executed(*order, *msg);
                         }
-                        else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderModifiedMessage>)
+                        else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderModifiedMessage>)
                         {
                            filler_ouch_nq_.fill_ouch_modified(*order, *msg);
                         }

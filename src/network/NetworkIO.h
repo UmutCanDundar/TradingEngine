@@ -36,7 +36,6 @@
 #include <cstdint>
 #include <cstddef>
 
-#include <iostream>
 
 class LoginController;
 class SoupBinTcp;
@@ -45,7 +44,7 @@ class PendingQueue;
 
 struct SocketState
 {
-  InPacket* active_pkt = nullptr;
+  TxPacket* active_pkt = nullptr;
   uint64_t epoll_data = 0;
   bool is_EPOLLOUT_set = false;
   bool connection_pending = false;
@@ -56,24 +55,28 @@ struct SocketState
 
 class NetworkIO
 {
+  public://
+    alignas(64) std::atomic<uint64_t> pipeline_seq{0};
+    char pad[56];
+
 private:
 public: // will be removed after test
   static constexpr uint8_t MAX_RETRY_COUNT = 3;
   static constexpr size_t PARTIAL_PACKET_POOL_CAPACITY = 16;
   static constexpr size_t PENDING_CAPACITY = 256;
 
-  using PendingIN = std::array<PendingQueue<InPacket *, PENDING_CAPACITY>, MAX_SESSIONS>;
-  using PendingOUT = std::array<PendingQueue<OutPacket *, PENDING_CAPACITY>, MAX_SESSIONS>; 
-  using PacketPool = std::array<OutPacket, PACKET_POOL_CAPACITY>;
-  using PartialPacketPool = std::array<OutPacket*, PARTIAL_PACKET_POOL_CAPACITY>;
+  using PendingIN = std::array<PendingQueue<TxPacket *, PENDING_CAPACITY>, MAX_SESSIONS>;
+  using PendingOUT = std::array<PendingQueue<RxPacket *, PENDING_CAPACITY>, MAX_SESSIONS>; 
+  using PacketPool = std::array<RxPacket, PACKET_POOL_CAPACITY>;
+  using PartialPacketPool = std::array<RxPacket*, PARTIAL_PACKET_POOL_CAPACITY>;
   size_t next_partialpkt = 0;
   
-  spscOutPacketQueue_t& receiver_to_parser_;
-  spscInPacketQueue_t& builder_to_sender_;
+  spscRxPacketQueue_t& receiver_to_parser_;
+  spscTxPacketQueue_t& builder_to_sender_;
   SessionManager& sess_mngr_;
   SoupBinTcp& sbt_;
   LoginController& login_;
-  InPacketPoolManager& inPkt_pool_;
+  TxPacketPoolManager& txPkt_pool_;
 
   std::array<uint32_t, MAX_SESSIONS> joined_ips{};
   int epoll_fd_{-1};
@@ -81,7 +84,7 @@ public: // will be removed after test
   std::array<int, MAX_SESSIONS> socks_{};
 
   PacketPool packet_pool_;
-  spscOutPacketQueue_t free_pkt_list_;
+  spscRxPacketQueue_t free_pkt_list_;
   PartialPacketPool partial_packet_pool_;
   PendingIN pending_write_;
   PendingOUT pending_read_;
@@ -89,14 +92,13 @@ public: // will be removed after test
   const std::atomic<bool> &running_engine_;
   
 public:
-  NetworkIO(spscOutPacketQueue_t &receiver_to_parser, spscInPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, const std::atomic<bool>& running_engine) noexcept;
+  NetworkIO(spscRxPacketQueue_t &receiver_to_parser, spscTxPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, const std::atomic<bool>& running_engine) noexcept;
   ~NetworkIO() noexcept;
 
   void recv_send() noexcept;
   
-  inline void releasePacket(OutPacket *pkt) noexcept
+  inline void releasePacket(RxPacket *pkt) noexcept
   {
-    std::cerr << "networke pkt iade edildi ";
     pkt->msg_count = 0;
     free_pkt_list_.push(pkt);
   }
@@ -115,34 +117,41 @@ public:
     void closeSocket(uint8_t index) noexcept;
    
     //HOT
-    void send(InPacket &inPkt, const int sock, const uint8_t index, SocketState &states) noexcept;
+    void send(TxPacket &txPkt, const int sock, const uint8_t index, SocketState &states) noexcept;
     void handleEINPROGRESS(const int sock, SocketState &states, const uint8_t index) noexcept;
-    bool SBTPacketHandler(OutPacket* outPkt, const size_t len, PendingQueue<OutPacket *, PENDING_CAPACITY>& pend_read, const size_t index) noexcept;
-    inline void trySend(InPacket &inPkt) noexcept 
+    bool SBTPacketHandler(RxPacket* rxPkt, const size_t len, PendingQueue<RxPacket *, PENDING_CAPACITY>& pend_read, const size_t index) noexcept;
+    inline void trySend(TxPacket &txPkt) noexcept 
     {
-      size_t index = inPkt.sock_index;
+      size_t index = txPkt.sock_index;
       int sock = socks_[index];
       auto &states = socket_states_[index];
-
+      
+      //     << "active=" << (states.active_pkt ? 1 : 0)
+      //     << " pending=" << pending_write_[index].size()
+      //     << " loggedin=" << sess_mngr_.isSessionLoggedIn(index)
+      //     << " conn_pending=" << states.connection_pending
+      //     << " index=" << index
+      //     << " ";
+      
       if(LIKELY(!states.connection_pending))
       {
-        if (UNLIKELY(!sess_mngr_.isSessionLoggedIn(index)) && !inPkt.is_login_msg)
+        if (UNLIKELY(!sess_mngr_.isSessionLoggedIn(index)) && !txPkt.is_login_msg)
           return;
       }
       else
       {
-        pending_write_[index].push(&inPkt);
+        pending_write_[index].push(&txPkt);
         return;
       }
 
       if (states.active_pkt)
       {
-        pending_write_[index].push(&inPkt);
+        pending_write_[index].push(&txPkt);
         return;
       }
       else
       {
-        send(inPkt, sock, index, states);
+        send(txPkt, sock, index, states);
       }
     }
 

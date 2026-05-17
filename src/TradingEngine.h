@@ -89,7 +89,7 @@ public:///
     MarketBook marketbook_;
     Limits limits_;
     SessionManager session_manager_;
-    InPacketPoolManager inPkt_pool_;
+    TxPacketPoolManager txPkt_pool_;
     Parser_FIX parser_fix_;
     Builder_FIX builder_fix_;
     SoupBinTcp sbt_;
@@ -98,7 +98,7 @@ public:///
     // =========================
     // QUEUES (LAYER 1)
     // =========================                         // Type Definition Location
-    spscOutPacketQueue_t receiver_to_parser_;            // NetworkPackets.h
+    spscRxPacketQueue_t receiver_to_parser_;            // NetworkPackets.h
     spscMessageQueue_t parser_to_store_;                 // MessageWithVenue.h
     spscOrderQueue_t store_to_risk_;                     // Order.h
     spscOrderQueue_t store_to_strategy_;                 // Order.h
@@ -106,7 +106,7 @@ public:///
     spscOrderQueue_t strategy_to_risk_;                  // Order.h
     spscOrderQueue_t risk_to_builder_;                   // Order.h
     spscRejectOrderQueue_t risk_to_strategy_;            // RiskEngine.h
-    spscInPacketQueue_t builder_to_sender_;              // NetworkPackets.h
+    spscTxPacketQueue_t builder_to_sender_;              // NetworkPackets.h
     spscDbQueue_t store_to_db_;                          // DbTypes.h
     spscDbQueue_t db_to_parser_;                         // DbTypes.h
     spscFIXInSessionQueue_t parser_to_fixbuilder_in_;    // FIXMessage.h

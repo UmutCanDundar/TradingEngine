@@ -169,8 +169,8 @@ namespace test_data_ordMngr {
 
     // BIST OUCH - GARAN | order_book_id=3 | order_id=42 | token: "TOKEN000000042" | price: 10000 | quantity: 100
 
-    inline BIST::OUT::OUCHOrderAcceptedMessage make_ouch_bist_accepted() {
-        BIST::OUT::OUCHOrderAcceptedMessage m{};
+    inline BIST::RX::OUCHOrderAcceptedMessage make_ouch_bist_accepted() {
+        BIST::RX::OUCHOrderAcceptedMessage m{};
         m.message_type  = 'A';
         m.timestamp     = 100;          
         m.order_book_id = 3;            
@@ -190,8 +190,8 @@ namespace test_data_ordMngr {
         std::strncpy(m.order_token, "TOKEN000000042", sizeof(m.order_token));
         return m;
     }
-    inline BIST::OUT::OUCHOrderExecutedMessage make_ouch_bist_executed() {
-        BIST::OUT::OUCHOrderExecutedMessage m{};
+    inline BIST::RX::OUCHOrderExecutedMessage make_ouch_bist_executed() {
+        BIST::RX::OUCHOrderExecutedMessage m{};
         m.message_type    = 'E';
         m.timestamp       = 200;        
         m.order_book_id   = 3;         
@@ -201,8 +201,8 @@ namespace test_data_ordMngr {
         std::strncpy(m.order_token, "TOKEN000000042", sizeof(m.order_token));
         return m;
     }
-    inline BIST::OUT::OUCHOrderCancelledMessage make_ouch_bist_cancelled() {
-        BIST::OUT::OUCHOrderCancelledMessage m{};
+    inline BIST::RX::OUCHOrderCancelledMessage make_ouch_bist_cancelled() {
+        BIST::RX::OUCHOrderCancelledMessage m{};
         m.message_type  = 'C';
         m.timestamp     = 300;          
         m.order_book_id = 3;           
@@ -272,8 +272,8 @@ namespace test_data_ordMngr {
     }
 
     // NASDAQ OUCH - AAPL | stock_locate=1 | user_ref_num=99 | price=10000 | quantity=1000
-    inline NASDAQ::OUT::OUCHOrderAcceptedMessage make_ouch_nasdaq_accepted() {
-        NASDAQ::OUT::OUCHOrderAcceptedMessage m{};
+    inline NASDAQ::RX::OUCHOrderAcceptedMessage make_ouch_nasdaq_accepted() {
+        NASDAQ::RX::OUCHOrderAcceptedMessage m{};
         m.message_type              = 'A';
         m.timestamp                 = 100;      
         m.user_ref_num              = 99;      
@@ -286,8 +286,8 @@ namespace test_data_ordMngr {
         std::strncpy(m.cl_ord_id, "CLIENT0000001 ", sizeof(m.cl_ord_id));
         return m;
     }
-    inline NASDAQ::OUT::OUCHOrderExecutedMessage make_ouch_nasdaq_executed() {
-        NASDAQ::OUT::OUCHOrderExecutedMessage m{};
+    inline NASDAQ::RX::OUCHOrderExecutedMessage make_ouch_nasdaq_executed() {
+        NASDAQ::RX::OUCHOrderExecutedMessage m{};
         m.message_type     = 'E';
         m.timestamp        = 200;      
         m.user_ref_num     = 99;        
@@ -298,8 +298,8 @@ namespace test_data_ordMngr {
         m.appendage_length = 0;
         return m;
     }
-    inline NASDAQ::OUT::OUCHOrderCancelledMessage make_ouch_nasdaq_cancelled() {
-        NASDAQ::OUT::OUCHOrderCancelledMessage m{};
+    inline NASDAQ::RX::OUCHOrderCancelledMessage make_ouch_nasdaq_cancelled() {
+        NASDAQ::RX::OUCHOrderCancelledMessage m{};
         m.message_type     = 'C';
         m.timestamp        = 300;       
         m.user_ref_num     = 99;       

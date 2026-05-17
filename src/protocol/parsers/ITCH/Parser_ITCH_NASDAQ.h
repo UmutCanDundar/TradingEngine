@@ -63,6 +63,7 @@
 class Parser_ITCH_NASDAQ
 {
 private:
+public: ///
     static constexpr size_t MAX_MESSAGES = 11;
 
     MessagePools<NASDAQ::ITCHMessageTypes> itch_pools_;
@@ -98,7 +99,7 @@ public:
         return ITCHmsg;
     }
 
-    inline void ItchPacketHandler(OutPacket *pkt) noexcept 
+    inline void ItchPacketHandler(RxPacket *pkt) noexcept 
     {
         size_t offset = 0;
         auto* data = pkt->data.data();

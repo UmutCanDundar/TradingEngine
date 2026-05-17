@@ -75,14 +75,14 @@ private:
     std::array<std::array<BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> makeBuilderLookUpTable() noexcept; 
     std::array<std::array<BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> builder_table_;
     
-    spscInPacketQueue_t& builder_to_sender_;
+    spscTxPacketQueue_t& builder_to_sender_;
     spscOrderQueue_t &risk_to_builder_;
     spscFIXOutSessionQueue_t& parser_to_fixbuilder_out_;
     spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;
     SessionManager& sess_mngr_;
     SoupBinTcp& sbt_;
     LoginController& login_;
-    InPacketPoolManager &inPkt_pool_;
+    TxPacketPoolManager &txPkt_pool_;
     Builder_FIX& fixBuilder_;
     OrderManager& ord_mngr_;
     Parser_FIX &fixParser_;
@@ -91,8 +91,8 @@ private:
     Builder_OUCH_NASDAQ ouchBuilder_nasdaq_{sbt_};
 
 public:
-    Builder_Dispatch(spscInPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, 
-                     SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr, Parser_FIX& fixParser) noexcept;
+    Builder_Dispatch(spscTxPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, 
+                     SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr, Parser_FIX& fixParser) noexcept;
 
     bool dispatch() noexcept;
 

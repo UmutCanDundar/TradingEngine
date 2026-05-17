@@ -8,28 +8,28 @@ namespace NASDAQ
 {
 
     using OUCHMessageTypes = std::tuple<
-        NASDAQ::OUT::OUCHSystemEventMessage,
-        NASDAQ::OUT::OUCHOrderAcceptedMessage,
-        NASDAQ::OUT::OUCHOrderReplacedMessage,
-        NASDAQ::OUT::OUCHOrderCancelledMessage,
-        NASDAQ::OUT::OUCHOrderExecutedMessage,
-        NASDAQ::OUT::OUCHOrderRejectedMessage,
-        NASDAQ::OUT::OUCHBrokenTradeMessage,
-        NASDAQ::OUT::OUCHOrderModifiedMessage,
-        NASDAQ::OUT::OUCHCancelPendingMessage,
-        NASDAQ::OUT::OUCHCancelRejectMessage,
-        NASDAQ::OUT::OUCHAccountQueryResponse>;
+        NASDAQ::RX::OUCHSystemEventMessage,
+        NASDAQ::RX::OUCHOrderAcceptedMessage,
+        NASDAQ::RX::OUCHOrderReplacedMessage,
+        NASDAQ::RX::OUCHOrderCancelledMessage,
+        NASDAQ::RX::OUCHOrderExecutedMessage,
+        NASDAQ::RX::OUCHOrderRejectedMessage,
+        NASDAQ::RX::OUCHBrokenTradeMessage,
+        NASDAQ::RX::OUCHOrderModifiedMessage,
+        NASDAQ::RX::OUCHCancelPendingMessage,
+        NASDAQ::RX::OUCHCancelRejectMessage,
+        NASDAQ::RX::OUCHAccountQueryResponse>;
 
     using OUCHMessage = std::variant<
-        NASDAQ::OUT::OUCHSystemEventMessage *,
-        NASDAQ::OUT::OUCHOrderAcceptedMessage *,
-        NASDAQ::OUT::OUCHOrderReplacedMessage *,
-        NASDAQ::OUT::OUCHOrderCancelledMessage *,
-        NASDAQ::OUT::OUCHOrderExecutedMessage *,
-        NASDAQ::OUT::OUCHOrderRejectedMessage *,
-        NASDAQ::OUT::OUCHBrokenTradeMessage *,
-        NASDAQ::OUT::OUCHOrderModifiedMessage *,
-        NASDAQ::OUT::OUCHCancelPendingMessage *,
-        NASDAQ::OUT::OUCHCancelRejectMessage *,
-        NASDAQ::OUT::OUCHAccountQueryResponse *>;
+        NASDAQ::RX::OUCHSystemEventMessage *,
+        NASDAQ::RX::OUCHOrderAcceptedMessage *,
+        NASDAQ::RX::OUCHOrderReplacedMessage *,
+        NASDAQ::RX::OUCHOrderCancelledMessage *,
+        NASDAQ::RX::OUCHOrderExecutedMessage *,
+        NASDAQ::RX::OUCHOrderRejectedMessage *,
+        NASDAQ::RX::OUCHBrokenTradeMessage *,
+        NASDAQ::RX::OUCHOrderModifiedMessage *,
+        NASDAQ::RX::OUCHCancelPendingMessage *,
+        NASDAQ::RX::OUCHCancelRejectMessage *,
+        NASDAQ::RX::OUCHAccountQueryResponse *>;
 }

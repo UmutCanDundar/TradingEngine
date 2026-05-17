@@ -42,8 +42,9 @@ std::array<std::vector<SymbolLimit>, VENUE_COUNT> Limits::initialize_symbollimit
             SymbolLimit sl{};
 
             sl.max_position_scaled = symLim["max_position"].get<int64_t>();
-            sl.max_notional_scaled = symLim["max_notional_scaled"].get<int64_t>();
+            sl.max_order_notional_scaled = symLim["max_order_notional_scaled"].get<int64_t>();
             sl.max_price_deviation = symLim["max_price_deviation"].get<int64_t>();
+            sl.max_exposure_scaled = symLim["max_exposure_scaled"].get<int64_t>();
             sl.fat_finger_ratio = symLim["fat_finger_ratio"].get<int64_t>();
             sl.min_qty = symLim["min_qty"].get<uint32_t>();
             sl.max_qty = symLim["max_qty"].get<uint32_t>();

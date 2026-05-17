@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstddef>
 
-enum class Protocol : int
+enum class Protocol : uint8_t
 {
 
    FIX = 0,
@@ -14,7 +14,7 @@ enum class Protocol : int
    Unknown = 3,
 };
 
-enum class Venue : int
+enum class Venue : uint8_t
 {
    BIST = 0,
    NASDAQ = 1,

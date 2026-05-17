@@ -37,27 +37,27 @@
 
 #include <boost/lockfree/spsc_queue.hpp>
 
-enum class SyncState : int 
+enum class SyncState : uint8_t 
 {
     WaitingNew = 0,   
     NewSeen = 1,
 };
 
-enum class Side : int
+enum class Side : uint8_t
 {
    Buy = 0,
    Sell = 1,
    Unknown = 2,
 };
 
-enum class OrderType : int
+enum class OrderType : uint8_t
 {
    Unknown = 0,
    Market = 1,
    Limit = 2,
 };
 
-enum class TimeInForce : int
+enum class TimeInForce : uint8_t
 {
    DAY = 0,
    GTC = 1,
@@ -69,7 +69,7 @@ enum class TimeInForce : int
    Unknown = 99
 };
 
-enum class Status : int
+enum class Status : uint8_t
 {
    Unknown = 0,  
    New = 1,       
@@ -147,5 +147,5 @@ struct alignas(64) Order // 192B
    Order& operator=(Order&&) = delete;
 };
 
-inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;
+inline constexpr size_t ORDER_QUEUE_CAPACITY = 1024;
 using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;

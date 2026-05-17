@@ -8,20 +8,20 @@ static void BM_Parser_FIX_nextFixMsg(benchmark::State& state)
 {
     pin_to_cpu(0);
 
-    std::vector<OutPacket*> pkts;
+    std::vector<RxPacket*> pkts;
     const auto pkt_case = state.range(0); 
     switch(pkt_case)
         {
             case 1: 
-                pkts.push_back(&test_data_parser::fix_outpacket_single_1); // 1msg 1pkt
+                pkts.push_back(&test_data_parser::fix_RxPacket_single_1); // 1msg 1pkt
                 break;
             case 2: 
-                pkts.push_back(&test_data_parser::fix_outpacket_full_1); // 3msgs 1pkt
+                pkts.push_back(&test_data_parser::fix_RxPacket_full_1); // 3msgs 1pkt
                 break;
             case 3: 
-                pkts.push_back(&test_data_parser::fix_outpacket_partial_1); // 3msgs scattered 3pkts
-                pkts.push_back(&test_data_parser::fix_outpacket_partial_2);
-                pkts.push_back(&test_data_parser::fix_outpacket_partial_3); 
+                pkts.push_back(&test_data_parser::fix_RxPacket_partial_1); // 3msgs scattered 3pkts
+                pkts.push_back(&test_data_parser::fix_RxPacket_partial_2);
+                pkts.push_back(&test_data_parser::fix_RxPacket_partial_3); 
                 break;          
             default: 
                 __builtin_unreachable(); 

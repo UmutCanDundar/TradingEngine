@@ -339,7 +339,6 @@ public:
     template <typename T>
     inline void store(const MessageWithVenue<T> &msg) noexcept
     {
-        std::cerr << "ENTER ORD manager ";
         this->update_order(msg);
     }
 

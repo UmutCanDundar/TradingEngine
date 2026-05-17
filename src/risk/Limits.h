@@ -51,8 +51,9 @@ class HashTables;
 struct SymbolLimit
 {
     int64_t max_position_scaled; 
-    int64_t max_notional_scaled; 
+    int64_t max_order_notional_scaled; 
     int64_t max_price_deviation; 
+    int64_t max_exposure_scaled;
     int64_t fat_finger_ratio; 
     uint32_t min_qty;       
     uint32_t max_qty;

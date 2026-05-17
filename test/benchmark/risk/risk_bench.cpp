@@ -89,11 +89,10 @@ public:
         auto* symmeta = order_manager->get_symbolmeta(Venue::BIST, 3);
         auto* ticksize_entry = new TickSizeEntry(0, 100'000'000, 10);
         symmeta->tick_size_table[0].store(ticksize_entry, std::memory_order_relaxed);
-
-        // BEST BID/ASK INITIALIZATION VENUE::BIST--0 SYMBOL::GARAN--0
-        auto& symRisk = risk->symbolrisks_[0][0];
-        symRisk.best_bid.store(10000, std::memory_order_relaxed);
-        symRisk.best_ask.store(10000, std::memory_order_relaxed);
+            
+        reset_accountrisk(risk->accountrisks_[0]);
+        reset_symbolrisk(risk->symbolrisks_[0][0]);
+        risk->orderrisks_[0].clear();
 
         consumer = std::thread([&]
         {
@@ -182,9 +181,6 @@ public:
             benchmark::ClobberMemory();
             latencies.push_back(end - start);
 
-            reset_accountrisk(risk->accountrisks_[0]);
-            reset_symbolrisk(risk->symbolrisks_[0][0]);
-            risk->orderrisks_[0].clear();
         }
     
         if (latencies.empty()) return;
@@ -284,9 +280,9 @@ inline void reset_accountrisk(AccountRisk& ar) noexcept
 inline void reset_symbolrisk(SymbolRisk& sr) noexcept
 {
     sr.net_position.store(0, std::memory_order_relaxed);
-    sr.cost_basis_scaled.store(0, std::memory_order_relaxed);
-    sr.unrealized_pnl.store(0, std::memory_order_relaxed);
-    sr.realized_pnl.store(0, std::memory_order_relaxed);
+    sr.cost_basis_scaled = 0;
+    sr.unrealized_pnl = 0;
+    sr.realized_pnl = 0;
     sr.pending_notional_scaled.store(0, std::memory_order_relaxed);
     sr.best_bid.store(10000, std::memory_order_relaxed);
     sr.best_ask.store(10000, std::memory_order_relaxed);

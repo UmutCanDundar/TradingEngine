@@ -5,6 +5,7 @@
 #include <variant>
 
 
+
 using namespace clickhouse;
 
 ClickhouseWriter::ClickhouseWriter(spscDbQueue_t &store_to_db, spscDbQueue_t &db_to_parser, const std::string &host, int port) noexcept : store_to_db_(store_to_db), db_to_parser_(db_to_parser)
@@ -22,11 +23,16 @@ bool ClickhouseWriter::store() noexcept
    if (!store_to_db_.pop(data))
       return false;
 
-   // std::visit([this](const auto &type)
-   //            { this->insert(type); },
-   //            data);
+   
+   std::visit([this, &data](const auto &item)
+   { 
+      // this->insert(item); 
+      using T = std::decay_t<decltype(item)>;
 
-   db_to_parser_.push(data);
+      if constexpr (!std::is_same_v<T, Order*>)
+         db_to_parser_.push(data);
+   }, data);
+
    return true;
 }
 
@@ -433,19 +439,19 @@ void ClickhouseWriter::insert(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg
               {
       using MsgType = std::remove_pointer_t<decltype(msg)>;
 
-      if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderAcceptedMessage>)
+      if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderAcceptedMessage>)
       {
       }
-   else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderRejectedMessage>)
+   else if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderRejectedMessage>)
    {
    }
-   else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderReplacedMessage>)
+   else if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderReplacedMessage>)
    {
    }
-   else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderCancelledMessage>)
+   else if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderCancelledMessage>)
    {
    }
-   else if constexpr (std::is_same_v<MsgType, BIST::OUT::OUCHOrderExecutedMessage>)
+   else if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderExecutedMessage>)
    {
    } }, ouchMsg.msg);
 }
@@ -455,37 +461,37 @@ void ClickhouseWriter::insert(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchM
               {
                     using MsgType = std::remove_pointer_t<decltype(msg)>;
 
-                    if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHSystemEventMessage>)
+                    if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHSystemEventMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderAcceptedMessage>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderAcceptedMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderReplacedMessage>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderReplacedMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderCancelledMessage>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderCancelledMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderExecutedMessage>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderExecutedMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderRejectedMessage>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderRejectedMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHBrokenTradeMessage>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHBrokenTradeMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHOrderModifiedMessage>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderModifiedMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHCancelPendingMessage>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHCancelPendingMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHCancelRejectMessage>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHCancelRejectMessage>)
                     {
                     }
-                    else if constexpr (std::is_same_v<MsgType, NASDAQ::OUT::OUCHAccountQueryResponse>)
+                    else if constexpr (std::is_same_v<MsgType, NASDAQ::RX::OUCHAccountQueryResponse>)
                     {
                     } },
               ouchMsg.msg);

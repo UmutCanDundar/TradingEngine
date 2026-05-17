@@ -205,4 +205,29 @@ namespace test_data_builder {
     inline auto* NQouch_cancel_order  = make_NQouch_cancel_order();
     inline auto* NQouch_modify_order  = make_NQouch_modify_order();
 
+    inline auto make_fix_order2() // For engine_Tx_bench test
+    {
+        auto* o = new Order(); 
+        o->price           = 10000;
+        o->quantity        = 100;
+        o->side            = Side::Buy;
+        o->venue           = Venue::BIST;
+        o->protocol        = Protocol::FIX;
+        o->instrument_id   = 3;
+        o->symbol_index    = 0;
+        o->order_type      = OrderType::Limit;
+        o->time_in_force   = TimeInForce::DAY;
+        o->message_type    = static_cast<uint8_t>(FIXTypes::NewOrderSingle);
+        o->isOurOrder      = true;
+        o->timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        std::strncpy(o->symbol.data(), "GARAN", 5); 
+        o->real_symbol_len = 5;    
+        std::strncpy(o->client_order_token.data(), "CLIENT0000001", 14);
+        o->real_cl_ord_token_len = 13;
+        o->client_order_id = absl::Hash<std::string_view>{}("CLIENT0000001");
+        
+        return o;
+    }
+
+    inline auto* fix_new_order2        = make_fix_order2(); 
 }

@@ -21,10 +21,10 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
 {
     Logger::Init();
 
-    auto inPkt_pool = std::make_unique<InPacketPoolManager>();
+    auto txPkt_pool = std::make_unique<TxPacketPoolManager>();
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
-    spscInPacketQueue_t builder_to_sender;
+    spscTxPacketQueue_t builder_to_sender;
     spscOrderQueue_t risk_to_builder;
     
     spscOrderQueue_t store_to_strategy_free_slot;
@@ -58,7 +58,7 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
                                         *sess_mngr,
                                         *sbt,
                                         *login,
-                                        *inPkt_pool,
+                                        *txPkt_pool,
                                         *builder_fix,
                                         *order_manager,
                                         *parser_fix        
@@ -82,25 +82,25 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
 //      ^ TRAFFIC FOR BUILDING DISPATCH ^
 // ====================================================
 
-    InPacket* inPkt = nullptr;
+    TxPacket* txPkt = nullptr;
 
-    builder_to_sender.pop(inPkt);
-    EXPECT_EQ(inPkt->data[0], '8'); 
-    EXPECT_EQ(inPkt->len, 177);
-    EXPECT_EQ(inPkt->sock_index, 0);  
-    EXPECT_FALSE(inPkt->is_login_msg); 
+    builder_to_sender.pop(txPkt);
+    EXPECT_EQ(txPkt->data[0], '8'); 
+    EXPECT_EQ(txPkt->len, 177);
+    EXPECT_EQ(txPkt->sock_index, 0);  
+    EXPECT_FALSE(txPkt->is_login_msg); 
 
-    builder_to_sender.pop(inPkt);
-    EXPECT_EQ(inPkt->data[33], 0x27); 
-    EXPECT_EQ(inPkt->len, 117);
-    EXPECT_EQ(inPkt->sock_index, 1);  
-    EXPECT_FALSE(inPkt->is_login_msg); 
+    builder_to_sender.pop(txPkt);
+    EXPECT_EQ(txPkt->data[33], 0x27); 
+    EXPECT_EQ(txPkt->len, 117);
+    EXPECT_EQ(txPkt->sock_index, 1);  
+    EXPECT_FALSE(txPkt->is_login_msg); 
     
-    builder_to_sender.pop(inPkt);
-    EXPECT_EQ(inPkt->data[12], 0x64); 
-    EXPECT_EQ(inPkt->len, 50);
-    EXPECT_EQ(inPkt->sock_index, 2);  
-    EXPECT_FALSE(inPkt->is_login_msg); 
+    builder_to_sender.pop(txPkt);
+    EXPECT_EQ(txPkt->data[12], 0x64); 
+    EXPECT_EQ(txPkt->len, 50);
+    EXPECT_EQ(txPkt->sock_index, 2);  
+    EXPECT_FALSE(txPkt->is_login_msg); 
 
     Logger::Shutdown();
 }

@@ -251,13 +251,13 @@ def generate_file(messages):
         "#include <cstdint>",
         "",
         "namespace NASDAQ {\n",
-        "/* namespace IN {\n",
+        "/* namespace TX {\n",
     ]
 
     for i, msg in enumerate(messages):
         lines.append(generate_struct(msg))
         if i == 4:
-            lines.append("} */ \nnamespace OUT\n{\n")
+            lines.append("} */ \nnamespace RX\n{\n")
            
     return "\n".join(lines)
 

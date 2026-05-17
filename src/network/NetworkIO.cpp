@@ -17,15 +17,14 @@
 #include <cerrno>
 #include <cstring>
 
-#include <iostream>
 
-NetworkIO::NetworkIO(spscOutPacketQueue_t &receiver_to_parser, spscInPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, InPacketPoolManager &inPkt_pool, const std::atomic<bool>& running_engine) noexcept
+NetworkIO::NetworkIO(spscRxPacketQueue_t &receiver_to_parser, spscTxPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, const std::atomic<bool>& running_engine) noexcept
    :  receiver_to_parser_(receiver_to_parser),
       builder_to_sender_(builder_to_sender),
       sess_mngr_(sess_mngr),
       sbt_(sbt),
       login_(login),
-      inPkt_pool_(inPkt_pool),
+      txPkt_pool_(txPkt_pool),
       epoll_fd_(createEpoll()),  
       socks_(Init_Sockets()),
       running_engine_(running_engine)
@@ -266,9 +265,9 @@ int NetworkIO::setupSocket(const int sock, const SessionContext& cxt) noexcept
          auto login_decision = login_.LoginDecider(sess_state);
          if(LIKELY(login_decision == LoginDecision::TryAgain))
          {
-            InPacket *inPkt = inPkt_pool_.get_inpkt();
-            login_.LoginAttempt(*inPkt, index, *sess_state);
-            send(*inPkt, sock, index, socket_states_[index]);
+            TxPacket *txPkt = txPkt_pool_.get_txPkt();
+            login_.LoginAttempt(*txPkt, index, *sess_state);
+            send(*txPkt, sock, index, socket_states_[index]);
          }
          else if(login_decision == LoginDecision::AlreadyLoggedIn)
          {
@@ -389,10 +388,10 @@ void NetworkIO::recv_send() noexcept
    
    while (running_engine_.load(std::memory_order_acquire))
    {
-      InPacket* inPkt;
-      while (builder_to_sender_.pop(inPkt))
+      TxPacket* txPkt;
+      while (builder_to_sender_.pop(txPkt))
       {
-         trySend(*inPkt);
+         trySend(*txPkt);
       }
       
       int nfds = epoll_wait(epoll_fd_, events, MAX_EVENTS, 0);
@@ -404,7 +403,6 @@ void NetworkIO::recv_send() noexcept
 
       for (int i = 0; i < nfds; ++i)
       {
-         std::cerr << "NETWORK epoll geldi ";
          uint64_t epoll_data = events[i].data.u64;
          size_t index = epollUnpackData<size_t>(epoll_data);
          int sock = socks_[index];
@@ -413,7 +411,7 @@ void NetworkIO::recv_send() noexcept
          if(UNLIKELY(sock == -1)) // Double-check for closed socketsa
             continue;
 
-         //inPacket sending
+         //TxPacket sending
          if (events[i].events & EPOLLOUT) // Check if event is writable (EPOLLOUT) ---
          {
             if(UNLIKELY(states.connection_pending))
@@ -425,11 +423,11 @@ void NetworkIO::recv_send() noexcept
             {
                send(*states.active_pkt, sock, index, states);
 
-               InPacket *inPkt;
+               TxPacket *txPkt;
 
-               while (!states.active_pkt && pending_write_[index].pop(inPkt))
+               while (!states.active_pkt && pending_write_[index].pop(txPkt))
                {
-                  send(*inPkt, sock, index, states);      
+                  send(*txPkt, sock, index, states);      
                }
 
                if (!states.active_pkt)
@@ -440,15 +438,14 @@ void NetworkIO::recv_send() noexcept
             }
          }
 
-         // outPacket receiving
+         // RxPacket receiving
          if (events[i].events & EPOLLIN)
          {
-            std::cerr << " pkt handling başladı";
             auto& pend_read = pending_read_[index];  
 
             while (true)
             {
-               OutPacket *pending_pkt = nullptr;
+               RxPacket *pending_pkt = nullptr;
                while (pend_read.pop(pending_pkt))
                {
                   if(pending_pkt->partial == true) 
@@ -463,32 +460,31 @@ void NetworkIO::recv_send() noexcept
                   }
                }
               
-               OutPacket *outPkt = nullptr;
-               if (!free_pkt_list_.pop(outPkt))
+               RxPacket *rxPkt = nullptr;
+               if (!free_pkt_list_.pop(rxPkt))
                   break;
 
                ssize_t len = 0;    
-               outPkt->protocol = epollUnpackData<Protocol>(epoll_data);
-               outPkt->venue = epollUnpackData<Venue>(epoll_data);
+               rxPkt->protocol = epollUnpackData<Protocol>(epoll_data);
+               rxPkt->venue = epollUnpackData<Venue>(epoll_data);
 
-               if (!(outPkt->protocol == Protocol::ITCH))
+               if (!(rxPkt->protocol == Protocol::ITCH))
                {
-                  len = ::recv(sock, outPkt->data.data(), outPkt->data.size(), 0);
-                  outPkt->len = len;
+                  len = ::recv(sock, rxPkt->data.data(), rxPkt->data.size(), 0);
+                  rxPkt->len = len;
                }
                else
                {
-                  len = ::recvfrom(sock, outPkt->data.data(), outPkt->data.size(), 0, nullptr, nullptr);
-                  outPkt->len = len;
+                  len = ::recvfrom(sock, rxPkt->data.data(), rxPkt->data.size(), 0, nullptr, nullptr);
+                  rxPkt->len = len;
                }
 
-               std::cerr << " pkt recv ile alındı: " << outPkt->len << " ";
 
                if (len < 0)
                {
                   if (errno == EAGAIN || errno == EWOULDBLOCK)
                   {
-                     releasePacket(outPkt);
+                     releasePacket(rxPkt);
                      break;
                   }
                   else if (errno == EINTR)
@@ -509,19 +505,18 @@ void NetworkIO::recv_send() noexcept
                else
                {
                   bool try_push = true;
-                  if (outPkt->protocol == Protocol::OUCH)
-                     try_push = SBTPacketHandler(outPkt, len, pend_read, index);
+                  if (rxPkt->protocol == Protocol::OUCH)
+                     try_push = SBTPacketHandler(rxPkt, len, pend_read, index);
 
-                  if (try_push && !receiver_to_parser_.push(outPkt))
+                  if (try_push && !receiver_to_parser_.push(rxPkt))
                   {
-                     pend_read.push(outPkt);
+                     pend_read.push(rxPkt);
                      
                      if (pend_read.back() && !(pend_read.back())->partial)
                        pend_read.swap_last_two();
                      
                      break;
                   }
-                  std::cerr << "NETWORK PUSHED ";
                }
             }
          }
@@ -554,7 +549,6 @@ void NetworkIO::handleEINPROGRESS(const int sock, SocketState& states, const uin
 
       if (error != 0)
       {
-         std::cerr << "error: " << error;
          LOG_ERROR("Connection failed for index {} with error {}", index, error);
          states.connection_pending = false;
 
@@ -581,9 +575,9 @@ void NetworkIO::handleEINPROGRESS(const int sock, SocketState& states, const uin
       auto login_decision = login_.LoginDecider(sess_state);
       if (LIKELY(login_decision == LoginDecision::TryAgain))
       {
-         InPacket *inPkt = inPkt_pool_.get_inpkt();
-         login_.LoginAttempt(*inPkt, index, *sess_state);
-         send(*inPkt, sock, index, socket_states_[index]);
+         TxPacket *txPkt = txPkt_pool_.get_txPkt();
+         login_.LoginAttempt(*txPkt, index, *sess_state);
+         send(*txPkt, sock, index, socket_states_[index]);
       }
       else if (login_decision == LoginDecision::AlreadyLoggedIn)
       {
@@ -597,51 +591,51 @@ void NetworkIO::handleEINPROGRESS(const int sock, SocketState& states, const uin
       }
 }
 
-bool NetworkIO::SBTPacketHandler(OutPacket *outPkt, const size_t recv_len, PendingQueue<OutPacket *, PENDING_CAPACITY>& pend_read, const size_t index) noexcept 
+bool NetworkIO::SBTPacketHandler(RxPacket *rxPkt, const size_t recv_len, PendingQueue<RxPacket *, PENDING_CAPACITY>& pend_read, const size_t index) noexcept 
 {
    uint16_t data_offset = 0;
-   auto *next_pkt_start = outPkt->data.data();
+   auto *next_pkt_start = rxPkt->data.data();
    
-   OutPacket *outPkt_pending;
-   while (pend_read.pop(outPkt_pending))
+   RxPacket *rxPkt_pending;
+   while (pend_read.pop(rxPkt_pending))
    {
-      if (outPkt_pending->partial)
+      if (rxPkt_pending->partial)
       {
-         if(!outPkt_pending->is_len_received)
+         if(!rxPkt_pending->is_len_received)
          {
-            outPkt_pending->len = ((outPkt_pending->len << 8) | *next_pkt_start) + 2;
-            outPkt_pending->is_len_received = true;
-            outPkt_pending->last_pkt_remaining_len = outPkt_pending->len - 1;
+            rxPkt_pending->len = ((rxPkt_pending->len << 8) | *next_pkt_start) + 2;
+            rxPkt_pending->is_len_received = true;
+            rxPkt_pending->last_pkt_remaining_len = rxPkt_pending->len - 1;
          }
 
-         uint16_t remaining = std::min(static_cast<uint16_t>(outPkt_pending->last_pkt_remaining_len), 
-                                       outPkt->len
+         uint16_t remaining = std::min(static_cast<uint16_t>(rxPkt_pending->last_pkt_remaining_len), 
+                                       rxPkt->len
                               );
 
-         std::memcpy(outPkt_pending->data.data() + (outPkt_pending->len - outPkt_pending->last_pkt_remaining_len), 
+         std::memcpy(rxPkt_pending->data.data() + (rxPkt_pending->len - rxPkt_pending->last_pkt_remaining_len), 
                      next_pkt_start, 
                      remaining);
 
-         uint16_t remaining_after_next_pkt = outPkt_pending->last_pkt_remaining_len - remaining; 
+         uint16_t remaining_after_next_pkt = rxPkt_pending->last_pkt_remaining_len - remaining; 
          
          if (remaining_after_next_pkt == 0) 
          {            
-            outPkt_pending->partial = false;
-            outPkt_pending->msg_count = 1;
-            outPkt_pending->offsets[0] = 0;
+            rxPkt_pending->partial = false;
+            rxPkt_pending->msg_count = 1;
+            rxPkt_pending->offsets[0] = 0;
             data_offset += remaining;
             next_pkt_start += remaining;
          }
          else 
          {
-            outPkt_pending->last_pkt_remaining_len -= remaining;
-            pend_read.push(outPkt_pending);
+            rxPkt_pending->last_pkt_remaining_len -= remaining;
+            pend_read.push(rxPkt_pending);
             goto end_of_loop;
          }
       }
 
-      if (!receiver_to_parser_.push(outPkt_pending))
-         pend_read.push(outPkt_pending);
+      if (!receiver_to_parser_.push(rxPkt_pending))
+         pend_read.push(rxPkt_pending);
       
    }
    end_of_loop:;
@@ -666,28 +660,28 @@ bool NetworkIO::SBTPacketHandler(OutPacket *outPkt, const size_t recv_len, Pendi
 
       if (pkt_len + data_offset > recv_len || len_partial)
       {
-         OutPacket *outPkt_partial;
+         RxPacket *rxPkt_partial;
 
-         if(!free_pkt_list_.pop(outPkt_partial)) 
+         if(!free_pkt_list_.pop(rxPkt_partial)) 
          {
-            outPkt_partial = partial_packet_pool_[next_partialpkt++ & (PARTIAL_PACKET_POOL_CAPACITY - 1)];
-            outPkt_partial->release_this_pkt = false;
+            rxPkt_partial = partial_packet_pool_[next_partialpkt++ & (PARTIAL_PACKET_POOL_CAPACITY - 1)];
+            rxPkt_partial->release_this_pkt = false;
          }
 
-         std::memcpy(outPkt_partial->data.data(), next_pkt_start, recv_len - data_offset);
-         outPkt_partial->partial = true;
-         outPkt_partial->len = pkt_len;
-         outPkt_partial->last_pkt_remaining_len = pkt_len - (recv_len - data_offset);
-         outPkt_partial->protocol = outPkt->protocol;
-         outPkt_partial->venue = outPkt->venue;
+         std::memcpy(rxPkt_partial->data.data(), next_pkt_start, recv_len - data_offset);
+         rxPkt_partial->partial = true;
+         rxPkt_partial->len = pkt_len;
+         rxPkt_partial->last_pkt_remaining_len = pkt_len - (recv_len - data_offset);
+         rxPkt_partial->protocol = rxPkt->protocol;
+         rxPkt_partial->venue = rxPkt->venue;
          
          if(len_partial)
          {
-            outPkt_partial->is_len_received = false;
-            outPkt_partial->last_pkt_remaining_len = 0;
+            rxPkt_partial->is_len_received = false;
+            rxPkt_partial->last_pkt_remaining_len = 0;
          }
 
-         pend_read.push(outPkt_partial);
+         pend_read.push(rxPkt_partial);
 
          return false;
       }
@@ -699,7 +693,7 @@ bool NetworkIO::SBTPacketHandler(OutPacket *outPkt, const size_t recv_len, Pendi
       switch (sbt_action)
       {
       case SBTAction::ToParser:
-         outPkt->offsets[outPkt->msg_count++] = data_offset - pkt_len;
+         rxPkt->offsets[rxPkt->msg_count++] = data_offset - pkt_len;
          break; 
 
       case SBTAction::Reconnect:
@@ -718,14 +712,14 @@ bool NetworkIO::SBTPacketHandler(OutPacket *outPkt, const size_t recv_len, Pendi
    return true;
 }
 
-void NetworkIO::send(InPacket& inPkt, const int sock, const uint8_t index, SocketState &states) noexcept
+void NetworkIO::send(TxPacket& txPkt, const int sock, const uint8_t index, SocketState &states) noexcept
 {
-   while (inPkt.offset < inPkt.len)
+   while (txPkt.offset < txPkt.len)
    {
-      ssize_t sent = ::send(sock, inPkt.data.data() + inPkt.offset, inPkt.len - inPkt.offset,0);
+      ssize_t sent = ::send(sock, txPkt.data.data() + txPkt.offset, txPkt.len - txPkt.offset,0);
       if(sent > 0)
       {
-         inPkt.offset += sent;
+         txPkt.offset += sent;
          continue;
       }
       else if (sent < 0)
@@ -738,7 +732,7 @@ void NetworkIO::send(InPacket& inPkt, const int sock, const uint8_t index, Socke
                states.is_EPOLLOUT_set = true;
             }
 
-            states.active_pkt = &inPkt;
+            states.active_pkt = &txPkt;
             return;
          }
          else
@@ -752,6 +746,7 @@ void NetworkIO::send(InPacket& inPkt, const int sock, const uint8_t index, Socke
          }
       }
    }
+   pipeline_seq.fetch_add(1, std::memory_order_release); // Tx pipeline test end
    states.active_pkt = nullptr;
 }
 

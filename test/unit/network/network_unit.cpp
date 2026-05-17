@@ -79,14 +79,6 @@
 
         FakeTCPServer(uint16_t port, std::mutex& mutex, std::condition_variable& cv) : port(port), packet_mutex(mutex), packets_ready_cv(cv) {}
     
-        // void wait_listening() 
-        // {
-        //     std::unique_lock<std::mutex> lk(listen_mutex);
-        //     listening_cv.wait(lk, [this]{
-        //         return listening.load(std::memory_order_acquire);
-        //     });
-        // }
-
         void wait_accepting() 
         {
             std::unique_lock<std::mutex> lk(accept_mutex);
@@ -123,9 +115,6 @@
             addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
             ::bind(server_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
             ::listen(server_fd, 5);
-            
-            // listening.store(true, std::memory_order_release);
-            // listening_cv.notify_all();
 
             accept_thread = std::thread([this]() {
        
@@ -259,7 +248,7 @@ TEST(NetworkIOTest, NetworkIOTestAll)
 {
     Logger::Init();
 
-    auto inPkt_pool = std::make_unique<InPacketPoolManager>();  
+    auto txPkt_pool = std::make_unique<TxPacketPoolManager>();  
     //Order Manager queues
     spscOrderQueue_t store_to_strategy_free_slot;
     spscOrderQueue_t store_to_risk;
@@ -270,12 +259,12 @@ TEST(NetworkIOTest, NetworkIOTestAll)
     //Builder Dispatch queues
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
-    spscInPacketQueue_t builder_to_sender;
+    spscTxPacketQueue_t builder_to_sender;
     spscOrderQueue_t risk_to_builder;
 
     //NetworkIO queues
-    // spscInPacketQueue_t builder_to_sender;
-    spscOutPacketQueue_t receiver_to_parser;    
+    // spscTxPacketQueue_t builder_to_sender;
+    spscRxPacketQueue_t receiver_to_parser;    
     
     std::atomic<bool> running{true};
     
@@ -305,7 +294,7 @@ TEST(NetworkIOTest, NetworkIOTestAll)
                                         *sess_mngr,
                                         *sbt,
                                         *login,
-                                        *inPkt_pool,
+                                        *txPkt_pool,
                                         *builder_fix,
                                         *order_manager,
                                         *parser_fix        
@@ -323,11 +312,6 @@ TEST(NetworkIOTest, NetworkIOTestAll)
     fix_server.start();
     ouch_bist_server.start();
     ouch_nq_server.start();
-    
-    // fix_server.wait_listening();
-    // ouch_bist_server.wait_listening();
-    // ouch_nq_server.wait_listening();
-    // //Wait until all server listen the ports 
 
     auto network_io = std::make_unique<NetworkIO>(
                                         receiver_to_parser,
@@ -335,7 +319,7 @@ TEST(NetworkIOTest, NetworkIOTestAll)
                                         *sess_mngr,
                                         *sbt,
                                         *login,
-                                        *inPkt_pool,
+                                        *txPkt_pool,
                                         running
     );
 
@@ -441,76 +425,76 @@ TEST(NetworkIOTest, NetworkIOTestAll)
     //       ^ TRAFFIC FOR NETWORK IO RECEIVER ^
     // ====================================================,
 
-    std::vector<OutPacket*> outpkts;
-    outpkts.reserve(5);
+    std::vector<RxPacket*> rxPkts;
+    rxPkts.reserve(5);
     
-    while (outpkts.size() < 5) 
+    while (rxPkts.size() < 5) 
     {
-        OutPacket* pkt = nullptr;
+        RxPacket* pkt = nullptr;
         while (receiver_to_parser.pop(pkt))
-            outpkts.push_back(pkt);
+            rxPkts.push_back(pkt);
         
-        if (outpkts.size() >= 5) break;
+        if (rxPkts.size() >= 5) break;
 
         std::unique_lock<std::mutex> lk(packet_mutex);
         packets_ready_cv.wait(lk);  
     }
 
-    auto check_fix_ack = [](const OutPacket* outPkt)
+    auto check_fix_ack = [](const RxPacket* rxPkt)
     {
-        EXPECT_EQ(outPkt->len,                    125);
-        EXPECT_EQ(outPkt->data[19],               '8');       // 35=MsgType = ExecutionReport
-        EXPECT_EQ(outPkt->data[78],               'G');       // 55=Symbol = GARAN
-        EXPECT_EQ(outPkt->data[87],               '1');       // 54=Side = Buy
-        EXPECT_EQ(outPkt->data[92],               '1');       // 38=Qty starts with '1' (100)
-        EXPECT_EQ(outPkt->data[110],              '0');       // 39=OrdStatus = New
-        EXPECT_EQ(outPkt->venue,                  Venue::BIST);
-        EXPECT_EQ(outPkt->protocol,               Protocol::FIX);
+        EXPECT_EQ(rxPkt->len,                    125);
+        EXPECT_EQ(rxPkt->data[19],               '8');       // 35=MsgType = ExecutionReport
+        EXPECT_EQ(rxPkt->data[78],               'G');       // 55=Symbol = GARAN
+        EXPECT_EQ(rxPkt->data[87],               '1');       // 54=Side = Buy
+        EXPECT_EQ(rxPkt->data[92],               '1');       // 38=Qty starts with '1' (100)
+        EXPECT_EQ(rxPkt->data[110],              '0');       // 39=OrdStatus = New
+        EXPECT_EQ(rxPkt->venue,                  Venue::BIST);
+        EXPECT_EQ(rxPkt->protocol,               Protocol::FIX);
     };
-    auto check_ouch_bist_ack = [](const OutPacket* outPkt)
+    auto check_ouch_bist_ack = [](const RxPacket* rxPkt)
     {
-        EXPECT_EQ(outPkt->len,                    140);
-        EXPECT_EQ(outPkt->data[3],                'A');       // message_type
-        EXPECT_EQ(outPkt->data[30],               'B');       // side = Buy
-        EXPECT_EQ(outPkt->data[46],               0x64);      // quantity last byte = 100
-        EXPECT_EQ(outPkt->data[49],               0x27);      // price high byte
-        EXPECT_EQ(outPkt->data[50],               0x10);      // price low byte = 10000
-        EXPECT_EQ(outPkt->venue,                  Venue::BIST);
-        EXPECT_EQ(outPkt->protocol,               Protocol::OUCH);
+        EXPECT_EQ(rxPkt->len,                    140);
+        EXPECT_EQ(rxPkt->data[3],                'A');       // message_type
+        EXPECT_EQ(rxPkt->data[30],               'B');       // side = Buy
+        EXPECT_EQ(rxPkt->data[46],               0x64);      // quantity last byte = 100
+        EXPECT_EQ(rxPkt->data[49],               0x27);      // price high byte
+        EXPECT_EQ(rxPkt->data[50],               0x10);      // price low byte = 10000
+        EXPECT_EQ(rxPkt->venue,                  Venue::BIST);
+        EXPECT_EQ(rxPkt->protocol,               Protocol::OUCH);
     };
-    auto check_ouch_nq_ack = [](const OutPacket* outPkt)
+    auto check_ouch_nq_ack = [](const RxPacket* rxPkt)
     {
-        EXPECT_EQ(outPkt->len,                    67);
-        EXPECT_EQ(outPkt->data[3],                'A');       // message_type
-        EXPECT_EQ(outPkt->data[16],               'S');       // side = Sell
-        EXPECT_EQ(outPkt->data[20],               0x64);      // quantity last byte = 100
-        EXPECT_EQ(outPkt->venue,                  Venue::NASDAQ);
-        EXPECT_EQ(outPkt->protocol,               Protocol::OUCH);
+        EXPECT_EQ(rxPkt->len,                    67);
+        EXPECT_EQ(rxPkt->data[3],                'A');       // message_type
+        EXPECT_EQ(rxPkt->data[16],               'S');       // side = Sell
+        EXPECT_EQ(rxPkt->data[20],               0x64);      // quantity last byte = 100
+        EXPECT_EQ(rxPkt->venue,                  Venue::NASDAQ);
+        EXPECT_EQ(rxPkt->protocol,               Protocol::OUCH);
     };
-    auto check_itch_bist_add = [](const OutPacket* outPkt)
+    auto check_itch_bist_add = [](const RxPacket* rxPkt)
     {
-        EXPECT_EQ(outPkt->len,                    45);
-        EXPECT_EQ(outPkt->data[0],                'A');       // message_type
-        EXPECT_EQ(outPkt->data[17],               'B');       // side = Buy
-        EXPECT_EQ(outPkt->data[29],               0x64);      // quantity last byte = 100
-        EXPECT_EQ(outPkt->data[30],               0x00);      // price[0]
-        EXPECT_EQ(outPkt->data[33],               0x10);      // price last byte
-        EXPECT_EQ(outPkt->venue,                  Venue::BIST);
-        EXPECT_EQ(outPkt->protocol,               Protocol::ITCH);
+        EXPECT_EQ(rxPkt->len,                    45);
+        EXPECT_EQ(rxPkt->data[0],                'A');       // message_type
+        EXPECT_EQ(rxPkt->data[17],               'B');       // side = Buy
+        EXPECT_EQ(rxPkt->data[29],               0x64);      // quantity last byte = 100
+        EXPECT_EQ(rxPkt->data[30],               0x00);      // price[0]
+        EXPECT_EQ(rxPkt->data[33],               0x10);      // price last byte
+        EXPECT_EQ(rxPkt->venue,                  Venue::BIST);
+        EXPECT_EQ(rxPkt->protocol,               Protocol::ITCH);
     };
-    auto check_itch_nq_add = [](const OutPacket* outPkt)
+    auto check_itch_nq_add = [](const RxPacket* rxPkt)
     {
-        EXPECT_EQ(outPkt->len,                    36);
-        EXPECT_EQ(outPkt->data[0],                'A');       // message_type
-        EXPECT_EQ(outPkt->data[19],               'S');       // side = Sell
-        EXPECT_EQ(outPkt->data[23],               0x64);      // shares last byte = 100
-        EXPECT_EQ(outPkt->data[24],               'A');       // stock[0] = A
-        EXPECT_EQ(outPkt->data[32],               0x05);      // price[0]
-        EXPECT_EQ(outPkt->data[35],               0x00);      // price last byte
-        EXPECT_EQ(outPkt->venue,                  Venue::NASDAQ);
-        EXPECT_EQ(outPkt->protocol,               Protocol::ITCH);
+        EXPECT_EQ(rxPkt->len,                    36);
+        EXPECT_EQ(rxPkt->data[0],                'A');       // message_type
+        EXPECT_EQ(rxPkt->data[19],               'S');       // side = Sell
+        EXPECT_EQ(rxPkt->data[23],               0x64);      // shares last byte = 100
+        EXPECT_EQ(rxPkt->data[24],               'A');       // stock[0] = A
+        EXPECT_EQ(rxPkt->data[32],               0x05);      // price[0]
+        EXPECT_EQ(rxPkt->data[35],               0x00);      // price last byte
+        EXPECT_EQ(rxPkt->venue,                  Venue::NASDAQ);
+        EXPECT_EQ(rxPkt->protocol,               Protocol::ITCH);
     };
-    using checkFunc = std::function<void(const OutPacket*)>;
+    using checkFunc = std::function<void(const RxPacket*)>;
     std::array<checkFunc, 5> checks
     {
         check_fix_ack,
@@ -520,18 +504,18 @@ TEST(NetworkIOTest, NetworkIOTestAll)
         check_itch_nq_add
     };
 
-    for(const auto* outPkt : outpkts) 
+    for(const auto* rxPkt : rxPkts) 
     {
-        auto venue = outPkt->venue;
-        auto prot = outPkt->protocol;
+        auto venue = rxPkt->venue;
+        auto prot = rxPkt->protocol;
 
         if(venue == Venue::BIST)
         {
             switch(prot)
             {
-                case Protocol::FIX: checks[0](outPkt); continue;
-                case Protocol::OUCH: checks[1](outPkt); continue;
-                case Protocol::ITCH: checks[3](outPkt); continue;
+                case Protocol::FIX: checks[0](rxPkt); continue;
+                case Protocol::OUCH: checks[1](rxPkt); continue;
+                case Protocol::ITCH: checks[3](rxPkt); continue;
                 default: continue;
             }
         }
@@ -539,8 +523,8 @@ TEST(NetworkIOTest, NetworkIOTestAll)
         {
             switch(prot)
             {
-                case Protocol::OUCH: checks[2](outPkt); continue;
-                case Protocol::ITCH: checks[4](outPkt); continue;
+                case Protocol::OUCH: checks[2](rxPkt); continue;
+                case Protocol::ITCH: checks[4](rxPkt); continue;
                 default: continue;
             }   
         }

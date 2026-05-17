@@ -19,7 +19,7 @@
 class BM_Parser : public benchmark::Fixture
 {
 public:
-    std::unique_ptr<InPacketPoolManager> inPkt_pool;
+    std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<SessionManager> sess_mngr;
     std::unique_ptr<SoupBinTcp> sbt;
     std::unique_ptr<Builder_FIX> builder_fix;
@@ -28,16 +28,16 @@ public:
     std::unique_ptr<Parser_FIX> parser_fix;
 
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
-    spscOutPacketQueue_t receiver_to_parser;
-    spscInPacketQueue_t builder_to_sender;
+    spscRxPacketQueue_t receiver_to_parser;
+    spscTxPacketQueue_t builder_to_sender;
     spscMessageQueue_t parser_to_store; 
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
     spscDbQueue_t db_to_parser; 
 
     std::unique_ptr<Parser_Dispatch> parser_dispatch;
 
-    OutPacket* pkt;
-    std::vector<OutPacket*> pkts;
+    RxPacket* pkt;
+    std::vector<RxPacket*> pkts;
     int pkt_case;
     MessageWithVenue<MessageTypes_t> msg;
     std::atomic<bool> running{true}; 
@@ -51,7 +51,7 @@ public:
         stop.store(false, std::memory_order_relaxed);
         pkts.clear(); 
         
-        inPkt_pool = std::make_unique<InPacketPoolManager>();
+        txPkt_pool = std::make_unique<TxPacketPoolManager>();
 
         sess_mngr   = std::make_unique<SessionManager>();  
         sbt         = std::make_unique<SoupBinTcp>(*sess_mngr);
@@ -65,7 +65,7 @@ public:
                                         *sess_mngr,
                                         *sbt,
                                         *login,
-                                        *inPkt_pool,
+                                        *txPkt_pool,
                                         running
             );
 
@@ -84,10 +84,10 @@ public:
         switch(pkt_case)
         {
             case 1: 
-                pkts.push_back(&test_data_parser::itch_nasdaq_outpacket_single_1); // 1msg 1pkt
+                pkts.push_back(&test_data_parser::itch_nasdaq_RxPacket_single_1); // 1msg 1pkt
                 break;
             case 2: 
-                pkts.push_back(&test_data_parser::itch_nasdaq_outpacket_full_1); // 3msg 1pkt
+                pkts.push_back(&test_data_parser::itch_nasdaq_RxPacket_full_1); // 3msg 1pkt
                 break;
             default: 
             __builtin_unreachable();
@@ -126,7 +126,7 @@ public:
         builder_fix.reset();
         sbt.reset();
         sess_mngr.reset();
-        inPkt_pool.reset();
+        txPkt_pool.reset();
     }
 };
 

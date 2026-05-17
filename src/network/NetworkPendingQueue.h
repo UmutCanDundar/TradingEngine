@@ -57,6 +57,11 @@ public:
         return head == tail;
     }
 
+    inline size_t size() noexcept
+    {
+        return (tail - head + N) & (N - 1);
+    }
+
     inline T back() noexcept
     {
         if (head == tail)

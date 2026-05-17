@@ -47,7 +47,7 @@ public:///
     std::vector<std::vector<HashEntry>> hashtables_;
     std::vector<size_t> symbols_count_per_venue_;
 
-    static constexpr size_t EXEC_ID_TABLE_SIZE = 1 << 18; // 262144 slots (~2.1 MB)
+    static constexpr size_t EXEC_ID_TABLE_SIZE = 1 << 4; // 262144 slots (~2.1 MB)
     static constexpr size_t MAX_PROBE = 8; 
     std::array<uint64_t, EXEC_ID_TABLE_SIZE> exec_id_hashes_;
 
@@ -119,6 +119,7 @@ public:
     }
 
 private:
+public: ///
     //-------------------Symbol Hashing----------------------
     void initialize(const std::span<const SymbolIndex> &symbol_table) noexcept;
 

@@ -15,10 +15,10 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
 {
     std::atomic<bool> running{true};
 
-    auto inPkt_pool = std::make_unique<InPacketPoolManager>();
+    auto txPkt_pool = std::make_unique<TxPacketPoolManager>();
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
-    spscOutPacketQueue_t receiver_to_parser;
-    spscInPacketQueue_t builder_to_sender;
+    spscRxPacketQueue_t receiver_to_parser;
+    spscTxPacketQueue_t builder_to_sender;
     spscMessageQueue_t parser_to_store; 
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
     spscDbQueue_t db_to_parser; 
@@ -26,7 +26,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
-    auto network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *inPkt_pool, running);
+    auto network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *txPkt_pool, running);
     auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
 
     auto parser_dispatch = std::make_unique<Parser_Dispatch>(
@@ -41,19 +41,19 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     );
     uint8_t sess_index = sess_mngr->getSessionIndex(Venue::BIST, Protocol::OUCH);
     
-    OutPacket* outPkt;
-    PendingQueue<OutPacket *, 256> pend_read;
+    RxPacket* rxPkt;
+    PendingQueue<RxPacket *, 256> pend_read;
 
 // ====================================================
 //       v DIFFERENT SCENARIOS FOR OUCH PARSING v 
     
 // SCENARIO 1: THREE PACKETS CONTAINING PARTIAL OUCH MESSAGES 
-    std::array<OutPacket*, 5> pkts = {
-        &test_data_parser::ouch_bist_outpacket_partial_1, 
-        &test_data_parser::ouch_bist_outpacket_partial_2, 
-        &test_data_parser::ouch_bist_outpacket_partial_3,
-        &test_data_parser::ouch_bist_outpacket_partial_4, 
-        &test_data_parser::ouch_bist_outpacket_partial_5, 
+    std::array<RxPacket*, 5> pkts = {
+        &test_data_parser::ouch_bist_RxPacket_partial_1, 
+        &test_data_parser::ouch_bist_RxPacket_partial_2, 
+        &test_data_parser::ouch_bist_RxPacket_partial_3,
+        &test_data_parser::ouch_bist_RxPacket_partial_4, 
+        &test_data_parser::ouch_bist_RxPacket_partial_5, 
     };
     
     for (auto pkt : pkts) 
@@ -76,7 +76,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     parser_to_store.pop(msgWvenue); 
 
     auto variant_msg = std::get<BIST::OUCHMessage>(msgWvenue.msg);
-    auto* msg1 = std::get<BIST::OUT::OUCHOrderAcceptedMessage*>(variant_msg);
+    auto* msg1 = std::get<BIST::RX::OUCHOrderAcceptedMessage*>(variant_msg);
     
     ASSERT_NE(msg1, nullptr);
     EXPECT_EQ(msg1->message_type, 'A');
@@ -106,7 +106,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     parser_to_store.pop(msgWvenue); 
 
     variant_msg = std::get<BIST::OUCHMessage>(msgWvenue.msg);
-    auto* msg2 = std::get<BIST::OUT::OUCHOrderCancelledMessage*>(variant_msg);
+    auto* msg2 = std::get<BIST::RX::OUCHOrderCancelledMessage*>(variant_msg);
 
     ASSERT_NE(msg2, nullptr);
     EXPECT_EQ(msg2->message_type, 'C');
@@ -123,7 +123,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     parser_to_store.pop(msgWvenue); 
 
     variant_msg = std::get<BIST::OUCHMessage>(msgWvenue.msg);
-    auto* msg3 = std::get<BIST::OUT::OUCHOrderExecutedMessage*>(variant_msg);
+    auto* msg3 = std::get<BIST::RX::OUCHOrderExecutedMessage*>(variant_msg);
 
     ASSERT_NE(msg3, nullptr);
     EXPECT_EQ(msg3->message_type, 'E');
@@ -141,7 +141,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     parser_to_store.pop(msgWvenue); 
 
     variant_msg = std::get<BIST::OUCHMessage>(msgWvenue.msg);
-    auto* msg4 = std::get<BIST::OUT::OUCHOrderExecutedMessage*>(variant_msg);
+    auto* msg4 = std::get<BIST::RX::OUCHOrderExecutedMessage*>(variant_msg);
 
     ASSERT_NE(msg4, nullptr);
     EXPECT_EQ(msg4->message_type, 'E');
@@ -161,6 +161,6 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     builder_fix.reset();
     sbt.reset();
     sess_mngr.reset();
-    inPkt_pool.reset();
+    txPkt_pool.reset();
 }
 

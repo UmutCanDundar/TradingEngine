@@ -8,7 +8,7 @@ TEST(OUCHNASDAQParserTest, Accepted)
     Parser_OUCH_NASDAQ parser;
     auto variant_msg = parser.parse(reinterpret_cast<const char*>(test_data_parser::ouch_nasdaq_pkt1.data()));
 
-    auto* msg = std::get<NASDAQ::OUT::OUCHOrderAcceptedMessage*>(variant_msg);
+    auto* msg = std::get<NASDAQ::RX::OUCHOrderAcceptedMessage*>(variant_msg);
 
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->message_type, 'A');
@@ -34,7 +34,7 @@ TEST(OUCHNASDAQParserTest, Cancelled)
     Parser_OUCH_NASDAQ parser;
     auto variant_msg = parser.parse(reinterpret_cast<const char*>(test_data_parser::ouch_nasdaq_pkt2.data()));
 
-    auto* msg = std::get<NASDAQ::OUT::OUCHOrderCancelledMessage*>(variant_msg);
+    auto* msg = std::get<NASDAQ::RX::OUCHOrderCancelledMessage*>(variant_msg);
 
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->message_type, 'C');
@@ -50,7 +50,7 @@ TEST(OUCHNASDAQParserTest, Replaced)
     Parser_OUCH_NASDAQ parser;
     auto variant_msg = parser.parse(reinterpret_cast<const char*>(test_data_parser::ouch_nasdaq_pkt3.data()));
 
-    auto* msg = std::get<NASDAQ::OUT::OUCHOrderReplacedMessage*>(variant_msg);
+    auto* msg = std::get<NASDAQ::RX::OUCHOrderReplacedMessage*>(variant_msg);
 
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->message_type, 'U');

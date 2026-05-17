@@ -6,7 +6,7 @@
 
 namespace BIST {
 
-/* namespace IN {
+/* namespace TX {
 
 struct OUCHEnterOrderMessage {
     uint64_t quantity = 0;                // Order quantity | offset: 20, len: 8
@@ -57,7 +57,7 @@ struct OUCHCancelByOrderIDMessage {
 };
 
 } */ 
-namespace OUT
+namespace RX
 {
 
 struct OUCHOrderAcceptedMessage {

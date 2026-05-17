@@ -21,7 +21,7 @@
 int main()
 {
 
-    std::unique_ptr<InPacketPoolManager> inPkt_pool;
+    std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<HashTables>          hashtables;
     std::unique_ptr<MarketBook>          marketbook;
     std::unique_ptr<SessionManager>      sess_mngr;
@@ -34,7 +34,7 @@ int main()
 
     spscFIXInSessionQueue_t  parser_to_fixbuilder_in;
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
-    spscInPacketQueue_t      builder_to_sender;
+    spscTxPacketQueue_t      builder_to_sender;
     spscOrderQueue_t         risk_to_builder;
 
     spscOrderQueue_t   store_to_strategy_free_slot;
@@ -50,7 +50,7 @@ int main()
     uint8_t sess_index;
 
 
-    inPkt_pool    = std::make_unique<InPacketPoolManager>();
+    txPkt_pool    = std::make_unique<TxPacketPoolManager>();
     hashtables    = std::make_unique<HashTables>();
     marketbook    = std::make_unique<MarketBook>(*hashtables);
     sess_mngr     = std::make_unique<SessionManager>();
@@ -75,7 +75,7 @@ int main()
                         *sess_mngr,
                         *sbt,
                         *login,
-                        *inPkt_pool,
+                        *txPkt_pool,
                         *builder_fix,
                         *order_manager,
                         *parser_fix
@@ -93,11 +93,11 @@ int main()
     {
         pin_to_cpu(0);
 
-        InPacket* inPkt;
+        TxPacket* txPkt;
 
         while (!stop.load(std::memory_order_acquire))
         {
-            if (!builder_to_sender.pop(inPkt))
+            if (!builder_to_sender.pop(txPkt))
                 _mm_pause();
         }
     });
@@ -136,7 +136,7 @@ int main()
     sess_mngr.reset();
     marketbook.reset();
     hashtables.reset();
-    inPkt_pool.reset();
+    txPkt_pool.reset();
 
     return 0;
 }

@@ -29,9 +29,9 @@ inline void reset_accountrisk(AccountRisk& ar) noexcept
 inline void reset_symbolrisk(SymbolRisk& sr) noexcept
 {
     sr.net_position.store(0, std::memory_order_relaxed);
-    sr.cost_basis_scaled.store(0, std::memory_order_relaxed);
-    sr.unrealized_pnl.store(0, std::memory_order_relaxed);
-    sr.realized_pnl.store(0, std::memory_order_relaxed);
+    sr.cost_basis_scaled = 0;
+    sr.unrealized_pnl = 0;
+    sr.realized_pnl = 0;
     sr.pending_notional_scaled.store(0, std::memory_order_relaxed);
     sr.best_bid.store(10000, std::memory_order_relaxed);
     sr.best_ask.store(10000, std::memory_order_relaxed);

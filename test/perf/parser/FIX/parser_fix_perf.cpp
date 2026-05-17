@@ -18,7 +18,7 @@ int main()
 {
     pin_to_cpu(2);
 
-    std::unique_ptr<InPacketPoolManager> inPkt_pool;
+    std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<SessionManager>      sess_mngr;
     std::unique_ptr<SoupBinTcp>          sbt;
     std::unique_ptr<Builder_FIX>         builder_fix;
@@ -28,8 +28,8 @@ int main()
     std::unique_ptr<Parser_Dispatch>     parser_dispatch;
 
     spscFIXInSessionQueue_t     parser_to_fixbuilder_in;
-    spscOutPacketQueue_t        receiver_to_parser;
-    spscInPacketQueue_t         builder_to_sender;
+    spscRxPacketQueue_t        receiver_to_parser;
+    spscTxPacketQueue_t         builder_to_sender;
     spscMessageQueue_t          parser_to_store;
     spscFIXOutSessionQueue_t    parser_to_fixbuilder_out;
     spscDbQueue_t               db_to_parser;
@@ -39,7 +39,7 @@ int main()
 
     std::atomic<bool> running{true};
 
-    inPkt_pool  = std::make_unique<InPacketPoolManager>();
+    txPkt_pool  = std::make_unique<TxPacketPoolManager>();
     sess_mngr   = std::make_unique<SessionManager>();
     sbt         = std::make_unique<SoupBinTcp>(*sess_mngr);
     builder_fix = std::make_unique<Builder_FIX>(*sess_mngr);
@@ -51,7 +51,7 @@ int main()
                         *sess_mngr,
                         *sbt,
                         *login,
-                        *inPkt_pool,
+                        *txPkt_pool,
                         running
     );
     parser_dispatch = std::make_unique<Parser_Dispatch>(
@@ -68,12 +68,12 @@ int main()
     uint8_t sess_index = sess_mngr->getSessionIndex(Venue::BIST, Protocol::FIX);
     SessionState* sess_state = sess_mngr->getSessionState(sess_index);
 
-    using PktVec = std::vector<OutPacket*>;
+    using PktVec = std::vector<RxPacket*>;
     std::array<PktVec, 4> cases = {{
-        { &test_data_parser::fix_outpacket_single_1 },
-        { &test_data_parser::fix_outpacket_full_1 },
-        { &test_data_parser::fix_outpacket_partial_1, &test_data_parser::fix_outpacket_partial_2, &test_data_parser::fix_outpacket_partial_3,
-          &test_data_parser::fix_outpacket_partial_4, &test_data_parser::fix_outpacket_partial_5, &test_data_parser::fix_outpacket_partial_6 }
+        { &test_data_parser::fix_RxPacket_single_1 },
+        { &test_data_parser::fix_RxPacket_full_1 },
+        { &test_data_parser::fix_RxPacket_partial_1, &test_data_parser::fix_RxPacket_partial_2, &test_data_parser::fix_RxPacket_partial_3,
+          &test_data_parser::fix_RxPacket_partial_4, &test_data_parser::fix_RxPacket_partial_5, &test_data_parser::fix_RxPacket_partial_6 }
     }};
 
     consumer = std::thread([&]
@@ -121,7 +121,7 @@ int main()
     builder_fix.reset();
     sbt.reset();
     sess_mngr.reset();
-    inPkt_pool.reset();
+    txPkt_pool.reset();
 
     return 0;
 }

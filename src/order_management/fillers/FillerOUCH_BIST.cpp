@@ -9,7 +9,7 @@
 
 FillerOUCH_BIST::FillerOUCH_BIST(OrderManager &om) noexcept : ord_mngr_(om) {}
 
-void FillerOUCH_BIST::fill_ouch_accepted(Order &order, const BIST::OUT::OUCHOrderAcceptedMessage &msg) noexcept
+void FillerOUCH_BIST::fill_ouch_accepted(Order &order, const BIST::RX::OUCHOrderAcceptedMessage &msg) noexcept
 {
 
     order.price = static_cast<int64_t>(msg.price);
@@ -21,7 +21,7 @@ void FillerOUCH_BIST::fill_ouch_accepted(Order &order, const BIST::OUT::OUCHOrde
     order.last_update_time = order.timestamp;
 }
 
-void FillerOUCH_BIST::fill_ouch_replaced(Order &order, const BIST::OUT::OUCHOrderReplacedMessage &msg) noexcept
+void FillerOUCH_BIST::fill_ouch_replaced(Order &order, const BIST::RX::OUCHOrderReplacedMessage &msg) noexcept
 {
     if (msg.order_state == 2)
         return;
@@ -38,7 +38,7 @@ void FillerOUCH_BIST::fill_ouch_replaced(Order &order, const BIST::OUT::OUCHOrde
     order.time_in_force = static_cast<TimeInForce>(msg.time_in_force);
 }
 
-void FillerOUCH_BIST::fill_ouch_cancelled(Order &order, const BIST::OUT::OUCHOrderCancelledMessage &msg) noexcept
+void FillerOUCH_BIST::fill_ouch_cancelled(Order &order, const BIST::RX::OUCHOrderCancelledMessage &msg) noexcept
 {
 
     order.last_update_time = msg.timestamp;
@@ -47,7 +47,7 @@ void FillerOUCH_BIST::fill_ouch_cancelled(Order &order, const BIST::OUT::OUCHOrd
     order.status = Status::Deleted;
     order.cancelled_count++;
 }
-void FillerOUCH_BIST::fill_ouch_executed(Order &order, const BIST::OUT::OUCHOrderExecutedMessage &msg) noexcept
+void FillerOUCH_BIST::fill_ouch_executed(Order &order, const BIST::RX::OUCHOrderExecutedMessage &msg) noexcept
 {
 
     order.price = static_cast<int64_t>(msg.trade_price);
@@ -61,7 +61,7 @@ void FillerOUCH_BIST::fill_ouch_executed(Order &order, const BIST::OUT::OUCHOrde
         order.status = Status::Filled;
 }
 
-void FillerOUCH_BIST::fill_ouch_rejected(Order &order, const BIST::OUT::OUCHOrderRejectedMessage &msg) noexcept
+void FillerOUCH_BIST::fill_ouch_rejected(Order &order, const BIST::RX::OUCHOrderRejectedMessage &msg) noexcept
 {
     if (order.status == Status::Unknown)
     {

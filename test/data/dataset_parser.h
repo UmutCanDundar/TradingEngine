@@ -53,8 +53,8 @@ namespace test_data_parser {
             '1','0','=','0','9','5','\x01',      
         };
 
-        OutPacket fix_outpacket_single_1 = []() {
-            OutPacket pkt{};
+        RxPacket fix_RxPacket_single_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
                 // ── New Order (D) ── offset: 0
@@ -81,8 +81,8 @@ namespace test_data_parser {
             return pkt;
         }();
 
-        OutPacket fix_outpacket_full_1 = []() {
-            OutPacket pkt{};
+        RxPacket fix_RxPacket_full_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
                 // ── New Order (D) ── offset: 0
@@ -129,8 +129,8 @@ namespace test_data_parser {
             return pkt;
         }();
 
-        OutPacket fix_outpacket_partial_1 = []() {
-            OutPacket pkt{};
+        RxPacket fix_RxPacket_partial_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
                 // ── New Order (D) ── offset: 0
@@ -156,8 +156,8 @@ namespace test_data_parser {
 
             return pkt;
         }();
-        OutPacket fix_outpacket_partial_2 = []() {
-            OutPacket pkt{};
+        RxPacket fix_RxPacket_partial_2 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
                 '6','4','\x01',
@@ -183,8 +183,8 @@ namespace test_data_parser {
 
             return pkt;
         }();
-        OutPacket fix_outpacket_partial_3 = []() {
-            OutPacket pkt{};
+        RxPacket fix_RxPacket_partial_3 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
                 '3','5','=','8','\x01',
@@ -205,8 +205,8 @@ namespace test_data_parser {
 
             return pkt;
         }();
-        OutPacket fix_outpacket_partial_4 = []() {
-            OutPacket pkt{};
+        RxPacket fix_RxPacket_partial_4 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
                 // ── New Order (D) ── offset: 0
@@ -228,8 +228,8 @@ namespace test_data_parser {
 
             return pkt;
         }();
-        OutPacket fix_outpacket_partial_5 = []() {
-            OutPacket pkt{};
+        RxPacket fix_RxPacket_partial_5 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
                 '3','8','=','1','0','0','\x01',
@@ -244,8 +244,8 @@ namespace test_data_parser {
 
             return pkt;
         }();
-        OutPacket fix_outpacket_partial_6 = []() {
-            OutPacket pkt{};
+        RxPacket fix_RxPacket_partial_6 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
                 '5','4','=','1','\x01',
@@ -328,8 +328,8 @@ namespace test_data_parser {
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,                    // reserved | offset: 52, len: 16
         };
 
-        OutPacket ouch_bist_outpacket_single_1 = []() {
-            OutPacket pkt{};
+        RxPacket ouch_bist_RxPacket_single_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
             // OrderAccepted Message
@@ -368,8 +368,8 @@ namespace test_data_parser {
             return pkt;
         }();
 
-        OutPacket ouch_bist_outpacket_full_1 = []() {
-            OutPacket pkt{};
+        RxPacket ouch_bist_RxPacket_full_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
             // OrderAccepted Message
@@ -433,8 +433,8 @@ namespace test_data_parser {
             return pkt;
         }();
 
-        OutPacket ouch_bist_outpacket_partial_1 = []() {
-            OutPacket pkt{};
+        RxPacket ouch_bist_RxPacket_partial_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
             // OrderAccepted Message
@@ -456,8 +456,8 @@ namespace test_data_parser {
 
             return pkt;
         }();
-        OutPacket ouch_bist_outpacket_partial_2 = []() {
-            OutPacket pkt{};
+        RxPacket ouch_bist_RxPacket_partial_2 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
             0x00,0x00,0x00,0x00,0x00,0x00,0x07,0xD0,            // quantity | offset: 36
@@ -496,8 +496,8 @@ namespace test_data_parser {
 
             return pkt;
         }();
-        OutPacket ouch_bist_outpacket_partial_3 = []() {
-            OutPacket pkt{};
+        RxPacket ouch_bist_RxPacket_partial_3 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
             0x00,0x00,0x00,0x00,0x00,0x01,                      
@@ -525,8 +525,8 @@ namespace test_data_parser {
 
             return pkt;
         }();
-        OutPacket ouch_bist_outpacket_partial_4 = []() {
-            OutPacket pkt{};
+        RxPacket ouch_bist_RxPacket_partial_4 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
             // Executed Message 
@@ -540,8 +540,8 @@ namespace test_data_parser {
 
             return pkt;
         }();
-        OutPacket ouch_bist_outpacket_partial_5 = []() {
-            OutPacket pkt{};
+        RxPacket ouch_bist_RxPacket_partial_5 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {                                               
             // Executed Message
@@ -676,8 +676,8 @@ namespace test_data_parser {
             0,0,0,0,0,0,0                                   // reserved2
         };
 
-        OutPacket itch_bist_outpacket_single_1 = []() {
-            OutPacket pkt{};
+        RxPacket itch_bist_RxPacket_single_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
             // Executed Message 
@@ -719,8 +719,8 @@ namespace test_data_parser {
             return pkt;
         }();
 
-        OutPacket itch_bist_outpacket_full_1 = []() {
-            OutPacket pkt{};
+        RxPacket itch_bist_RxPacket_full_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {
             // Executed Message 
@@ -828,8 +828,8 @@ namespace test_data_parser {
             0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x99   // match_number
         };
 
-        OutPacket itch_nasdaq_outpacket_single_1 = []() {
-            OutPacket pkt{};
+        RxPacket itch_nasdaq_RxPacket_single_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {                                               
             0x52,                               // message_type = 'R' | offset: 0
@@ -861,8 +861,8 @@ namespace test_data_parser {
             return pkt;
         }();
 
-        OutPacket itch_nasdaq_outpacket_full_1 = []() {
-            OutPacket pkt{};
+        RxPacket itch_nasdaq_RxPacket_full_1 = []() {
+            RxPacket pkt{};
 
             const uint8_t data[] = {                                               
             0x52,                               // message_type = 'R' | offset: 0

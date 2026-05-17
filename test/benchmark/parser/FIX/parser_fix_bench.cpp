@@ -19,7 +19,7 @@
 class BM_Parser : public benchmark::Fixture
 {
 public:
-    std::unique_ptr<InPacketPoolManager> inPkt_pool;
+    std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<SessionManager> sess_mngr;
     std::unique_ptr<SoupBinTcp> sbt;
     std::unique_ptr<Builder_FIX> builder_fix;
@@ -28,8 +28,8 @@ public:
     std::unique_ptr<Parser_FIX> parser_fix;
 
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
-    spscOutPacketQueue_t receiver_to_parser;
-    spscInPacketQueue_t builder_to_sender;
+    spscRxPacketQueue_t receiver_to_parser;
+    spscTxPacketQueue_t builder_to_sender;
     spscMessageQueue_t parser_to_store; 
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
     spscDbQueue_t db_to_parser; 
@@ -37,14 +37,15 @@ public:
     std::unique_ptr<Parser_Dispatch> parser_dispatch;
 
     SessionState* sess_state;
-    OutPacket* pkt;
-    std::vector<OutPacket*> pkts;
+    RxPacket* pkt;
+    std::vector<RxPacket*> pkts;
     int pkt_case;
     MessageWithVenue<MessageTypes_t> msg;
     std::atomic<bool> running{true}; 
 
     std::atomic<bool> stop{false};
     std::thread consumer;
+    std::atomic<uint64_t> released_msg_count{0};
 
 public:
     void SetUp(const ::benchmark::State& st) 
@@ -52,7 +53,7 @@ public:
         stop.store(false, std::memory_order_relaxed);
         pkts.clear(); 
         
-        inPkt_pool = std::make_unique<InPacketPoolManager>();
+        txPkt_pool = std::make_unique<TxPacketPoolManager>();
 
         sess_mngr   = std::make_unique<SessionManager>();
         sbt         = std::make_unique<SoupBinTcp>(*sess_mngr);
@@ -66,7 +67,7 @@ public:
                                         *sess_mngr,
                                         *sbt,
                                         *login,
-                                        *inPkt_pool,
+                                        *txPkt_pool,
                                         running
             );
 
@@ -88,20 +89,20 @@ public:
         switch(pkt_case)
         {
             case 1: 
-                pkts.push_back(&test_data_parser::fix_outpacket_single_1); // 1msg 1pkt
+                pkts.push_back(&test_data_parser::fix_RxPacket_single_1); // 1msg 1pkt
                 break;
             case 2: 
-                pkts.push_back(&test_data_parser::fix_outpacket_full_1); // 3msgs 1pkt
+                pkts.push_back(&test_data_parser::fix_RxPacket_full_1); // 3msgs 1pkt
                 break;
             case 3: 
-                pkts.push_back(&test_data_parser::fix_outpacket_partial_1); // 3msgs scattered 3pkts, in order
-                pkts.push_back(&test_data_parser::fix_outpacket_partial_2);
-                pkts.push_back(&test_data_parser::fix_outpacket_partial_3); 
+                pkts.push_back(&test_data_parser::fix_RxPacket_partial_1); // 3msgs scattered 3pkts, in order
+                pkts.push_back(&test_data_parser::fix_RxPacket_partial_2);
+                pkts.push_back(&test_data_parser::fix_RxPacket_partial_3); 
                 break;
             case 4: 
-                pkts.push_back(&test_data_parser::fix_outpacket_partial_4); // 3msgs scattered 3pkts, out of order
-                pkts.push_back(&test_data_parser::fix_outpacket_partial_5);
-                pkts.push_back(&test_data_parser::fix_outpacket_partial_6); 
+                pkts.push_back(&test_data_parser::fix_RxPacket_partial_4); // 3msgs scattered 3pkts, out of order
+                pkts.push_back(&test_data_parser::fix_RxPacket_partial_5);
+                pkts.push_back(&test_data_parser::fix_RxPacket_partial_6); 
                 break;
             default: 
                 __builtin_unreachable(); 
@@ -119,11 +120,13 @@ public:
                 if(parser_to_store.pop(local_msg)) 
                 {
                     parser_dispatch->fixparser_.releaseFIX(std::get<FIXMessage*>(local_msg.msg));
+                    released_msg_count.fetch_add(1, std::memory_order_release);
                     
                 }
                 else if(parser_to_fixbuilder_in.pop(sesMsg))
                 {
                     parser_dispatch->fixparser_.releaseFIX(sesMsg);
+                    released_msg_count.fetch_add(1, std::memory_order_release);
                 }
                 else
                 { 
@@ -144,7 +147,7 @@ public:
         builder_fix.reset();
         sbt.reset();
         sess_mngr.reset();
-        inPkt_pool.reset();
+        txPkt_pool.reset();
 
     }
 };
@@ -153,16 +156,21 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseFIX)(benchmark::State& state)
 {
     pin_to_cpu(2);
 
+    uint64_t msgs_per_iter = pkt_case == 1 ? 1 : 3;
+    uint64_t total_expected = 0;
+
     std::vector<uint64_t> latencies;
     latencies.reserve(100000);
     
     for(auto _ : state)
     {
+        total_expected += msgs_per_iter;
+
         for(auto pkt : pkts) 
             pkt->consumed = false;
-        
+
         sess_state->fix.set_expected_seq(pkt_case == 4 ? 4 : 1);
-        
+                
         asm volatile("" ::: "memory");
         auto wall_start = std::chrono::high_resolution_clock::now();
         uint64_t start = rdtsc_start();
@@ -178,8 +186,13 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseFIX)(benchmark::State& state)
         benchmark::ClobberMemory();
         latencies.push_back(end - start);
 
-        while (!parser_to_store.empty() || !parser_to_fixbuilder_in.empty())
+        // while (!parser_to_store.empty() || !parser_to_fixbuilder_in.empty())
+        //     _mm_pause();
+
+        while (released_msg_count.load(std::memory_order_acquire) < total_expected)
+        {
             _mm_pause();
+        }
     }
    
     if (latencies.empty()) return;

@@ -84,10 +84,8 @@ void RiskEngine::initialize_symbolrisks() noexcept
 bool RiskEngine::update_risk() noexcept
 {
     Order *order;
-    // std::cerr << "ENTER RISK ";
     while (store_to_risk_.pop(order))
     {
-        std::cerr << "RISK POP OLDU ";
         const uint8_t venue_index = static_cast<uint8_t>(order->venue);
         auto &accRisk = accountrisks_[venue_index];
         const auto &accLim = limits_.getAccountLimit(venue_index);
@@ -106,7 +104,6 @@ bool RiskEngine::update_risk() noexcept
         order->canModify.store(order->canModify | RISK_DONE, std::memory_order_release);
 
         pipeline_seq.fetch_add(1, std::memory_order_release); // test 
-        // std::cerr <<  pipeline_done.load(std::memory_order_relaxed) << std::endl;
         return true;
     }
 
@@ -151,10 +148,10 @@ bool RiskEngine::check_risk() noexcept
         if (order->order_type == OrderType::Limit)
         {
             RejectReason |= check_price_tick_valid(order->price, *symmeta);
-            RejectReason |= check_notional_value(order->price, order->quantity, symLim.max_notional_scaled);
-            RejectReason |= check_market_data_and_deviation(symRisk.best_bid, symRisk.best_ask, order->price, symLim.max_price_deviation);            
-            RejectReason |= check_fat_finger(order->quantity, symLim.fat_finger_qty_threshold, order->price, symRisk.best_bid, symRisk.best_ask, symLim.fat_finger_ratio);
-            
+            RejectReason |= check_max_order_notional_value(order->price, order->quantity, symLim.max_order_notional_scaled);
+            RejectReason |= check_max_symbol_exposure_value(order->price, order->quantity, order->side, symRisk.pending_notional_scaled.load(std::memory_order_acquire), symLim.max_exposure_scaled);
+            RejectReason |= check_market_data_and_deviation(symRisk.best_bid.load(std::memory_order_acquire), symRisk.best_ask.load(std::memory_order_acquire), order->price, symLim.max_price_deviation);
+            RejectReason |= check_fat_finger(order->quantity, symLim.fat_finger_qty_threshold, order->price, symRisk.best_bid.load(std::memory_order_acquire), symRisk.best_ask.load(std::memory_order_acquire), symLim.fat_finger_ratio);
             if (RejectReason){risk_to_strategy_.push(OrderWithRejectReason{order, RejectReason}); continue;}
         }
 
@@ -170,7 +167,6 @@ bool RiskEngine::check_risk() noexcept
 
         order->canModify.store(order->canModify | RISK_DONE, std::memory_order_relaxed);
         risk_to_builder_.push(order);
-
         return true;
     }
 
@@ -225,6 +221,7 @@ bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const Accoun
     if (order.protocol == Protocol::FIX) {
         if(UNLIKELY(order.syncState == SyncState::WaitingNew))
         {
+            pipeline_seq.fetch_add(1, std::memory_order_release);
             return true;
         }
         else 
@@ -239,8 +236,7 @@ bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const Accoun
                 }
                 order.status = order.StatusesPreNew[i & 1UL];
             }
-            
-            pipeline_seq.fetch_add(1, std::memory_order_release); // incoming pipeline test end
+            pipeline_seq.fetch_add(1, std::memory_order_release); // Rx pipeline test end
             order.canModify.store(order.canModify | RISK_DONE, std::memory_order_release);
             return true;
         }
@@ -254,7 +250,7 @@ void RiskEngine::update_unrealized_pnl(SymbolRisk &symRisk, int64_t best_bid, in
 
     if (net_pos == 0)
     {
-        symRisk.unrealized_pnl.store(0, std::memory_order_release);
+        symRisk.unrealized_pnl = 0;
         return;
     }
 
@@ -264,12 +260,12 @@ void RiskEngine::update_unrealized_pnl(SymbolRisk &symRisk, int64_t best_bid, in
     if (net_pos > 0)
     {
         const int64_t pnl = (best_bid - avg_entry_price) * net_pos_abs;
-        symRisk.unrealized_pnl.store(pnl, std::memory_order_release);
+        symRisk.unrealized_pnl = pnl;
     }
     else
     {
         const int64_t pnl = (avg_entry_price - best_ask) * net_pos_abs;
-        symRisk.unrealized_pnl.store(pnl, std::memory_order_release);
+        symRisk.unrealized_pnl = pnl;
     }
 }
 
@@ -302,8 +298,8 @@ void RiskEngine::update_symbol_risk(AccountRisk &accRisk, const Order &order, co
 
             if (side_mult == 1)
             {
-                symRisk.cost_basis_scaled.fetch_add(nominal, std::memory_order_release);
-                const auto avg_entry_price = symRisk.cost_basis_scaled.load(std::memory_order_relaxed) / net_pos;
+                symRisk.cost_basis_scaled += nominal;
+                const auto avg_entry_price = symRisk.cost_basis_scaled / net_pos;
                 symRisk.avg_entry_price.store(avg_entry_price, std::memory_order_release);
             }
             else
@@ -311,17 +307,17 @@ void RiskEngine::update_symbol_risk(AccountRisk &accRisk, const Order &order, co
                 auto avg_entry_price = symRisk.avg_entry_price.load(std::memory_order_relaxed);
 
                 const auto realized_pnl = (order.price - avg_entry_price) * exec_qty_int64; 
-                symRisk.realized_pnl.fetch_add(realized_pnl, std::memory_order_release);
+                symRisk.realized_pnl += realized_pnl;
                 accRisk.daily_realized_pnl.fetch_add(realized_pnl, std::memory_order_release);
                 
                 if(net_pos == 0) 
                 {
-                    symRisk.cost_basis_scaled.store(0, std::memory_order_release);
+                    symRisk.cost_basis_scaled = 0;
                     symRisk.avg_entry_price.store(0, std::memory_order_release);
                 }
                 else
                 {
-                    symRisk.cost_basis_scaled.fetch_sub(avg_entry_price * exec_qty_int64, std::memory_order_release);
+                    symRisk.cost_basis_scaled -= avg_entry_price * exec_qty_int64;
                 }
             }
             break;
@@ -336,8 +332,8 @@ void RiskEngine::update_symbol_risk(AccountRisk &accRisk, const Order &order, co
             
             if (side_mult == 1) 
             {
-                symRisk.cost_basis_scaled.fetch_add(nominal, std::memory_order_release);
-                const auto avg_entry_price = symRisk.cost_basis_scaled.load(std::memory_order_relaxed) / net_pos;
+                symRisk.cost_basis_scaled += nominal;
+                const auto avg_entry_price = symRisk.cost_basis_scaled / net_pos;
                 symRisk.avg_entry_price.store(avg_entry_price, std::memory_order_release);
             }
             else
@@ -345,17 +341,17 @@ void RiskEngine::update_symbol_risk(AccountRisk &accRisk, const Order &order, co
                 auto avg_entry_price = symRisk.avg_entry_price.load(std::memory_order_relaxed);
 
                 const auto realized_pnl = (order.price - avg_entry_price) * exec_qty_int64; 
-                symRisk.realized_pnl.fetch_add(realized_pnl, std::memory_order_release);
+                symRisk.realized_pnl += realized_pnl;
                 accRisk.daily_realized_pnl.fetch_add(realized_pnl, std::memory_order_release);
                 
                 if(net_pos == 0) 
                 {
-                    symRisk.cost_basis_scaled.store(0, std::memory_order_release);
+                    symRisk.cost_basis_scaled = 0;
                     symRisk.avg_entry_price.store(0, std::memory_order_release);
                 }
                 else
                 {
-                    symRisk.cost_basis_scaled.fetch_sub(avg_entry_price * exec_qty_int64, std::memory_order_release);
+                    symRisk.cost_basis_scaled -= avg_entry_price * exec_qty_int64;
                 }
             }
             break;
@@ -388,11 +384,11 @@ void RiskEngine::update_symbol_risk(AccountRisk &accRisk, const Order &order, co
         symRisk.best_bid.store(best_bid, std::memory_order_release);
         symRisk.best_ask.store(best_ask, std::memory_order_release);
 
-        if (!(best_bid <= 0 && best_ask <= 0) && symRisk.cost_basis_scaled.load(std::memory_order_relaxed) != 0)
+        if (!(best_bid <= 0 && best_ask <= 0) && symRisk.cost_basis_scaled != 0)
         {
-            accRisk.total_unrealized_pnl.fetch_sub(symRisk.unrealized_pnl.load(std::memory_order_relaxed), std::memory_order_release);
+            accRisk.total_unrealized_pnl.fetch_sub(symRisk.unrealized_pnl, std::memory_order_release);
             update_unrealized_pnl(symRisk, best_bid, best_ask);
-            accRisk.total_unrealized_pnl.fetch_add(symRisk.unrealized_pnl.load(std::memory_order_relaxed), std::memory_order_release);
+            accRisk.total_unrealized_pnl.fetch_add(symRisk.unrealized_pnl, std::memory_order_release);
         }
     }
 

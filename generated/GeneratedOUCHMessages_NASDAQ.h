@@ -6,7 +6,7 @@
 
 namespace NASDAQ {
 
-/* namespace IN {
+/* namespace TX {
 
 struct OUCHEnterOrderMessage {
     uint64_t price = 0;                              // Price with 4 implied decimals | offset: 18, len: 8
@@ -63,7 +63,7 @@ struct OUCHAccountQueryRequest {
 };
 
 } */ 
-namespace OUT
+namespace RX
 {
 
 struct OUCHSystemEventMessage {

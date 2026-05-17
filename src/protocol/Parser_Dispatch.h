@@ -63,7 +63,7 @@
 
 #include <boost/lockfree/spsc_queue.hpp>
 
-struct OutPacket;
+struct RxPacket;
 struct Order;
 struct SessionState;
 class NetworkIO;
@@ -74,14 +74,14 @@ class Parser_Dispatch
 {
 //private:
 public:
-    static constexpr uint16_t DB_QUEUE_THRESHOLD = 256;
+    static constexpr uint16_t DB_QUEUE_THRESHOLD = 512;
     static inline uint16_t PktCount = 1;
 
-    using ParserFunc = void (Parser_Dispatch::*)(OutPacket*) noexcept;
+    using ParserFunc = void (Parser_Dispatch::*)(RxPacket*) noexcept;
     std::array<std::array<ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> makeParserLookUpTable() noexcept; 
     std::array<std::array<ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> parser_table_;
 
-    spscOutPacketQueue_t &receiver_to_parser_;
+    spscRxPacketQueue_t &receiver_to_parser_;
     spscMessageQueue_t &parser_to_store_;
     spscFIXOutSessionQueue_t &parser_to_fixbuilder_out_;
     spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;
@@ -96,7 +96,7 @@ public:
     Parser_OUCH_NASDAQ ouchparser_nasdaq_;
 
 public:
-    Parser_Dispatch(spscOutPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, 
+    Parser_Dispatch(spscRxPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, 
                     SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX &fixparser) noexcept;
 
     bool dispatch() noexcept;
@@ -105,10 +105,10 @@ public:
 public:
     void flush_DbQueue() noexcept;
     void proceedPendingFIX(auto* variant_msg, auto& seq_fix, SessionState& state) noexcept;
-    void parseFIX(OutPacket* pkt) noexcept;
-    void parseITCH_BIST(OutPacket *pkt) noexcept;
-    void parseITCH_NASDAQ(OutPacket *pkt) noexcept;
-    void parseOUCH_BIST(OutPacket *pkt) noexcept;
-    void parseOUCH_NASDAQ(OutPacket *pkt) noexcept;
+    void parseFIX(RxPacket* pkt) noexcept;
+    void parseITCH_BIST(RxPacket *pkt) noexcept;
+    void parseITCH_NASDAQ(RxPacket *pkt) noexcept;
+    void parseOUCH_BIST(RxPacket *pkt) noexcept;
+    void parseOUCH_NASDAQ(RxPacket *pkt) noexcept;
  
 };

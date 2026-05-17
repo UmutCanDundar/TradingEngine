@@ -5,7 +5,7 @@
 
 #include <type_traits>
 
-Parser_Dispatch::Parser_Dispatch(spscOutPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in,
+Parser_Dispatch::Parser_Dispatch(spscRxPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in,
                                  SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX& fixparser) noexcept
                                  : parser_table_(makeParserLookUpTable()), receiver_to_parser_(receiver_to_parser), parser_to_store_(parser_to_store), parser_to_fixbuilder_out_(parser_to_fixbuilder_out), 
                                  parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), db_to_parser_(db_to_parser), network_io_(network_io), fixparser_(fixparser)
@@ -28,22 +28,22 @@ std::array<std::array<Parser_Dispatch::ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT>
 
 bool Parser_Dispatch::dispatch() noexcept
 {
-   OutPacket *pkt = nullptr;
+   RxPacket *pkt = nullptr;
    receiver_to_parser_.pop(pkt);
 
    if(!pkt)
    {
       return false;
    }
-   // else if (pkt->len <= 0)
-   // {
-   //    network_io_.releasePacket(pkt);
-   //    return true;
-   // }
-   std::cerr << "pkt_len:" << pkt->len << " ";
+   else if (pkt->len <= 0)
+   {
+      network_io_.releasePacket(pkt);
+      return true;
+   }
+
+   
    if (UNLIKELY((PktCount++ & (DB_QUEUE_THRESHOLD - 1u)) == 0))
    {
-      std::cerr << "flushed";
       flush_DbQueue();
       PktCount = 1;
    }
@@ -52,17 +52,17 @@ bool Parser_Dispatch::dispatch() noexcept
    if(pkt->release_this_pkt)
       network_io_.releasePacket(pkt);
 
-   std::cerr << "ENTER PARSER ";
 
    return true;
 }
 
 void Parser_Dispatch::flush_DbQueue() noexcept
 {
-   while (!db_to_parser_.empty())
-   {
-      DbData_t DbQueueItem;
-      db_to_parser_.pop(DbQueueItem);
+   DbData_t DbQueueItem;
+   //  static int msg2 = 0;
+
+   while (db_to_parser_.pop(DbQueueItem))
+   {   
       std::visit([&](auto &item)
                  {
                     using T = std::decay_t<decltype(item)>;
@@ -70,7 +70,7 @@ void Parser_Dispatch::flush_DbQueue() noexcept
                     {
                        fixparser_.releaseFIX(item.msg);
                     }
-                    if constexpr (std::is_same_v<T, MessageWithVenue<FIXSessionMessage *>>)
+                    else if constexpr (std::is_same_v<T, MessageWithVenue<FIXSessionMessage *>>)
                     {
                        fixparser_.releaseFIX(item.msg);
                     }
@@ -81,6 +81,7 @@ void Parser_Dispatch::flush_DbQueue() noexcept
                     else if constexpr (std::is_same_v<T, MessageWithVenue<BIST::OUCHMessage>>)
                     {
                        ouchparser_bist_.releaseOUCH(item.msg);
+                     //   msg2++;
                     }
                     else if constexpr (std::is_same_v<T, MessageWithVenue<NASDAQ::ITCHMessage>>)
                     {
@@ -89,10 +90,6 @@ void Parser_Dispatch::flush_DbQueue() noexcept
                     else if constexpr (std::is_same_v<T, MessageWithVenue<NASDAQ::OUCHMessage>>)
                     {
                        ouchparser_nasdaq_.releaseOUCH(item.msg);
-                    }
-                    else if constexpr (std::is_same_v<T, Order *>)
-                    {
-                       return;
                     }
                  },
                  DbQueueItem);
@@ -123,7 +120,7 @@ void Parser_Dispatch::proceedPendingFIX(auto* variant_msg, auto& seq_fix, Sessio
    fixparser_.pop_pending(seqnum);
 }
 
-void Parser_Dispatch::parseFIX(OutPacket *pkt) noexcept
+void Parser_Dispatch::parseFIX(RxPacket *pkt) noexcept
 {
    uint8_t sess_index = sess_mngr_.getSessionIndex(pkt->venue, pkt->protocol);
    SessionState *state = sess_mngr_.getSessionState(sess_index);
@@ -149,7 +146,8 @@ void Parser_Dispatch::parseFIX(OutPacket *pkt) noexcept
 
             if (seq_fix.get_expected() == fixMsg->seqnum)   
             {
-               parser_to_store_.push(MessageWithVenue<MessageTypes_t>(fixMsg, Venue::BIST));
+                  
+               parser_to_store_.push(MessageWithVenue<MessageTypes_t>(fixMsg, Venue::BIST));               
                seq_fix.increase_expected_seq();
                
                while(V_t* variant_msg = fixparser_.find_in_pending(seq_fix.get_expected()))
@@ -206,7 +204,7 @@ void Parser_Dispatch::parseFIX(OutPacket *pkt) noexcept
    }
 }
 
-void Parser_Dispatch::parseITCH_BIST(OutPacket *pkt) noexcept
+void Parser_Dispatch::parseITCH_BIST(RxPacket *pkt) noexcept
 {
    itchparser_bist_.ItchPacketHandler(pkt);
 
@@ -217,7 +215,7 @@ void Parser_Dispatch::parseITCH_BIST(OutPacket *pkt) noexcept
    }
 }
 
-void Parser_Dispatch::parseITCH_NASDAQ(OutPacket *pkt) noexcept
+void Parser_Dispatch::parseITCH_NASDAQ(RxPacket *pkt) noexcept
 {
    itchparser_nasdaq_.ItchPacketHandler(pkt);
 
@@ -240,7 +238,7 @@ void Parser_Dispatch::parseITCH_NASDAQ(OutPacket *pkt) noexcept
    }
 }
 
-void Parser_Dispatch::parseOUCH_BIST(OutPacket *pkt) noexcept
+void Parser_Dispatch::parseOUCH_BIST(RxPacket *pkt) noexcept
 {
    for (size_t msg_index = 0; msg_index < pkt->msg_count; ++msg_index)
    {
@@ -249,7 +247,7 @@ void Parser_Dispatch::parseOUCH_BIST(OutPacket *pkt) noexcept
    }
 }
 
-void Parser_Dispatch::parseOUCH_NASDAQ(OutPacket *pkt) noexcept
+void Parser_Dispatch::parseOUCH_NASDAQ(RxPacket *pkt) noexcept
 {
    for (size_t msg_index = 0; msg_index < pkt->msg_count; ++msg_index)
    {

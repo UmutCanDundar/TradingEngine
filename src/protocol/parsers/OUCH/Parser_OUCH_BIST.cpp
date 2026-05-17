@@ -16,8 +16,8 @@ const std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MES
 
    handlers[0] = [](Parser_OUCH_BIST &parser, const char *data, BIST::OUCHMessage &msg) noexcept
    {
-      BIST::OUT::OUCHOrderAcceptedMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<BIST::OUT::OUCHOrderAcceptedMessage>().acquire(m);
+      BIST::RX::OUCHOrderAcceptedMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<BIST::RX::OUCHOrderAcceptedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->order_id = Endian::read_u64_be(data + 28);
@@ -46,8 +46,8 @@ const std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MES
 
    handlers[1] = [](Parser_OUCH_BIST &parser, const char *data, BIST::OUCHMessage &msg) noexcept
    {
-      BIST::OUT::OUCHOrderRejectedMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<BIST::OUT::OUCHOrderRejectedMessage>().acquire(m);
+      BIST::RX::OUCHOrderRejectedMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<BIST::RX::OUCHOrderRejectedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->reject_code = Endian::read_i32_be(data + 23);
@@ -59,8 +59,8 @@ const std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MES
 
    handlers[2] = [](Parser_OUCH_BIST &parser, const char *data, BIST::OUCHMessage &msg) noexcept
    {
-      BIST::OUT::OUCHOrderReplacedMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<BIST::OUT::OUCHOrderReplacedMessage>().acquire(m);
+      BIST::RX::OUCHOrderReplacedMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<BIST::RX::OUCHOrderReplacedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->order_id = Endian::read_u64_be(data + 42);
@@ -86,8 +86,8 @@ const std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MES
 
    handlers[3] = [](Parser_OUCH_BIST &parser, const char *data, BIST::OUCHMessage &msg) noexcept
    {
-      BIST::OUT::OUCHOrderCancelledMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<BIST::OUT::OUCHOrderCancelledMessage>().acquire(m);
+      BIST::RX::OUCHOrderCancelledMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<BIST::RX::OUCHOrderCancelledMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->order_id = Endian::read_u64_be(data + 28);
@@ -102,8 +102,8 @@ const std::array<Parser_OUCH_BIST::MessageHandlerFunc, Parser_OUCH_BIST::MAX_MES
 
    handlers[4] = [](Parser_OUCH_BIST &parser, const char *data, BIST::OUCHMessage &msg) noexcept
    {
-      BIST::OUT::OUCHOrderExecutedMessage *m = nullptr;
-      parser.ouch_pools_.get_pool<BIST::OUT::OUCHOrderExecutedMessage>().acquire(m);
+      BIST::RX::OUCHOrderExecutedMessage *m = nullptr;
+      parser.ouch_pools_.get_pool<BIST::RX::OUCHOrderExecutedMessage>().acquire(m);
 
       m->timestamp = Endian::read_u64_be(data + 1);
       m->traded_quantity = Endian::read_u64_be(data + 27);

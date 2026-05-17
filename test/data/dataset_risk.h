@@ -354,6 +354,7 @@ namespace test_data_risk {
 //===========================================================================
 //                  STRATEGY TO RISK RISK TEST DATA
 //===========================================================================
+    
     inline auto make_order1() 
     {
         auto* o = new Order(); // PASS
@@ -551,4 +552,6 @@ namespace test_data_risk {
     inline auto* o14 = make_order14();
     inline auto* o15 = make_order15();
 
+
+   
 }

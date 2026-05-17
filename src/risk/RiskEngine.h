@@ -31,13 +31,7 @@
 // - Symbol indices are pre-resolved via HashTables.
 // - All quantities are stored in scaled integer form (no floating point).
 //
-// DEVELOPER NOTES (PRE-PROFILING):
-// - At this stage, frequently-updated atomics are co-located within the same
-//   cache line to minimize memory footprint and preserve cache density.
-//   After profiling, hot fields may be further separated into distinct
-//   cache lines if false sharing is observed and warrants more aggressive
-//   cache-line isolation. (SymbolRisk, AccountRisk, OrderRisk)
-//
+// DEVELOPER NOTES:
 // - The current implementation assumes a single account per venue for risk-limits
 //   evaluation. While other parts of the system are designed with multi-account
 //   support in mind, this class intentionally models one account per venue to
@@ -103,23 +97,22 @@ enum AccountStatus : uint8_t
 // ==========================
 // Account risk (per-venue/account)
 // ==========================
-struct alignas(64) AccountRisk // May be refactored after profiling to mitigate false sharing
+struct AccountRisk // All fields are seperated due to high possibility of false sharing, currently we have only one account per venue, so we can afford this much space for better performance, may be refactored after profiling
 {
-    std::atomic<int64_t> current_exposure{0}; 
-    std::atomic<int64_t> balance{10'000'000};
-    std::atomic<int64_t> positional_exposure{0};            
-    std::atomic<int64_t> used_margin{0};       
-    std::atomic<int64_t> current_leverage{1};   
-    std::atomic<int64_t> daily_realized_pnl{0};
-    std::atomic<int64_t> total_unrealized_pnl{0};
-    std::atomic<uint32_t> open_orders_count{0};
+    alignas(64) std::atomic<int64_t> current_exposure{0}; 
+    alignas(64) std::atomic<int64_t> balance{10'000'000};
+    alignas(64) std::atomic<int64_t> positional_exposure{0};            
+    alignas(64) std::atomic<int64_t> used_margin{0};       
+    alignas(64) std::atomic<int64_t> current_leverage{1};   
+    alignas(64) std::atomic<int64_t> daily_realized_pnl{0};
+    alignas(64) std::atomic<int64_t> total_unrealized_pnl{0};
+    alignas(64) std::atomic<uint32_t> open_orders_count{0};
+    alignas(64) std::atomic<AccountStatus> status{AccountStatus::Active}; // Inactive after tests
     
-    std::atomic<AccountStatus> status{AccountStatus::Active}; // Inactive after tests
-    uint8_t pad1[3]; 
-    
+    alignas(64)
     OrderRateLimit orderratelimit;    
     CancelRateLimit cancelratelimit;   
-    uint8_t pad2[16]; 
+    uint8_t pad[16]; 
 
     AccountRisk() noexcept = default;
     AccountRisk(const AccountRisk&) = delete;
@@ -131,22 +124,34 @@ struct alignas(64) AccountRisk // May be refactored after profiling to mitigate 
 // ==========================
 // Symbol risk (per-symbol state)
 // ==========================
-struct alignas(64) SymbolRisk // May be refactored after profiling to mitigate false sharing
+struct SymbolRisk // Fields are grouped by similar access patterns to optimize cache usage and minimize false sharing; may be refactored after profiling
 {
-    // ----- Hot state -----
-    std::atomic<int64_t> net_position{0};     
-    std::atomic<int64_t> cost_basis_scaled{0};       
-    std::atomic<int64_t> unrealized_pnl{0};
-    std::atomic<int64_t> realized_pnl{0};
-    std::atomic<int64_t> pending_notional_scaled{0}; 
-    std::atomic<int64_t> best_bid{0}; 
-    std::atomic<int64_t> best_ask{0};
-    std::atomic<int32_t> avg_entry_price{0};
+    // Cache line 1 — written on every order (New/Cancel/Replace...)
+    alignas(64)
+    std::atomic<int64_t> pending_notional_scaled{0};
     std::atomic<int32_t> open_orders_count{0};
+    uint8_t pad1[52];
 
-    OrderRateLimit orderratelimit; 
-    CancelRateLimit cancelratelimit; 
-    uint8_t pad2[16]; 
+    // Cache line 2 — written on fill (Partial/Filled/Cancelled...)  
+    alignas(64)
+    std::atomic<int64_t> net_position{0};
+    std::atomic<int32_t> avg_entry_price{0};
+    int64_t cost_basis_scaled{0};
+    int64_t realized_pnl{0};
+    uint8_t pad2[32];
+
+    // Cache line 3 — written on market data update (ITCH)
+    alignas(64)
+    std::atomic<int64_t> best_bid{0};
+    std::atomic<int64_t> best_ask{0};
+    int64_t unrealized_pnl{0};
+    uint8_t pad3[40];
+
+    // Cache line 4 — rate limiter, check thread only
+    alignas(64) 
+    OrderRateLimit orderratelimit;
+    CancelRateLimit cancelratelimit;
+    uint8_t pad4[16];
 
     SymbolRisk() noexcept = default;
     SymbolRisk(const SymbolRisk&) = delete;
@@ -168,8 +173,7 @@ struct alignas(64) OrderRisk // May be refactored after profiling to mitigate fa
     std::atomic<Status> status{Status::Unknown};
     std::atomic<bool> active{false};
     Venue venue{Venue::Unknown};     // immutable 
-    
-    uint8_t pad[44]; // alignment padding
+    uint8_t pad1[44];
 
     OrderRisk() noexcept = default;
     OrderRisk(const OrderRisk&) = delete;
@@ -179,8 +183,8 @@ struct alignas(64) OrderRisk // May be refactored after profiling to mitigate fa
 };
 
 struct OrderRiskKey {
-    uint32_t symbol_index;
     int64_t price;
+    uint32_t symbol_index;
     uint8_t side;
     uint8_t venue;
 
@@ -225,16 +229,16 @@ enum class RiskRejectReason : uint32_t
 
     MaxOrderNotionalLimitExceeded = 1 << 4, // Order notional value exceeds per-order notional limit
     MaxNotionalLimitExceeded = 1 << 5,  // Resulting total notional exposure exceeds the maximum allowed limit
+    MaxSymbolExposureLimitExceeded = 1 << 6, // Order price is outside exchange-defined price bands
 
-    MaxOpenOrdersReachedAccount = 1 << 6, // Maximum number of open orders reached at account level
-    MaxOpenOrdersReachedSymbol = 1 << 7, // Maximum number of open orders reached for the symbol
+    MaxOpenOrdersReachedAccount = 1 << 7, // Maximum number of open orders reached at account level
+    MaxOpenOrdersReachedSymbol = 1 << 8, // Maximum number of open orders reached for the symbol
 
     // Price Validity & Sanity Checks
-    PriceTickInvalid = 1 << 8,       // Order price does not conform to the instrument tick size
-    InvalidPriceRange = 1 << 9,      // Order price deviates excessively from reference/market price
-    FatFingerCheckFailed = 1 << 10,   // Fat-finger protection triggered (abnormal size or price deviation)
-    // PriceOutsideMarketBand = 1 << 11, // Order price is outside exchange-defined price bands
-
+    PriceTickInvalid = 1 << 9,       // Order price does not conform to the instrument tick size
+    InvalidPriceRange = 1 << 10,      // Order price deviates excessively from reference/market price
+    FatFingerCheckFailed = 1 << 11,   // Fat-finger protection triggered (abnormal size or price deviation)
+    
     // Order Rate & Frequency Limits
     MaxOrderRateLimitExceededAccount = 1 << 12,  // Account-level order submission rate limit exceeded
     MaxCancelRateLimitExceededAccount = 1 << 13, // Account-level cancel rate limit exceeded
@@ -278,7 +282,8 @@ using spscRejectOrderQueue_t = boost::lockfree::spsc_queue<OrderWithRejectReason
 class RiskEngine
 {
 public://
-    std::atomic<uint64_t> pipeline_seq{0};
+    alignas(64) std::atomic<uint64_t> pipeline_seq{0};
+    char pad[56];
 private:
 public://
     static constexpr size_t ORDERRISK_POOL_CAPACITY = 65536;
@@ -324,9 +329,9 @@ public: //
     bool check_venue_halt_and_circuit(Order &order, const SymbolMeta &symbolmeta) noexcept;
     bool check_order_rate_limit(AccountRisk &accRisk, SymbolRisk &symRisk, Order &order) noexcept;
     bool check_cancel_rate_limit(AccountRisk &accRisk, SymbolRisk &symRisk, Order &order) noexcept;
-    uint32_t check_price_tick_valid(int64_t price, const SymbolMeta &symbolmeta) noexcept;
+    uint32_t check_price_tick_valid(const int64_t price, const SymbolMeta &symbolmeta) noexcept;
 
-    inline uint32_t check_quantity_bounds(uint32_t qty, uint32_t min_qty, uint32_t max_qty, uint32_t round_lot_size) noexcept
+    inline uint32_t check_quantity_bounds(const uint32_t qty, const uint32_t min_qty, const uint32_t max_qty, const uint32_t round_lot_size) noexcept
     {
         if (UNLIKELY(qty < min_qty))
             return static_cast<uint32_t>(RiskRejectReason::MinOrderSizeExceeded); 
@@ -337,14 +342,14 @@ public: //
         return 0;
     }
     
-    inline uint32_t check_max_open_orders_account(uint32_t current_open_orders, uint32_t max_open_orders) noexcept
+    inline uint32_t check_max_open_orders_account(const uint32_t current_open_orders, const uint32_t max_open_orders) noexcept
     {
         if (UNLIKELY(current_open_orders >= max_open_orders))
             return static_cast<uint32_t>(RiskRejectReason::MaxOpenOrdersReachedAccount);
         return 0;
     }
 
-    inline uint32_t check_max_open_orders_symbol(uint32_t symbol_open_orders, uint32_t max_symbol_open_orders) noexcept
+    inline uint32_t check_max_open_orders_symbol(const uint32_t symbol_open_orders, const uint32_t max_symbol_open_orders) noexcept
     {
                                                
         if (UNLIKELY(symbol_open_orders >= max_symbol_open_orders))
@@ -363,7 +368,7 @@ public: //
         return 0;
     }
 
-    inline uint32_t check_notional_value(int64_t price, uint32_t qty, int64_t max_notional_scaled) noexcept
+    inline uint32_t check_max_order_notional_value(const int64_t price, const uint32_t qty, const int64_t max_notional_scaled) noexcept
     {
         int64_t notional = price * qty;
         if (UNLIKELY(notional > max_notional_scaled))
@@ -371,7 +376,16 @@ public: //
         return 0;
     }
 
-    inline uint32_t check_max_position_limit(int64_t net_position_scaled, int64_t order_qty, Side side, int64_t max_position_scaled) noexcept
+    inline uint32_t check_max_symbol_exposure_value(const int64_t price, const uint32_t qty, const Side side, const int64_t pending_notional_scaled, const int64_t max_exposure_scaled) noexcept
+    {
+        const int8_t side_mult = (side == Side::Buy) ? 1 : -1;
+        int64_t notional = price * qty * side_mult;
+        if (UNLIKELY(pending_notional_scaled + notional > max_exposure_scaled))
+            return static_cast<uint32_t>(RiskRejectReason::MaxSymbolExposureLimitExceeded);
+        return 0;
+    }
+
+    inline uint32_t check_max_position_limit(const int64_t net_position_scaled, const int64_t order_qty, const Side side, const int64_t max_position_scaled) noexcept
     {
         const auto side_mult = (side == Side::Buy) ? 1 : -1;
         const int64_t projected_position = net_position_scaled + (side_mult * order_qty);
@@ -381,7 +395,7 @@ public: //
         return 0;
     }
 
-    inline uint32_t check_market_data_and_deviation(int64_t best_bid_scaled, int64_t best_ask_scaled, int64_t price, int64_t max_price_deviation) noexcept
+    inline uint32_t check_market_data_and_deviation(const int64_t best_bid_scaled, const int64_t best_ask_scaled, const int64_t price, const int64_t max_price_deviation) noexcept
     {
         if (UNLIKELY(best_bid_scaled == 0 && best_ask_scaled == 0))
             return static_cast<uint32_t>(RiskRejectReason::MarketDataUnavailable);
@@ -396,7 +410,7 @@ public: //
         return 0; 
     }
 
-    inline uint32_t check_fat_finger(uint32_t qty, uint32_t fat_finger_qty_threshold, int64_t price, int64_t best_bid_scaled, int64_t best_ask_scaled, int64_t fat_finger_ratio_scaled) noexcept
+    inline uint32_t check_fat_finger(const uint32_t qty, const uint32_t fat_finger_qty_threshold, const int64_t price, const int64_t best_bid_scaled, const int64_t best_ask_scaled, const int64_t fat_finger_ratio_scaled) noexcept
     {
         int64_t mid = (best_bid_scaled + best_ask_scaled) / 2;
 
@@ -411,27 +425,27 @@ public: //
         return 0;
     }
 
-    inline uint32_t check_account_risk(Order &order, AccountRisk &accRisk, const AccountLimit &accLim, SymbolRisk &symRisk, const int64_t price, const uint32_t qty) noexcept
+    inline uint32_t check_account_risk(const Order &order, const AccountRisk &accRisk, const AccountLimit &accLim, SymbolRisk &symRisk, const int64_t price, const uint32_t qty) noexcept
     {
         uint32_t reason = 0;
 
-        const int64_t balance          = accRisk.balance.load(std::memory_order_acquire);
-        const int64_t current_exposure = accRisk.current_exposure.load(std::memory_order_acquire);
-        const int64_t used_margin      = accRisk.used_margin.load(std::memory_order_acquire);
-        const int64_t unrealized_pnl   = accRisk.total_unrealized_pnl.load(std::memory_order_acquire);
-        const int64_t realized_pnl     = accRisk.daily_realized_pnl.load(std::memory_order_acquire);
-        const int64_t avg              = symRisk.avg_entry_price.load(std::memory_order_acquire);
-        const int64_t best_bid         = symRisk.best_bid.load(std::memory_order_acquire);
-        const int64_t estimated_notional = price * static_cast<int64_t>(qty);
+        const int64_t balance              = accRisk.balance.load(std::memory_order_acquire);
+        const int64_t current_exposure     = accRisk.current_exposure.load(std::memory_order_acquire);
+        const int64_t used_margin          = accRisk.used_margin.load(std::memory_order_acquire);
+        const int64_t total_unrealized_pnl = accRisk.total_unrealized_pnl.load(std::memory_order_acquire);
+        const int64_t daily_realized_pnl   = accRisk.daily_realized_pnl.load(std::memory_order_acquire);
+        const int64_t avg                  = symRisk.avg_entry_price.load(std::memory_order_acquire);
+        const int64_t best_bid             = symRisk.best_bid.load(std::memory_order_acquire);
+        const int64_t estimated_notional   = price * static_cast<int64_t>(qty);
 
         reason |= check_acc_status(accRisk.status.load(std::memory_order_acquire));
         reason |= check_max_leverage(balance, current_exposure, estimated_notional, accLim.max_leverage);
-        reason |= check_max_drawdown(realized_pnl, avg, price, qty, order.side, accLim.max_daily_loss);
-        reason |= check_unrealized_loss(unrealized_pnl, best_bid, avg, price, qty, order.side, accLim.max_unrealized_loss);
+        reason |= check_max_drawdown(daily_realized_pnl, avg, price, qty, order.side, accLim.max_daily_loss);
+        reason |= check_unrealized_loss(total_unrealized_pnl, best_bid, avg, price, qty, order.side, accLim.max_unrealized_loss);
 
         if (order.price > 0 && order.order_type == OrderType::Limit)
         {
-            reason |= check_free_margin(balance, unrealized_pnl, estimated_notional, used_margin);
+            reason |= check_free_margin(balance, total_unrealized_pnl, estimated_notional, used_margin);
             reason |= check_balance(balance, estimated_notional);
             reason |= check_max_notional(current_exposure, estimated_notional, accLim.max_notional);
         }
@@ -440,7 +454,7 @@ public: //
     }
 
     // Helper functions associated with the other private functions
-    void update_unrealized_pnl(SymbolRisk &symRisk, int64_t best_bid, int64_t best_ask) noexcept;
+    void update_unrealized_pnl(SymbolRisk &symRisk, const int64_t best_bid, const int64_t best_ask) noexcept;
     
 
     inline uint32_t check_acc_status(AccountStatus status) noexcept

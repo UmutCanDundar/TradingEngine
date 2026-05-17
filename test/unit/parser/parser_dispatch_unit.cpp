@@ -15,10 +15,10 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
 {
     std::atomic<bool> running{true};
 
-    auto inPkt_pool = std::make_unique<InPacketPoolManager>();
+    auto txPkt_pool = std::make_unique<TxPacketPoolManager>();
     spscFIXInSessionQueue_t parser_to_fixbuilder_in;
-    spscOutPacketQueue_t receiver_to_parser;
-    spscInPacketQueue_t builder_to_sender;
+    spscRxPacketQueue_t receiver_to_parser;
+    spscTxPacketQueue_t builder_to_sender;
     spscMessageQueue_t parser_to_store; 
     spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
     spscDbQueue_t db_to_parser; 
@@ -26,7 +26,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
-    auto network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *inPkt_pool, running);
+    auto network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *txPkt_pool, running);
     auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
 
     auto parser_dispatch = std::make_unique<Parser_Dispatch>(
@@ -43,26 +43,26 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     auto* sess_state = sess_mngr->getSessionState(sess_index);
     auto& seq_fix = sess_state->fix;
     
-    OutPacket* outPkt;
-    PendingQueue<OutPacket *, 256> pend_read;
+    RxPacket* rxPkt;
+    PendingQueue<RxPacket *, 256> pend_read;
 
 // ====================================================
 //       v TRAFFIC FOR PARSING DISPATCH v 
     
-    std::array<OutPacket*, 13> pkts = {
-        &test_data_parser::ouch_bist_outpacket_partial_1, 
-        &test_data_parser::ouch_bist_outpacket_partial_2,
-        &test_data_parser::itch_bist_outpacket_single_1,
-        &test_data_parser::fix_outpacket_partial_1, 
-        &test_data_parser::fix_outpacket_partial_2,
-        &test_data_parser::ouch_bist_outpacket_partial_3,
-        &test_data_parser::ouch_bist_outpacket_partial_4,  
-        &test_data_parser::fix_outpacket_partial_3,
-        &test_data_parser::fix_outpacket_partial_4,
-        &test_data_parser::ouch_bist_outpacket_partial_5,
-        &test_data_parser::itch_nasdaq_outpacket_single_1,  
-        &test_data_parser::fix_outpacket_partial_5, 
-        &test_data_parser::fix_outpacket_partial_6,   
+    std::vector<RxPacket*> pkts = {
+        &test_data_parser::ouch_bist_RxPacket_partial_1, 
+        &test_data_parser::ouch_bist_RxPacket_partial_2,
+        &test_data_parser::itch_bist_RxPacket_single_1,
+        &test_data_parser::fix_RxPacket_partial_1, 
+        &test_data_parser::fix_RxPacket_partial_2,
+        &test_data_parser::ouch_bist_RxPacket_partial_3,
+        &test_data_parser::ouch_bist_RxPacket_partial_4,  
+        &test_data_parser::fix_RxPacket_partial_3,
+        &test_data_parser::fix_RxPacket_partial_4,
+        &test_data_parser::ouch_bist_RxPacket_partial_5,
+        &test_data_parser::itch_nasdaq_RxPacket_single_1,  
+        &test_data_parser::fix_RxPacket_partial_5, 
+        &test_data_parser::fix_RxPacket_partial_6,   
     };
     
     for (auto pkt : pkts) 
@@ -70,9 +70,9 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
 
         if(pkt->protocol == Protocol::OUCH) 
         {
-            bool ouch_outpkt_ready = false; 
-            ouch_outpkt_ready = network_io->SBTPacketHandler(pkt, pkt->len, pend_read, sess_index);
-            if(ouch_outpkt_ready)
+            bool ouch_rxPkt_ready = false; 
+            ouch_rxPkt_ready = network_io->SBTPacketHandler(pkt, pkt->len, pend_read, sess_index);
+            if(ouch_rxPkt_ready)
                 receiver_to_parser.push(pkt);
         }
         else
@@ -93,7 +93,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     parser_to_store.pop(msgWvenue); 
 
     auto variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue.msg);
-    auto* msg1 = std::get<BIST::OUT::OUCHOrderAcceptedMessage*>(variant_msg_ouch);
+    auto* msg1 = std::get<BIST::RX::OUCHOrderAcceptedMessage*>(variant_msg_ouch);
     
     ASSERT_NE(msg1, nullptr);
     EXPECT_EQ(msg1->message_type, 'A');
@@ -212,7 +212,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     parser_to_store.pop(msgWvenue); 
 
     variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue.msg);
-    auto* msg5 = std::get<BIST::OUT::OUCHOrderCancelledMessage*>(variant_msg_ouch);
+    auto* msg5 = std::get<BIST::RX::OUCHOrderCancelledMessage*>(variant_msg_ouch);
 
     ASSERT_NE(msg5, nullptr);
     EXPECT_EQ(msg5->message_type, 'C');
@@ -228,7 +228,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     parser_to_store.pop(msgWvenue); 
 
     variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue.msg);
-    auto* msg6 = std::get<BIST::OUT::OUCHOrderExecutedMessage*>(variant_msg_ouch);
+    auto* msg6 = std::get<BIST::RX::OUCHOrderExecutedMessage*>(variant_msg_ouch);
 
     ASSERT_NE(msg6, nullptr);
     EXPECT_EQ(msg6->message_type, 'E');
@@ -273,7 +273,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     parser_to_store.pop(msgWvenue); 
 
     variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue.msg);
-    auto* msg8 = std::get<BIST::OUT::OUCHOrderExecutedMessage*>(variant_msg_ouch);
+    auto* msg8 = std::get<BIST::RX::OUCHOrderExecutedMessage*>(variant_msg_ouch);
 
     ASSERT_NE(msg8, nullptr);
     EXPECT_EQ(msg8->message_type, 'E');
