@@ -112,7 +112,7 @@ struct UserInfo_SBT
 
 struct SessionAuth
 {
-    SessionProtocol sess_prot;
+    SessionProtocol sess_prot = SessionProtocol::None;
 
     union // Variant could be used here instead of union (Dev Comment)
     {
@@ -187,8 +187,6 @@ struct SessionAuth
         default:
             break;
         }
-        
-        other.sess_prot = SessionProtocol::None;
     }
 
     SessionAuth &operator=(SessionAuth &&other) noexcept
@@ -209,8 +207,6 @@ struct SessionAuth
             default:
                 break;
             }
-
-            other.sess_prot = SessionProtocol::None;
         }
 
         return *this;
@@ -229,6 +225,8 @@ struct SessionAuth
             default:
                 break;
         }
+
+        sess_prot = SessionProtocol::None;
     }
 };
 
@@ -236,7 +234,7 @@ struct SessionState
 {
     alignas(64) // HOT
     std::atomic<bool> is_logged_in = false;  // All Atomic flags could be enum later (Dev Comment)
-    SessionProtocol sess_prot;
+    SessionProtocol sess_prot  = SessionProtocol::None;
 
     // HOT
     union alignas(64)

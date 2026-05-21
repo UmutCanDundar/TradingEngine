@@ -11,6 +11,7 @@
 OrderManager::OrderManager(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscOrderQueue_t &store_to_risk, spscDbQueue_t &store_to_db, MarketBook &marketbook,HashTables &hashtables) noexcept
     : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_risk_(store_to_risk), store_to_db_(store_to_db), marketbook_(marketbook), hashtables_(hashtables)
 {
+   
    market_orders_.reserve(ORDER_MAP_CAPACITY);
    our_orders_.reserve(ORDER_MAP_CAPACITY);
    our_orders_wtokenkey_.reserve(ORDER_MAP_CAPACITY);
@@ -25,7 +26,6 @@ OrderManager::OrderManager(spscMessageQueue_t &parser_to_store, spscOrderQueue_t
       our_orders_all_venue_[venue].resize(symbol_count);
       instrument_cache_[venue].reserve(symbol_count);
    }
-      
 }
 
 bool OrderManager::store() noexcept

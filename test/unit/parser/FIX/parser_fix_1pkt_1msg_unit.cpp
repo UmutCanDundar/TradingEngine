@@ -3,11 +3,10 @@
 #include "Parser_FIX.h"
 #include "dataset_parser.h"
 
-
 TEST(FixParserTest, NewOrderSingle)
 {
-    spscFIXInSessionQueue_t parser_to_fixbuilder_in;
-    Parser_FIX parser1{parser_to_fixbuilder_in};
+    spscFIXTxSessionQueue_t parser_to_fixbuilder_tx;
+    Parser_FIX parser1{parser_to_fixbuilder_tx};
 
     FIXMessage* msg = parser1.parse<FIXMessage>(
         reinterpret_cast<const char*>(test_data_parser::single_fix_pkt1.data()),
@@ -46,8 +45,8 @@ TEST(FixParserTest, NewOrderSingle)
 
 TEST(FixParserTest, ExecutionReport)
 {
-    spscFIXInSessionQueue_t parser_to_fixbuilder_in;
-    Parser_FIX parser2{parser_to_fixbuilder_in};
+    spscFIXTxSessionQueue_t parser_to_fixbuilder_tx;
+    Parser_FIX parser2{parser_to_fixbuilder_tx};
 
     FIXMessage* msg = parser2.parse<FIXMessage>(
         reinterpret_cast<const char*>(test_data_parser::single_fix_pkt2.data()),

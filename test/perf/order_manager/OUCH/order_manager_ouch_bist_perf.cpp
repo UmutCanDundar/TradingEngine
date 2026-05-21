@@ -12,7 +12,7 @@
 
 int main()
 {
-    pin_to_cpu(2);
+    pin_to_cpu(6);
 
     std::unique_ptr<HashTables>   hashtables;
     std::unique_ptr<MarketBook>   marketbook;

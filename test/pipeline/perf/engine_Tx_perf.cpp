@@ -153,7 +153,7 @@ int main()
     for (int i = 0; i < WARMUP; i++)
         run_case((i % 3) + 1);
 
-    constexpr int N = 5'000'000;
+    constexpr int N = 1'300'000;
     for (int i = 0; i < N; i++)
         run_case((i % 3) + 1);
 
@@ -164,6 +164,12 @@ int main()
     ouch_bist_server->stop_server();
     ouch_nq_server->stop_server();
 
+    fix_server.reset();
+    ouch_bist_server.reset();
+    ouch_nq_server.reset();
+
+    delete ticksize_entry;
+    
     Logger::Shutdown();
     return 0;
 }

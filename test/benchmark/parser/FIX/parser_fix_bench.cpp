@@ -27,11 +27,11 @@ public:
     std::unique_ptr<NetworkIO> network_io;
     std::unique_ptr<Parser_FIX> parser_fix;
 
-    spscFIXInSessionQueue_t parser_to_fixbuilder_in;
+    spscFIXTxSessionQueue_t parser_to_fixbuilder_tx;
     spscRxPacketQueue_t receiver_to_parser;
     spscTxPacketQueue_t builder_to_sender;
     spscMessageQueue_t parser_to_store; 
-    spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
+    spscFIXRxSessionQueue_t parser_to_fixbuilder_rx;
     spscDbQueue_t db_to_parser; 
 
     std::unique_ptr<Parser_Dispatch> parser_dispatch;
@@ -59,7 +59,7 @@ public:
         sbt         = std::make_unique<SoupBinTcp>(*sess_mngr);
         builder_fix = std::make_unique<Builder_FIX>(*sess_mngr);
         login       = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
-        parser_fix  = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
+        parser_fix  = std::make_unique<Parser_FIX>(parser_to_fixbuilder_tx);
 
         network_io  = std::make_unique<NetworkIO>(
                                         receiver_to_parser,
@@ -74,8 +74,8 @@ public:
         parser_dispatch = std::make_unique<Parser_Dispatch>(
                                             receiver_to_parser,
                                             parser_to_store,
-                                            parser_to_fixbuilder_out,
-                                            parser_to_fixbuilder_in,
+                                            parser_to_fixbuilder_rx,
+                                            parser_to_fixbuilder_tx,
                                             *sess_mngr,
                                             db_to_parser,
                                             *network_io,
@@ -110,7 +110,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(0);        
+            pin_to_cpu(15);        
 
             MessageWithVenue<MessageTypes_t> local_msg;
             FIXSessionMessage* sesMsg;  
@@ -123,7 +123,7 @@ public:
                     released_msg_count.fetch_add(1, std::memory_order_release);
                     
                 }
-                else if(parser_to_fixbuilder_in.pop(sesMsg))
+                else if(parser_to_fixbuilder_tx.pop(sesMsg))
                 {
                     parser_dispatch->fixparser_.releaseFIX(sesMsg);
                     released_msg_count.fetch_add(1, std::memory_order_release);
@@ -154,7 +154,7 @@ public:
 
 BENCHMARK_DEFINE_F(BM_Parser, ParseFIX)(benchmark::State& state)
 {
-    pin_to_cpu(2);
+    pin_to_cpu(6);
 
     uint64_t msgs_per_iter = pkt_case == 1 ? 1 : 3;
     uint64_t total_expected = 0;
@@ -186,7 +186,7 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseFIX)(benchmark::State& state)
         benchmark::ClobberMemory();
         latencies.push_back(end - start);
 
-        // while (!parser_to_store.empty() || !parser_to_fixbuilder_in.empty())
+        // while (!parser_to_store.empty() || !parser_to_fixbuilder_tx.empty())
         //     _mm_pause();
 
         while (released_msg_count.load(std::memory_order_acquire) < total_expected)

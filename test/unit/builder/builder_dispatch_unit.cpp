@@ -22,8 +22,8 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
     Logger::Init();
 
     auto txPkt_pool = std::make_unique<TxPacketPoolManager>();
-    spscFIXInSessionQueue_t parser_to_fixbuilder_in;
-    spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
+    spscFIXTxSessionQueue_t parser_to_fixbuilder_tx;
+    spscFIXRxSessionQueue_t parser_to_fixbuilder_rx;
     spscTxPacketQueue_t builder_to_sender;
     spscOrderQueue_t risk_to_builder;
     
@@ -39,7 +39,7 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
-    auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
+    auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_tx);
     auto order_manager = std::make_unique<OrderManager>(
                                         parser_to_store,
                                         store_to_strategy,
@@ -53,8 +53,8 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
     auto builder_dispatch = std::make_unique<Builder_Dispatch>(
                                         builder_to_sender,
                                         risk_to_builder,
-                                        parser_to_fixbuilder_out,
-                                        parser_to_fixbuilder_in,
+                                        parser_to_fixbuilder_rx,
+                                        parser_to_fixbuilder_tx,
                                         *sess_mngr,
                                         *sbt,
                                         *login,

@@ -29,11 +29,11 @@ public:
     std::unique_ptr<Parser_FIX> parser_fix;
     std::unique_ptr<Parser_Dispatch> parser_dispatch;
 
-    spscFIXInSessionQueue_t parser_to_fixbuilder_in;
+    spscFIXTxSessionQueue_t parser_to_fixbuilder_tx;
     spscRxPacketQueue_t receiver_to_parser;
     spscTxPacketQueue_t builder_to_sender;
     spscMessageQueue_t parser_to_store; 
-    spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
+    spscFIXRxSessionQueue_t parser_to_fixbuilder_rx;
     spscDbQueue_t db_to_parser; 
 
     std::atomic<bool> stop{false};
@@ -62,13 +62,13 @@ public:
         builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
         login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
         network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *txPkt_pool, running);
-        parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
+        parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_tx);
 
         parser_dispatch = std::make_unique<Parser_Dispatch>(
                                             receiver_to_parser,
                                             parser_to_store,
-                                            parser_to_fixbuilder_out,
-                                            parser_to_fixbuilder_in,
+                                            parser_to_fixbuilder_rx,
+                                            parser_to_fixbuilder_tx,
                                             *sess_mngr,
                                             db_to_parser,
                                             *network_io,
@@ -96,7 +96,7 @@ public:
 
         network_thread = std::thread([&]()
         {
-            pin_to_cpu(4);
+            pin_to_cpu(14);
             
             while(!stop2.load(std::memory_order_acquire))
             {
@@ -135,7 +135,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(0);        
+            pin_to_cpu(15);        
 
             MessageWithVenue<MessageTypes_t> local_msg;
             FIXSessionMessage* sesMsg;   
@@ -167,7 +167,7 @@ public:
                     local_msg.msg);
 
                 }
-                else if(parser_to_fixbuilder_in.pop(sesMsg))
+                else if(parser_to_fixbuilder_tx.pop(sesMsg))
                 {
                     parser_dispatch->fixparser_.releaseFIX(sesMsg);
                 }
@@ -200,7 +200,7 @@ public:
 
 BENCHMARK_DEFINE_F(BM_Parser, MixedTraffic)(benchmark::State& state)
 {
-    pin_to_cpu(2);
+    pin_to_cpu(6);
     
     auto& seq_fix = sess_mngr->getSessionState(sess_index_fix)->fix;
     

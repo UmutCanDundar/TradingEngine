@@ -27,7 +27,7 @@ static void BM_Parser_FIX_nextFixMsg(benchmark::State& state)
                 __builtin_unreachable(); 
         }  
 
-    spscFIXInSessionQueue_t queue;
+    spscFIXTxSessionQueue_t queue;
     Parser_FIX parser{queue};
 
     std::vector<uint64_t> latencies;

@@ -72,8 +72,8 @@ class Parser_FIX;
 
 class Parser_Dispatch
 {
-//private:
-public:
+private:
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     static constexpr uint16_t DB_QUEUE_THRESHOLD = 512;
     static inline uint16_t PktCount = 1;
 
@@ -83,8 +83,8 @@ public:
 
     spscRxPacketQueue_t &receiver_to_parser_;
     spscMessageQueue_t &parser_to_store_;
-    spscFIXOutSessionQueue_t &parser_to_fixbuilder_out_;
-    spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;
+    spscFIXRxSessionQueue_t &parser_to_fixbuilder_rx_;
+    spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx_;
     SessionManager &sess_mngr_;
     spscDbQueue_t &db_to_parser_;
     NetworkIO &network_io_;
@@ -96,13 +96,13 @@ public:
     Parser_OUCH_NASDAQ ouchparser_nasdaq_;
 
 public:
-    Parser_Dispatch(spscRxPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in, 
+    Parser_Dispatch(spscRxPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXRxSessionQueue_t &parser_to_fixbuilder_rx, spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx, 
                     SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX &fixparser) noexcept;
 
     bool dispatch() noexcept;
    
-//private: 
-public:
+private: 
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     void flush_DbQueue() noexcept;
     void proceedPendingFIX(auto* variant_msg, auto& seq_fix, SessionState& state) noexcept;
     void parseFIX(RxPacket* pkt) noexcept;

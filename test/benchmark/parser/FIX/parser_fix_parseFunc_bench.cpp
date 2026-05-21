@@ -18,7 +18,7 @@ static void BM_Parser_FIX_parseFunc(benchmark::State& state)
         ? test_data_parser::single_fix_pkt1.size()
         : test_data_parser::single_fix_pkt2.size();
 
-    spscFIXInSessionQueue_t queue;
+    spscFIXTxSessionQueue_t queue;
     Parser_FIX parser{queue};
 
     std::vector<uint64_t> latencies;

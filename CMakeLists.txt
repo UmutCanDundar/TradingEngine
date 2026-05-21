@@ -10,26 +10,39 @@ option(USE_SYSTEM_DEPS "Use system dependencies if available" ON)
 
 add_compile_definitions(PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
 
+# --- PROJECT OPTIONS INTERFACE ---
 add_library(project_options INTERFACE)
+
 target_compile_options(project_options INTERFACE
     -Wall -Wextra -Wno-pedantic 
-    -O2
-    -g
+    $<$<CONFIG:Debug>:-O0 -g>
+    $<$<CONFIG:Release>:-O3 -DNDEBUG>
+    $<$<CONFIG:RelWithDebInfo>:-O2 -g -DNDEBUG>
     -march=native
     -mtune=native
     -mavx2
     -mavx
-    $<$<NOT:$<CONFIG:Release>>:-fno-omit-frame-pointer>
-    # $<$<NOT:$<CONFIG:Release>>:-fno-sized-deallocation>
-    # $<$<NOT:$<CONFIG:Release>>:-fsanitize=address,undefined>
-    # $<$<NOT:$<CONFIG:Release>>:-fno-optimize-sibling-calls>
-    # $<$<NOT:$<CONFIG:Release>>:-fno-inline>
     $<$<AND:$<CXX_COMPILER_ID:GNU>,$<AND:$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,13>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,14>>>:-Wno-array-bounds;-Wno-stringop-truncation;-Wno-stringop-overflow>
 )
 
-target_link_options(project_options INTERFACE
-    # $<$<NOT:$<CONFIG:Release>>:-fsanitize=address,undefined>
-)
+# --- SANITIZER OPTIONS ---
+option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
+option(ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+
+if(ENABLE_ASAN AND ENABLE_TSAN)
+    message(FATAL_ERROR "ASan and TSan cannot be enabled at the same time. Pick one!")
+endif()
+
+# --- SANITIZER LOGIC (Integrated into project_options) ---
+if(ENABLE_ASAN)
+    target_compile_options(project_options INTERFACE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(project_options INTERFACE -fsanitize=address)
+elseif(ENABLE_TSAN)
+    target_compile_options(project_options INTERFACE -fsanitize=thread -fno-omit-frame-pointer)
+    target_link_options(project_options INTERFACE -fsanitize=thread)
+else()
+    target_compile_options(project_options INTERFACE $<$<NOT:$<CONFIG:Release>>:-fno-omit-frame-pointer>)
+endif()
 
 #DEPENDENCIES
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -43,6 +56,7 @@ set(SPDLOG_DIR ${PROJECT_SOURCE_DIR}/third-party/spdlog)
 set(ABSL_DIR ${PROJECT_SOURCE_DIR}/third-party/absl/abseil-cpp)
 set(CLICKHOUSE_DIR ${PROJECT_SOURCE_DIR}/third-party/clickhouse/clickhouse-cpp)
 set(FOLLY_DIR ${PROJECT_SOURCE_DIR}/third-party/folly)
+
 
 #THIRD-PARTY
 function(require_onlyheader_dep target_name include_dir)
@@ -69,6 +83,7 @@ function(check_compiled_dep dep_name include_dir)
     endif()
 endfunction()
 
+
 #boost
 if(USE_SYSTEM_DEPS)
     find_package(Boost 1.75 QUIET)
@@ -86,6 +101,7 @@ if(Boost_FOUND AND TARGET Boost::boost)
 else()
     require_onlyheader_dep(boost_headers ${BOOST_DIR})
 endif()
+
 
 #nlohmann-json
 if(USE_SYSTEM_DEPS)
@@ -105,6 +121,7 @@ else()
     require_onlyheader_dep(lohmann_json ${JSON_DIR})
 endif()
 
+
 #spdlog
 if(USE_SYSTEM_DEPS)
     find_package(spdlog QUIET)
@@ -123,40 +140,34 @@ else()
     require_onlyheader_dep(spdlog_headers ${SPDLOG_DIR})
 endif()
 
-#clickhouse
-if(USE_SYSTEM_DEPS)
-    find_package(clickhouse-cpp QUIET)
-endif()
-
+#clickhouse 
 if(clickhouse-cpp_FOUND AND TARGET clickhouse-cpp-lib)
     message(STATUS "Using system clickhouse-cpp")
 else()
     check_compiled_dep(clickhouse-cpp-lib ${CLICKHOUSE_DIR})
+
+    set(CMAKE_CXX_FLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
     add_subdirectory(${CLICKHOUSE_DIR})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_BACKUP}")
+    
     target_compile_options(clickhouse-cpp-lib PRIVATE -w)
 endif()
 
-#folly
-
-if(USE_SYSTEM_DEPS)
-    find_package(folly QUIET)
-endif()
-if(folly_FOUND AND TARGET folly)
-    message(STATUS "Using system folly")
-else()
-    check_compiled_dep(folly ${FOLLY_DIR})
-    set(CMAKE_CXX_FLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
-    add_subdirectory(${FOLLY_DIR})
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_BACKUP}")
-    target_compile_options(folly PRIVATE -w -Wno-unused-result)
-    
+if(ENABLE_ASAN)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
 endif()
 
-#absl
-if(USE_SYSTEM_DEPS)
-    find_package(absl QUIET)
+#folly 
+check_compiled_dep(folly ${FOLLY_DIR})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
+add_subdirectory(${FOLLY_DIR})
+target_compile_options(folly PRIVATE -w -Wno-unused-result)
+
+if(ENABLE_TSAN)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -fno-omit-frame-pointer")
 endif()
+
+#absl — ASAN ile
 if(absl_FOUND AND TARGET absl::flat_hash_map AND TARGET absl::hash AND TARGET absl::btree)
     message(STATUS "Using system absl")
 else()
@@ -179,6 +190,7 @@ foreach(tgt IN LISTS ABSL_TARGETS)
     target_compile_options(ab_${tgt} INTERFACE -w)
 endforeach()
 
+
 #GENERATED 
 add_subdirectory(generated)
 
@@ -188,8 +200,10 @@ target_include_directories(generated_headers
         ${GENERATED_DIR}
 )
 
+
 #SOURCE
 add_subdirectory(src)
+
 
 #TESTS
 add_subdirectory(test)

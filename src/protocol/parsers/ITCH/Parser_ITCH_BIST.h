@@ -64,7 +64,7 @@
 class Parser_ITCH_BIST
 {
 private:
-public: ///
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     static constexpr size_t MAX_MESSAGES = 14;
 
     MessagePools<BIST::ITCHMessageTypes> itch_pools_;

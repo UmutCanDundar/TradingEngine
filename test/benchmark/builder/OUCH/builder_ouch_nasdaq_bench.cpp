@@ -8,7 +8,7 @@
 
 static void BM_Builder_OUCH_NASDAQ(benchmark::State& state)
 {
-    pin_to_cpu(0);
+    pin_to_cpu(6);
 
     auto ord_case = state.range(0);
     

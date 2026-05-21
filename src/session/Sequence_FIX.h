@@ -72,7 +72,7 @@ private:
     const char *heartbeat_interval = "60";
     const size_t heartbeat_interval_len = 2;
 
-    static constexpr size_t DAILY_FIX_MSG_COUNT = 300'000;
+    static constexpr size_t DAILY_FIX_MSG_COUNT = 1'300'000; // 300'000
     std::array<Buffer_FIX, DAILY_FIX_MSG_COUNT> messages;
 
     FIXSequence sequences_;

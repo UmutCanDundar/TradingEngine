@@ -90,7 +90,6 @@ class Sequence_FIX;
 class Parser_FIX
 {
 private:
-public: ///
     static constexpr char SOH = '\x01';
     static constexpr size_t MAX_TAG = 512;
     static constexpr size_t MAX_SESTAG = 2048;
@@ -123,10 +122,10 @@ public: ///
     static const std::array<SesTagHandlerFunc, MAX_SESTAG> makeSesTagHandlersLookup() noexcept;
     static const std::array<SesTagHandlerFunc, MAX_SESTAG> SestagHandlers;
 
-    spscFIXInSessionQueue_t &parser_to_fixbuilder_in_;
+    spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx_;
 
 public:
-    Parser_FIX(spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept;
+    Parser_FIX(spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx) noexcept;
     
     bool handle_sesMsg(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix, SessionState &state) noexcept;
     char find_type(const char *data) noexcept;
@@ -144,8 +143,6 @@ public:
         else
             free_fixSesMsg_list_.pop(msg);
         
-        // static int pick = 0;
-
         auto const &handlers = []() -> auto const &
         {
             if constexpr (std::is_same_v<T, FIXMessage>)

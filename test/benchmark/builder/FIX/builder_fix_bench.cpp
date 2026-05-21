@@ -8,7 +8,7 @@
 
 static void BM_Builder_FIX_newOrder(benchmark::State& state)
 {
-    pin_to_cpu(0);
+    pin_to_cpu(6);
 
     Order* order = test_data_builder::fix_new_order;
     auto sess_mngr   = std::make_unique<SessionManager>();

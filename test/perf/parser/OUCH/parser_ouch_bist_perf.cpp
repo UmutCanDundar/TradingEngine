@@ -16,7 +16,7 @@
 
 int main()
 {
-    pin_to_cpu(2);
+    pin_to_cpu(6);
 
     std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<SessionManager>      sess_mngr;
@@ -27,11 +27,11 @@ int main()
     std::unique_ptr<Parser_FIX>          parser_fix;
     std::unique_ptr<Parser_Dispatch>     parser_dispatch;
 
-    spscFIXInSessionQueue_t     parser_to_fixbuilder_in;
+    spscFIXTxSessionQueue_t     parser_to_fixbuilder_tx;
     spscRxPacketQueue_t        receiver_to_parser;
     spscTxPacketQueue_t         builder_to_sender;
     spscMessageQueue_t          parser_to_store;
-    spscFIXOutSessionQueue_t    parser_to_fixbuilder_out;
+    spscFIXRxSessionQueue_t    parser_to_fixbuilder_rx;
     spscDbQueue_t               db_to_parser;
 
     std::atomic<bool> stop{false};
@@ -51,7 +51,7 @@ int main()
     sbt         = std::make_unique<SoupBinTcp>(*sess_mngr);
     builder_fix = std::make_unique<Builder_FIX>(*sess_mngr);
     login       = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
-    parser_fix  = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
+    parser_fix  = std::make_unique<Parser_FIX>(parser_to_fixbuilder_tx);
     network_io  = std::make_unique<NetworkIO>(
                         receiver_to_parser,
                         builder_to_sender,
@@ -64,8 +64,8 @@ int main()
     parser_dispatch = std::make_unique<Parser_Dispatch>(
                         receiver_to_parser,
                         parser_to_store,
-                        parser_to_fixbuilder_out,
-                        parser_to_fixbuilder_in,
+                        parser_to_fixbuilder_rx,
+                        parser_to_fixbuilder_tx,
                         *sess_mngr,
                         db_to_parser,
                         *network_io,

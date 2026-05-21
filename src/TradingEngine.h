@@ -81,7 +81,7 @@ public:
     void stop() noexcept;
 
 private:
-public:///
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     // =========================
     // CORE (LAYER 0)
     // =========================
@@ -109,8 +109,8 @@ public:///
     spscTxPacketQueue_t builder_to_sender_;              // NetworkPackets.h
     spscDbQueue_t store_to_db_;                          // DbTypes.h
     spscDbQueue_t db_to_parser_;                         // DbTypes.h
-    spscFIXInSessionQueue_t parser_to_fixbuilder_in_;    // FIXMessage.h
-    spscFIXOutSessionQueue_t parser_to_fixbuilder_out_;  // FIXMessage.h
+    spscFIXTxSessionQueue_t parser_to_fixbuilder_tx_;    // FIXMessage.h
+    spscFIXRxSessionQueue_t parser_to_fixbuilder_rx_;  // FIXMessage.h
 
     // =========================
     // COMPONENTS (LAYER 2)

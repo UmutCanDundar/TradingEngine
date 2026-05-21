@@ -9,10 +9,10 @@
 #include <atomic>
 #include <cstddef>
 
-Builder_Dispatch::Builder_Dispatch(spscTxPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in,
+Builder_Dispatch::Builder_Dispatch(spscTxPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXRxSessionQueue_t &parser_to_fixbuilder_rx, spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx,
                                    SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr, Parser_FIX &fixParser) noexcept
-                                   : builder_table_(makeBuilderLookUpTable()), builder_to_sender_(builder_to_sender), risk_to_builder_(risk_to_builder), parser_to_fixbuilder_out_(parser_to_fixbuilder_out), 
-                                   parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), sbt_(sbt), login_(login), txPkt_pool_(txPkt_pool), fixBuilder_(fixBuilder), ord_mngr_(ord_mngr),
+                                   : builder_table_(makeBuilderLookUpTable()), builder_to_sender_(builder_to_sender), risk_to_builder_(risk_to_builder), parser_to_fixbuilder_rx_(parser_to_fixbuilder_rx), 
+                                   parser_to_fixbuilder_tx_(parser_to_fixbuilder_tx), sess_mngr_(sess_mngr), sbt_(sbt), login_(login), txPkt_pool_(txPkt_pool), fixBuilder_(fixBuilder), ord_mngr_(ord_mngr),
                                    fixParser_(fixParser)
 {}
 
@@ -48,10 +48,10 @@ void Builder_Dispatch::buildFIX(Order *order) noexcept
    FIXSessionMessage *fixSesMsg{nullptr};
    uint8_t session_index = sess_mngr_.getSessionIndex(Venue::BIST, Protocol::FIX);
 
-   while (parser_to_fixbuilder_out_.pop(fixSesMsg))
+   while (parser_to_fixbuilder_rx_.pop(fixSesMsg))
       buildFIX_ses_out(*fixSesMsg, session_index);
 
-   while (parser_to_fixbuilder_in_.pop(fixSesMsg))
+   while (parser_to_fixbuilder_tx_.pop(fixSesMsg))
       buildFIX_ses_in(*fixSesMsg, session_index);
 
    buildFIX_app(order, session_index);

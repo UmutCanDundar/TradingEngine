@@ -9,7 +9,7 @@
 
 int main()
 {
-    pin_to_cpu(2);
+    pin_to_cpu(6);
 
     auto sess_mngr         = std::make_unique<SessionManager>();
     auto sbt               = std::make_unique<SoupBinTcp>(*sess_mngr);

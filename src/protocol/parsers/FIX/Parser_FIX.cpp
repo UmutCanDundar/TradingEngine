@@ -6,7 +6,7 @@
 #include <chrono>
 #include <cstring>
 
-Parser_FIX::Parser_FIX(spscFIXInSessionQueue_t &parser_to_fixbuilder_in) noexcept : parser_to_fixbuilder_in_(parser_to_fixbuilder_in)
+Parser_FIX::Parser_FIX(spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx) noexcept : parser_to_fixbuilder_tx_(parser_to_fixbuilder_tx)
 {
   for (size_t i = 0; i < FIX_QUEUE_CAPACITY; i++) {
     auto* msg = &fixMsg_pool_[i];
@@ -160,7 +160,7 @@ void Parser_FIX::resend_logic(uint32_t msg_seqnum, Sequence_FIX &seq_fix) noexce
       msg_1->begin_seqnum = seq_fix.get_expected();
       msg_1->end_seqnum = msg_seqnum;
       msg_1->msg_type = static_cast<uint8_t>(FIXTypes::ResendRequest);
-      parser_to_fixbuilder_in_.push(msg_1);
+      parser_to_fixbuilder_tx_.push(msg_1);
 
       seq_fix.increase_resend_counter();
    }
@@ -169,12 +169,12 @@ void Parser_FIX::resend_logic(uint32_t msg_seqnum, Sequence_FIX &seq_fix) noexce
       FIXSessionMessage *msg_2 = nullptr;
       free_fixSesMsg_list_.pop(msg_2);
       msg_2->msg_type = static_cast<uint8_t>(FIXTypes::Logout);
-      parser_to_fixbuilder_in_.push(msg_2);
+      parser_to_fixbuilder_tx_.push(msg_2);
 
       FIXSessionMessage *msg_3 = nullptr;
       free_fixSesMsg_list_.pop(msg_3);
       msg_3->msg_type = static_cast<uint8_t>(FIXTypes::Logon);
-      parser_to_fixbuilder_in_.push(msg_3);
+      parser_to_fixbuilder_tx_.push(msg_3);
 
       // pending_to_store_map_.clear();
       seq_fix.reset_resend_counter();
@@ -198,7 +198,7 @@ void Parser_FIX::resend_logic_logon(FIXSessionMessage *fixSesMsg, Sequence_FIX &
    msg->begin_seqnum = seq_fix.get_expected();
    msg->end_seqnum = fixSesMsg->seqnum - 1;
    msg->msg_type = static_cast<uint8_t>(FIXTypes::ResendRequest);
-   parser_to_fixbuilder_in_.push(msg);
+   parser_to_fixbuilder_tx_.push(msg);
    push_pending(fixSesMsg);
 }
 

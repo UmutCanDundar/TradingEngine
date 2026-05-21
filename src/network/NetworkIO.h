@@ -55,12 +55,12 @@ struct SocketState
 
 class NetworkIO
 {
-  public://
-    alignas(64) std::atomic<uint64_t> pipeline_seq{0};
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
+    alignas(64) std::atomic<uint64_t> pipeline_seq{0}; // Used for debugging and monitoring the processing sequence of packets through the pipeline. Will be removed after profiling and debugging.
     char pad[56];
 
 private:
-public: // will be removed after test
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
   static constexpr uint8_t MAX_RETRY_COUNT = 3;
   static constexpr size_t PARTIAL_PACKET_POOL_CAPACITY = 16;
   static constexpr size_t PENDING_CAPACITY = 256;
@@ -104,7 +104,7 @@ public:
   }
 
   private:
-  public: // will be removed after test
+  public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     //COLD 
     std::array<int, MAX_SESSIONS> Init_Sockets() noexcept;
     void makeSocketNonBlocking(int sock) noexcept;
@@ -125,13 +125,6 @@ public:
       size_t index = txPkt.sock_index;
       int sock = socks_[index];
       auto &states = socket_states_[index];
-      
-      //     << "active=" << (states.active_pkt ? 1 : 0)
-      //     << " pending=" << pending_write_[index].size()
-      //     << " loggedin=" << sess_mngr_.isSessionLoggedIn(index)
-      //     << " conn_pending=" << states.connection_pending
-      //     << " index=" << index
-      //     << " ";
       
       if(LIKELY(!states.connection_pending))
       {

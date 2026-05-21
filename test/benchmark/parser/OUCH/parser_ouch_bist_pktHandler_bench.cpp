@@ -82,7 +82,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(0);        
+            pin_to_cpu(15);        
 
             RxPacket* pkt;
             RxPacket* neWpkt = new RxPacket();
@@ -117,7 +117,7 @@ public:
 
 BENCHMARK_DEFINE_F(BM_SBTPktHandler, DiffCase)(benchmark::State& state)
 {
-    pin_to_cpu(2);
+    pin_to_cpu(6);
 
     auto queue_push = state.range(1);
 

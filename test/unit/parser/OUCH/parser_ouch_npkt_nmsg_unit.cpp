@@ -16,24 +16,24 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     std::atomic<bool> running{true};
 
     auto txPkt_pool = std::make_unique<TxPacketPoolManager>();
-    spscFIXInSessionQueue_t parser_to_fixbuilder_in;
+    spscFIXTxSessionQueue_t parser_to_fixbuilder_tx;
     spscRxPacketQueue_t receiver_to_parser;
     spscTxPacketQueue_t builder_to_sender;
     spscMessageQueue_t parser_to_store; 
-    spscFIXOutSessionQueue_t parser_to_fixbuilder_out;
+    spscFIXRxSessionQueue_t parser_to_fixbuilder_rx;
     spscDbQueue_t db_to_parser; 
     auto sess_mngr     = std::make_unique<SessionManager>();
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
     auto network_io    = std::make_unique<NetworkIO>(receiver_to_parser, builder_to_sender, *sess_mngr, *sbt, *login, *txPkt_pool, running);
-    auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_in);
+    auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_tx);
 
     auto parser_dispatch = std::make_unique<Parser_Dispatch>(
                                         receiver_to_parser,
                                         parser_to_store,
-                                        parser_to_fixbuilder_out,
-                                        parser_to_fixbuilder_in,
+                                        parser_to_fixbuilder_rx,
+                                        parser_to_fixbuilder_tx,
                                         *sess_mngr,
                                         db_to_parser,
                                         *network_io,

@@ -147,7 +147,7 @@ public:
 
 BENCHMARK_DEFINE_F(BM_OrderManager, ItchNasdaqSingle)(benchmark::State& state)
 {
-    pin_to_cpu(2);
+    pin_to_cpu(6);
 
     std::vector<uint64_t> latencies;
     latencies.reserve(100000);

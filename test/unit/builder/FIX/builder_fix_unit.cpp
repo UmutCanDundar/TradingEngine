@@ -55,7 +55,7 @@ TEST(FixBuilderTest, FixNewOrder)
     auto tags = make_tag_map(buf->data, buf->len);
 
     // ---------------- HEADER CHECKS ----------------
-    EXPECT_EQ(tags[8], "FIX.4.4"); // BeginString
+    EXPECT_EQ(tags[8], "FIX.5.0"); // BeginString
     EXPECT_EQ(tags[9], "154");     // BodyLength 
     EXPECT_EQ(tags[35], "D");       // NewOrderSingle
     EXPECT_EQ(tags[49], "CLIENT01");   // auth_fix.my_id

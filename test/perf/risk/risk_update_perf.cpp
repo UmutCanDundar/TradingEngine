@@ -41,7 +41,7 @@ inline void reset_symbolrisk(SymbolRisk& sr) noexcept
 
 int main()
 {
-    pin_to_cpu(2);
+    pin_to_cpu(6);
 
     std::unique_ptr<HashTables>    hashtables;
     std::unique_ptr<Limits>        limits;
@@ -156,6 +156,8 @@ int main()
     marketbook.reset();
     limits.reset();
     hashtables.reset();
+
+    delete ticksize_entry;
 
     return 0;
 }

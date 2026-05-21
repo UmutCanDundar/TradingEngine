@@ -12,9 +12,14 @@ FetchContent_Declare(
 )
 
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)    
+set(BENCHMARK_FORCE_WERROR OFF CACHE BOOL "" FORCE) 
 
 FetchContent_MakeAvailable(googletest)
 FetchContent_MakeAvailable(benchmark)
+
+target_compile_options(benchmark PRIVATE -w)
+target_compile_options(benchmark_main PRIVATE -w)
 
 enable_testing()
 

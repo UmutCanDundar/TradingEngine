@@ -130,5 +130,5 @@ struct FIXSessionMessage // ~80B
 
 inline constexpr size_t FIX_QUEUE_CAPACITY = 1024;
 
-using spscFIXInSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
-using spscFIXOutSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
+using spscFIXTxSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
+using spscFIXRxSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;

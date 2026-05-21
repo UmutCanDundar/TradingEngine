@@ -5,10 +5,10 @@
 
 #include <type_traits>
 
-Parser_Dispatch::Parser_Dispatch(spscRxPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXOutSessionQueue_t &parser_to_fixbuilder_out, spscFIXInSessionQueue_t &parser_to_fixbuilder_in,
+Parser_Dispatch::Parser_Dispatch(spscRxPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXRxSessionQueue_t &parser_to_fixbuilder_rx, spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx,
                                  SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX& fixparser) noexcept
-                                 : parser_table_(makeParserLookUpTable()), receiver_to_parser_(receiver_to_parser), parser_to_store_(parser_to_store), parser_to_fixbuilder_out_(parser_to_fixbuilder_out), 
-                                 parser_to_fixbuilder_in_(parser_to_fixbuilder_in), sess_mngr_(sess_mngr), db_to_parser_(db_to_parser), network_io_(network_io), fixparser_(fixparser)
+                                 : parser_table_(makeParserLookUpTable()), receiver_to_parser_(receiver_to_parser), parser_to_store_(parser_to_store), parser_to_fixbuilder_rx_(parser_to_fixbuilder_rx), 
+                                 parser_to_fixbuilder_tx_(parser_to_fixbuilder_tx), sess_mngr_(sess_mngr), db_to_parser_(db_to_parser), network_io_(network_io), fixparser_(fixparser)
 {}
 
 std::array<std::array<Parser_Dispatch::ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> Parser_Dispatch::makeParserLookUpTable() noexcept
@@ -106,7 +106,7 @@ void Parser_Dispatch::proceedPendingFIX(auto* variant_msg, auto& seq_fix, Sessio
                        if constexpr (std::is_same_v<MsgType, FIXSessionMessage>)
                        {
                            if(msg->msg_type != static_cast<uint8_t>(FIXTypes::Logon) && !fixparser_.handle_sesMsg(msg, seq_fix, state))
-                               parser_to_fixbuilder_out_.push(msg);
+                               parser_to_fixbuilder_rx_.push(msg);
                        }
                        else
                        { 
@@ -170,7 +170,7 @@ void Parser_Dispatch::parseFIX(RxPacket *pkt) noexcept
             if (seq_fix.get_expected() == fixSesMsg->seqnum)
             {
                if (!fixparser_.handle_sesMsg(fixSesMsg, seq_fix, *state))
-                  parser_to_fixbuilder_out_.push(fixSesMsg);
+                  parser_to_fixbuilder_rx_.push(fixSesMsg);
 
                seq_fix.increase_expected_seq();
 

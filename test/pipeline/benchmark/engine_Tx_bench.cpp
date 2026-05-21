@@ -89,11 +89,6 @@ struct FakeTCPServer
         ::recv(client_fd, buf, sizeof(buf), 0);
     }
 
-    void send_to_client(const auto& msg)
-    {
-        ::send(client_fd, msg.data(), msg.size(), 0);
-    }
-
     void stop_server()
     {
         if (client_fd >= 0){ ::shutdown(client_fd, SHUT_RDWR); ::close(client_fd); client_fd = -1; }
@@ -109,6 +104,8 @@ public:
     std::unique_ptr<FakeTCPServer> fix_server;
     std::unique_ptr<FakeTCPServer> ouch_bist_server;
     std::unique_ptr<FakeTCPServer> ouch_nq_server;
+
+    TickSizeEntry* ticksize_entry;
 
     int ord_case{0};
 
@@ -133,7 +130,7 @@ public:
 
         // TICK SIZE — VENUE::BIST / SYMBOL::GARAN
         auto* symmeta      = engine->ord_mngr_.get_symbolmeta(Venue::BIST, 3);
-        auto* ticksize_entry = new TickSizeEntry(0, 100'000'000, 10);
+        ticksize_entry = new TickSizeEntry(0, 100'000'000, 10);
         symmeta->tick_size_table[0].store(ticksize_entry, std::memory_order_relaxed);
 
         // BEST BID/ASK — VENUE::BIST / SYMBOL::GARAN
@@ -150,7 +147,6 @@ public:
         ouch_bist_server->wait_accepting();
         ouch_nq_server->wait_accepting();
 
-        // fix_server->send_to_client(test_data_network::fix_login_ack); // this line causes thread race!
         engine->session_manager_.setSessionLoggedIn(0, true); 
         engine->session_manager_.setSessionLoggedIn(1, true); 
         engine->session_manager_.setSessionLoggedIn(2, true);  
@@ -176,6 +172,8 @@ public:
         fix_server.reset();
         ouch_bist_server.reset();
         ouch_nq_server.reset();
+
+        delete ticksize_entry;
 
         Logger::Shutdown();
     }

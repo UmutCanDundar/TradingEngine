@@ -63,7 +63,7 @@
 class Parser_ITCH_NASDAQ
 {
 private:
-public: ///
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     static constexpr size_t MAX_MESSAGES = 11;
 
     MessagePools<NASDAQ::ITCHMessageTypes> itch_pools_;

@@ -36,7 +36,7 @@ char *Builder_FIX::buildHeader(char *buf, size_t body_len, const size_t msg_inde
     auto ts_pair = transact_time();
     body_len += 1 + auth_fix.my_id.size() + auth_fix.venue_id.size() + seqnum_digits + ts_pair.second + 20;
     
-    buf = addTag("8=", 2, "FIX.4.4", 7, buf);
+    buf = addTag("8=", 2, "FIX.5.0 ", 7, buf);
     buf = addTag("9=", 2, static_cast<uint32_t>(body_len), buf);
     buf = addTag("35=", 3, msg_types[msg_index], 1, buf);
     buf = addTag("49=", 3, auth_fix.my_id.data(), auth_fix.my_id.size(), buf);   
@@ -61,7 +61,7 @@ char *Builder_FIX::buildHeader(const Buffer_FIX *org_buf, char *temp, const Venu
     auto ts_pair = transact_time();
     body_len += 10 + ts_pair.second;
 
-    temp = addTag("8=", 2, "FIX.4.4", 7, temp);
+    temp = addTag("8=", 2, "FIX.5.0 ", 7, temp);
     temp = addTag("9=", 2, body_len, temp);
     temp = addTag("35=", 3, type, 1, temp);
     temp = addTag("49=", 3, auth_fix.my_id.data(), auth_fix.my_id.size(), temp);

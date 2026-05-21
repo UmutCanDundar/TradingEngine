@@ -868,6 +868,8 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             //     | static_cast<uint32_t>(RiskRejectReason::MaxOrderRateLimitExceededSymbol)
             //     | static_cast<uint32_t>(RiskRejectReason::MaxOrderRateLimitExceededAccount));
                 
+    delete ticksize_entry;
+    delete oR;
     Logger::Shutdown();             
 }
 

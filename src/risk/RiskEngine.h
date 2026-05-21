@@ -281,11 +281,12 @@ using spscRejectOrderQueue_t = boost::lockfree::spsc_queue<OrderWithRejectReason
 
 class RiskEngine
 {
-public://
-    alignas(64) std::atomic<uint64_t> pipeline_seq{0};
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
+    alignas(64) std::atomic<uint64_t> pipeline_seq{0}; // Used for debugging and monitoring the processing sequence of orders through the pipeline. Will be removed after profiling and debugging.
     char pad[56];
+    
 private:
-public://
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     static constexpr size_t ORDERRISK_POOL_CAPACITY = 65536;
     static constexpr size_t MAX_SYMBOL_COUNT = 512; 
 
@@ -313,7 +314,6 @@ public:
     bool check_risk() noexcept;
    
 private:
-public: // 
     // Helper functions associated with the public functions
     // --------------------------------------INITIALIZE FUNCTIONS-----------------------------------------------
     void initialize_accountrisks() noexcept;

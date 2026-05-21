@@ -141,8 +141,9 @@ int main()
 
     auto run_case = [&](int pkt_case)
     {
+        std::atomic_thread_fence(std::memory_order_seq_cst);
         uint64_t before = engine->risk_.pipeline_seq.load(std::memory_order_acquire);
-
+    
         engine->ord_mngr_.add_awaitingAck_order(*test_data_builder::fix_new_order);
         engine->ord_mngr_.add_awaitingAck_order(*test_data_builder::ouch_new_order);
         engine->ord_mngr_.add_awaitingAck_order(*test_data_builder::NQouch_new_order);
@@ -156,7 +157,7 @@ int main()
             case 5: itch_nq_sender.send_to(test_data_network::itch_nq_add_order);            break;
             default: __builtin_unreachable();
         }
-
+        
         while (engine->risk_.pipeline_seq.load(std::memory_order_acquire) <= before)
             _mm_pause();
 
@@ -178,7 +179,7 @@ int main()
     for (int i = 0; i < WARMUP; i++)
         run_case((i % 5) + 1);
 
-    constexpr int N = 5'000'000;
+    constexpr int N = 1'300'000;
     for (int i = 0; i < N; i++)
         run_case((i % 5) + 1);
 
@@ -188,6 +189,10 @@ int main()
     fix_server->stop_server();
     ouch_bist_server->stop_server();
     ouch_nq_server->stop_server();
+
+    fix_server.reset();
+    ouch_bist_server.reset();
+    ouch_nq_server.reset();
 
     Logger::Shutdown();
     return 0;

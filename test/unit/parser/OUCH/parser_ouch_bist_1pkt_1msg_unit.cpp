@@ -4,7 +4,6 @@
 #include "Parser_OUCH_BIST.h"
 #include "dataset_parser.h"
 
-
 TEST(OUCHBISTParserTest, Accepted)
 {
     Parser_OUCH_BIST parser;

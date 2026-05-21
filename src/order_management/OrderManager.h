@@ -52,7 +52,7 @@
 //     eliminating vtable indirection on the hot path.
 //
 // DEVELOPER NOTES (PRE-PROFILING):
-// - This class must be created on the heap due to ~14.5MB Stack usage.
+// - This class must be created on the heap due to ~16.7MB Stack usage.
 //
 // - The current layout assumes low-frequency writes to shared metadata such as
 //   venue state and symbol metadata.
@@ -275,14 +275,9 @@ class OrderManager
     friend class FillerITCH_NASDAQ;
     friend class FillerOUCH_BIST;
     friend class FillerOUCH_NASDAQ;
-    FillerFIX filler_fix_{*this};
-    FillerITCH_BIST filler_itch_bist_{*this};
-    FillerITCH_NASDAQ filler_itch_nq_{*this};
-    FillerOUCH_BIST filler_ouch_bist_{*this};
-    FillerOUCH_NASDAQ filler_ouch_nq_{*this};
    
 private:
-public:
+public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     static constexpr size_t MARKETORDER_LAST_INDEX = 32768;
     static constexpr size_t TICKSIZE_POOL_CAPACITY = 65536; 
     static constexpr size_t TICKSIZE_CAPACITY_FOR_BIST = 32768;
@@ -322,6 +317,12 @@ public:
 
     MarketBook &marketbook_;
     HashTables &hashtables_;
+
+    FillerFIX filler_fix_{*this};
+    FillerITCH_BIST filler_itch_bist_{*this};
+    FillerITCH_NASDAQ filler_itch_nq_{*this};
+    FillerOUCH_BIST filler_ouch_bist_{*this};
+    FillerOUCH_NASDAQ filler_ouch_nq_{*this};
 
 public:
     OrderManager(spscMessageQueue_t &parser_to_store,

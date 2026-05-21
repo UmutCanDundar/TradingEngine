@@ -46,6 +46,8 @@ public:
     std::atomic<bool> stop2{false};
     std::thread consumer2;
 
+    TickSizeEntry* ticksize_entry;
+
 public:
     void SetUp(const ::benchmark::State& st) 
     {
@@ -87,7 +89,7 @@ public:
 
         //TICK SIZE INITIALIZATION VENUE::BIST--0 SYMBOL::GARAN--0 TICKSIZE--10
         auto* symmeta = order_manager->get_symbolmeta(Venue::BIST, 3);
-        auto* ticksize_entry = new TickSizeEntry(0, 100'000'000, 10);
+        ticksize_entry = new TickSizeEntry(0, 100'000'000, 10);
         symmeta->tick_size_table[0].store(ticksize_entry, std::memory_order_relaxed);
             
         reset_accountrisk(risk->accountrisks_[0]);
@@ -96,7 +98,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(0);        
+            pin_to_cpu(14);        
 
             Order* order; 
             
@@ -111,7 +113,7 @@ public:
 
         consumer2 = std::thread([&]
         {
-            pin_to_cpu(4);        
+            pin_to_cpu(15);        
 
             OrderWithRejectReason orderWRR; 
             
@@ -134,6 +136,8 @@ public:
         marketbook.reset();
         limits.reset();
         hashtables.reset();
+
+        delete ticksize_entry;
     }
 };
 
@@ -142,7 +146,7 @@ public:
 //========================================================
     BENCHMARK_DEFINE_F(BM_Risk, Update)(benchmark::State& state)
     {
-        pin_to_cpu(2);
+        pin_to_cpu(6);
         
         int order_case = state.range(0);
 
@@ -208,7 +212,7 @@ public:
 //========================================================
     BENCHMARK_DEFINE_F(BM_Risk, Check)(benchmark::State& state)
     {
-        pin_to_cpu(2);
+        pin_to_cpu(6);
 
         std::vector<uint64_t> latencies;
         latencies.reserve(100000);
