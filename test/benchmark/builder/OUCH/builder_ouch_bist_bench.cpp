@@ -19,7 +19,7 @@ static void BM_Builder_OUCH_BIST(benchmark::State& state)
     auto builder_ouch_bist = std::make_unique<Builder_OUCH_BIST>(*sbt, *sess_mngr);
 
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
 
     for (auto _ : state)
     {

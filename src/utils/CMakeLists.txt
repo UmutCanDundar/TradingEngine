@@ -17,8 +17,5 @@ target_link_libraries(utils
 )
 
 target_compile_features(utils PRIVATE cxx_std_23)
-target_compile_definitions(utils PUBLIC
-    $<$<CONFIG:Release>:RELEASE_BUILD>
-)
 
-
+add_subdirectory(CustomMap)

@@ -103,7 +103,7 @@ bool RiskEngine::update_risk() noexcept
         }
         order->canModify.store(order->canModify | RISK_DONE, std::memory_order_release);
 
-        pipeline_seq.fetch_add(1, std::memory_order_release); // test 
+        pipeline_seq.fetch_add(1, std::memory_order_release); // Rx test end
         return true;
     }
 
@@ -129,7 +129,6 @@ bool RiskEngine::check_risk() noexcept
         if (check_venue_halt_and_circuit(*order, *symmeta) /* || 
             check_order_rate_limit(accRisk, symRisk, *order) */) // this check need to be commented out during benchmark test
             continue;
-        
         if(UNLIKELY(order->status == Status::CancelRequest)) 
         {
             if(check_cancel_rate_limit(accRisk, symRisk, *order)) 
@@ -155,6 +154,7 @@ bool RiskEngine::check_risk() noexcept
             if (RejectReason){risk_to_strategy_.push(OrderWithRejectReason{order, RejectReason}); continue;}
         }
 
+
         // ===== MAIN RISK CHECKS =====
         RejectReason |= check_quantity_bounds(order->quantity, symLim.min_qty, symLim.max_qty, symmeta->round_lot_size);
         RejectReason |= check_max_open_orders_account(accRisk.open_orders_count.load(std::memory_order_acquire), accLim.max_open_orders);
@@ -162,9 +162,9 @@ bool RiskEngine::check_risk() noexcept
         RejectReason |= check_self_trade_order(*order, venue_index);
         RejectReason |= check_max_position_limit(symRisk.net_position.load(std::memory_order_acquire), order->quantity, order->side, symLim.max_position_scaled);
         RejectReason |= check_account_risk(*order, accRisk, accLim, symRisk, order->price, order->quantity);
-        
         if (RejectReason){risk_to_strategy_.push(OrderWithRejectReason{order, RejectReason}); continue;}
 
+        
         order->canModify.store(order->canModify | RISK_DONE, std::memory_order_relaxed);
         risk_to_builder_.push(order);
         return true;
@@ -221,7 +221,6 @@ bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const Accoun
     if (order.protocol == Protocol::FIX) {
         if(UNLIKELY(order.syncState == SyncState::WaitingNew))
         {
-            pipeline_seq.fetch_add(1, std::memory_order_release);
             return true;
         }
         else 
@@ -319,7 +318,21 @@ void RiskEngine::update_symbol_risk(AccountRisk &accRisk, const Order &order, co
                 {
                     symRisk.cost_basis_scaled -= avg_entry_price * exec_qty_int64;
                 }
+                
             }
+
+            // Update unrealized PnL after a partial-fill
+            { 
+                const int64_t best_bid = symRisk.best_bid.load(std::memory_order_relaxed);
+                const int64_t best_ask = symRisk.best_ask.load(std::memory_order_relaxed);
+                if (!(best_bid <= 0 && best_ask <= 0) && symRisk.cost_basis_scaled != 0)
+                {
+                    accRisk.total_unrealized_pnl.fetch_sub(symRisk.unrealized_pnl, std::memory_order_release);
+                    update_unrealized_pnl(symRisk, best_bid, best_ask);
+                    accRisk.total_unrealized_pnl.fetch_add(symRisk.unrealized_pnl, std::memory_order_release);
+                }
+            }
+
             break;
         }
         case Status::Filled:
@@ -354,6 +367,19 @@ void RiskEngine::update_symbol_risk(AccountRisk &accRisk, const Order &order, co
                     symRisk.cost_basis_scaled -= avg_entry_price * exec_qty_int64;
                 }
             }
+
+            // Update unrealized PnL after a fill
+            { 
+                const int64_t best_bid = symRisk.best_bid.load(std::memory_order_relaxed);
+                const int64_t best_ask = symRisk.best_ask.load(std::memory_order_relaxed);
+                if (!(best_bid <= 0 && best_ask <= 0) && symRisk.cost_basis_scaled != 0)
+                {
+                    accRisk.total_unrealized_pnl.fetch_sub(symRisk.unrealized_pnl, std::memory_order_release);
+                    update_unrealized_pnl(symRisk, best_bid, best_ask);
+                    accRisk.total_unrealized_pnl.fetch_add(symRisk.unrealized_pnl, std::memory_order_release);
+                }
+            }
+            
             break;
         }
         case Status::Cancelled:

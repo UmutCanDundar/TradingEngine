@@ -17,7 +17,7 @@ target_compile_options(project_options INTERFACE
     -Wall -Wextra -Wno-pedantic 
     $<$<CONFIG:Debug>:-O0 -g>
     $<$<CONFIG:Release>:-O3 -DNDEBUG>
-    $<$<CONFIG:RelWithDebInfo>:-O2 -g -DNDEBUG>
+    $<$<CONFIG:RelWithDebInfo>:-O3 -g -DNDEBUG>
     -march=native
     -mtune=native
     -mavx2
@@ -55,7 +55,6 @@ set(BOOST_DIR ${PROJECT_SOURCE_DIR}/third-party/boost)
 set(SPDLOG_DIR ${PROJECT_SOURCE_DIR}/third-party/spdlog)
 set(ABSL_DIR ${PROJECT_SOURCE_DIR}/third-party/absl/abseil-cpp)
 set(CLICKHOUSE_DIR ${PROJECT_SOURCE_DIR}/third-party/clickhouse/clickhouse-cpp)
-set(FOLLY_DIR ${PROJECT_SOURCE_DIR}/third-party/folly)
 
 
 #THIRD-PARTY
@@ -154,20 +153,10 @@ else()
 endif()
 
 if(ENABLE_ASAN)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    target_compile_options(clickhouse-cpp-lib PRIVATE -fsanitize=address -fno-omit-frame-pointer)
 endif()
 
-#folly 
-check_compiled_dep(folly ${FOLLY_DIR})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
-add_subdirectory(${FOLLY_DIR})
-target_compile_options(folly PRIVATE -w -Wno-unused-result)
-
-if(ENABLE_TSAN)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -fno-omit-frame-pointer")
-endif()
-
-#absl — ASAN ile
+#absl 
 if(absl_FOUND AND TARGET absl::flat_hash_map AND TARGET absl::hash AND TARGET absl::btree)
     message(STATUS "Using system absl")
 else()
@@ -190,6 +179,17 @@ foreach(tgt IN LISTS ABSL_TARGETS)
     target_compile_options(ab_${tgt} INTERFACE -w)
 endforeach()
 
+if(ENABLE_ASAN)
+    foreach(tgt IN LISTS ABSL_TARGETS)
+        target_compile_options(ab_${tgt} INTERFACE -fsanitize=address -fno-omit-frame-pointer)
+        target_link_options(ab_${tgt} INTERFACE -fsanitize=address)
+    endforeach()
+elseif(ENABLE_TSAN)
+    foreach(tgt IN LISTS ABSL_TARGETS)
+        target_compile_options(ab_${tgt} INTERFACE -fsanitize=thread -fno-omit-frame-pointer)
+        target_link_options(ab_${tgt} INTERFACE -fsanitize=thread)
+    endforeach()
+endif()
 
 #GENERATED 
 add_subdirectory(generated)

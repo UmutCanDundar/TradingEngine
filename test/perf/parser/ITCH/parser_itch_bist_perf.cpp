@@ -15,7 +15,7 @@
 
 int main()
 {
-    pin_to_cpu(6);
+    pin_to_cpu(6, 0);
 
     std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<SessionManager>      sess_mngr;
@@ -35,6 +35,8 @@ int main()
 
     std::atomic<bool> stop{false};
     std::thread consumer;
+
+    std::atomic<uint64_t> released_msg_count{0};
 
     std::atomic<bool> running{true};
 
@@ -79,6 +81,7 @@ int main()
             {
                 parser_to_store.pop(local_msg);
                 parser_dispatch->itchparser_bist_.releaseITCH(std::get<BIST::ITCHMessage>(local_msg.msg));
+                released_msg_count.fetch_add(1, std::memory_order_release);
             }
             else
                 _mm_pause();
@@ -87,11 +90,13 @@ int main()
 
     auto run = [&]()
     {
+        released_msg_count.store(0, std::memory_order_release);
+        
         for (auto* p : pkts) p->msg_count = 0;
         asm volatile("" ::: "memory");
         for (auto* p : pkts)
             parser_dispatch->parseITCH_BIST(p);
-        while (!parser_to_store.empty()) _mm_pause();
+        while (released_msg_count.load(std::memory_order_acquire) < 4) _mm_pause();
     };
 
     constexpr int WARMUP = 10'000;

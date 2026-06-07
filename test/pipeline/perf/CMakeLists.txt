@@ -22,3 +22,15 @@ target_link_libraries(engine_Tx_perf
     TradingEngine 
 )
 target_compile_features(engine_Tx_perf PRIVATE cxx_std_23)
+
+add_executable(engine_RxTx_perf
+    engine_RxTx_perf.cpp
+)
+target_link_libraries(engine_RxTx_perf 
+    PRIVATE
+    perf_utils
+    test_data
+    project_options
+    TradingEngine 
+)
+target_compile_features(engine_RxTx_perf PRIVATE cxx_std_23)

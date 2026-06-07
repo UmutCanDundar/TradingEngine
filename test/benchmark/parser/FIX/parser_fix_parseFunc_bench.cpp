@@ -22,7 +22,7 @@ static void BM_Parser_FIX_parseFunc(benchmark::State& state)
     Parser_FIX parser{queue};
 
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
 
     for (auto _ : state)
     {

@@ -24,7 +24,7 @@ void OrderFlow::start() noexcept
                                       {
    
     configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
-    configure_affinity(15);        
+    configure_affinity(13);        
 
     run_clickhouse_writer(); });
 }

@@ -102,7 +102,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(15);        
+            pin_to_cpu(0);        
 
             TxPacket* txPkt; 
             
@@ -141,7 +141,7 @@ BENCHMARK_DEFINE_F(BM_Builder, MixedTraffic)(benchmark::State& state)
     auto& seq_fix = sess_mngr->getSessionState(sess_index)->fix;
     
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
 
     for(auto _ : state)
     {

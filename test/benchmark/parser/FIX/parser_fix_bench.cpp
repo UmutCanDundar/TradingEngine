@@ -110,7 +110,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(15);        
+            pin_to_cpu(0);        
 
             MessageWithVenue<MessageTypes_t> local_msg;
             FIXSessionMessage* sesMsg;  
@@ -157,14 +157,13 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseFIX)(benchmark::State& state)
     pin_to_cpu(6);
 
     uint64_t msgs_per_iter = pkt_case == 1 ? 1 : 3;
-    uint64_t total_expected = 0;
 
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
     
     for(auto _ : state)
     {
-        total_expected += msgs_per_iter;
+        released_msg_count.store(0, std::memory_order_release);
 
         for(auto pkt : pkts) 
             pkt->consumed = false;
@@ -186,13 +185,8 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseFIX)(benchmark::State& state)
         benchmark::ClobberMemory();
         latencies.push_back(end - start);
 
-        // while (!parser_to_store.empty() || !parser_to_fixbuilder_tx.empty())
-        //     _mm_pause();
-
-        while (released_msg_count.load(std::memory_order_acquire) < total_expected)
-        {
-            _mm_pause();
-        }
+        while (released_msg_count.load(std::memory_order_acquire) < msgs_per_iter) _mm_pause();
+        
     }
    
     if (latencies.empty()) return;
@@ -215,7 +209,7 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseFIX)(benchmark::State& state)
     state.counters["|max_cycles|"] = latencies.back();
 }
 
-BENCHMARK_REGISTER_F(BM_Parser, ParseFIX)->Arg(0)->UseManualTime()->Name("BM_ParserFIX_best");
-BENCHMARK_REGISTER_F(BM_Parser, ParseFIX)->Arg(1)->UseManualTime()->Name("BM_ParserFIX_normal");
-BENCHMARK_REGISTER_F(BM_Parser, ParseFIX)->Arg(2)->UseManualTime()->Name("BM_ParserFIX_worst(seq-in-order)");
-BENCHMARK_REGISTER_F(BM_Parser, ParseFIX)->Arg(3)->UseManualTime()->Name("BM_ParserFIX_worst(seq-out-of-order)");
+BENCHMARK_REGISTER_F(BM_Parser, ParseFIX)->Arg(1)->UseManualTime()->Name("BM_ParserFIX_best");
+BENCHMARK_REGISTER_F(BM_Parser, ParseFIX)->Arg(2)->UseManualTime()->Name("BM_ParserFIX_normal");
+BENCHMARK_REGISTER_F(BM_Parser, ParseFIX)->Arg(3)->UseManualTime()->Name("BM_ParserFIX_worst(seq-in-order)");
+BENCHMARK_REGISTER_F(BM_Parser, ParseFIX)->Arg(4)->UseManualTime()->Name("BM_ParserFIX_worst(seq-out-of-order)");

@@ -69,7 +69,7 @@ int main()
 
     consumer2 = std::thread([&]
     {
-        pin_to_cpu(4);
+        pin_to_cpu(2);
         Order* order;
         while (!stop2.load(std::memory_order_acquire))
             if (!store_to_strategy.pop(order)) _mm_pause();
@@ -77,7 +77,7 @@ int main()
 
     consumer3 = std::thread([&]
     {
-        pin_to_cpu(6);
+        pin_to_cpu(4);
         DbData_t DbData;
         while (!stop3.load(std::memory_order_acquire))
             if (!store_to_db.pop(DbData)) _mm_pause();
@@ -104,6 +104,8 @@ int main()
 
     auto run = [&]()
     {
+        refresh_awaiting_map();
+
         for (size_t j = 1; j < 4; j++)
             parser_to_store.push(ord_manager_traffic[j]);
 
@@ -112,12 +114,16 @@ int main()
         bool processing = true;
         while (processing)
             processing = order_manager->store();
+
+        for(auto& [key, ord] : order_manager->our_orders_)
+            store_to_strategy_free_slot.push(ord);
+        order_manager->our_orders_.clear();
     };
 
     constexpr int WARMUP = 10'000;
-    for (int i = 0; i < WARMUP; i++)
+    for (int i = 0; i < WARMUP; i++)   
         run();
-
+        
     constexpr int N = 5'000'000;
     for (int i = 0; i < N; i++)
         run();

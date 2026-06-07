@@ -128,7 +128,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(15);        
+            pin_to_cpu(0);        
 
             Order* order; 
             
@@ -143,7 +143,7 @@ public:
 
         consumer2 = std::thread([&]
         {
-            pin_to_cpu(4);        
+            pin_to_cpu(2);        
 
             Order* order; 
             
@@ -158,7 +158,7 @@ public:
 
         consumer3 = std::thread([&]
         {
-            pin_to_cpu(6);        
+            pin_to_cpu(4);        
 
             Order* order; 
             
@@ -256,7 +256,7 @@ BENCHMARK_DEFINE_F(BM_OrderManager, MixedTraffic)(benchmark::State& state)
     pin_to_cpu(6);
 
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
 
     for(auto _ : state)
     {
@@ -285,7 +285,7 @@ BENCHMARK_DEFINE_F(BM_OrderManager, MixedTraffic)(benchmark::State& state)
         for(auto& [key, ord] : order_manager->our_orders_)
             store_to_strategy_free_slot.push(ord);
         order_manager->our_orders_.clear();
-    
+
     }
    
     if (latencies.empty()) return;

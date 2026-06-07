@@ -100,7 +100,7 @@
 #include <absl/container/flat_hash_map.h>
 #include <absl/hash/hash.h>
 #include <boost/lockfree/spsc_queue.hpp>
-#include <folly/concurrency/ConcurrentHashMap.h>
+#include "ConcurrentFixedFlatMap.h"
 
 // =====================
 // Forward Declaration
@@ -303,7 +303,8 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> market_orders_;  
     absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> our_orders_;
     absl::flat_hash_map<uint64_t, Order*> our_orders_wtokenkey_;
-    folly::ConcurrentHashMap<uint64_t, Order *> awaitingAck_orders_; // OUCH-FIX orders awaiting exchange acknowledgement
+    ConcurrentFixedFlatMap<uint64_t, Order *> awaitingAck_orders_; // OUCH-FIX orders awaiting exchange acknowledgement
+
     absl::flat_hash_map<uint32_t, OrderKey> nq_ouch_refnum_ordkey_; // NQ OUCH(user_ref_num)  - OrderKey  
     absl::flat_hash_map<uint64_t, OrderKey> nq_itch_refnum_ordkey_; // NQ ITCH(order_ref_num) - OrderKey  
     absl::flat_hash_map<uint64_t, uint32_t> sympack_symid_;

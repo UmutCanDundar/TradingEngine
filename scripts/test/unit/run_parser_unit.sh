@@ -3,11 +3,15 @@ set -e
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 TEST_BIN="$ROOT/build/test/unit/parser/parser_dispatch_unit"
+RESULT_DIR="$ROOT/test/_results/unit"
+RESULTS="$RESULT_DIR/parser_results.txt"
+
+mkdir -p "$RESULT_DIR"
 
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "\n${YELLOW}Running parsers unit test...${NC}"
+echo -e "\n${YELLOW}Running parser unit test...${NC}"
 
 cd $ROOT
-"$TEST_BIN"
+"$TEST_BIN" 2>&1 | tee -a "$RESULTS"

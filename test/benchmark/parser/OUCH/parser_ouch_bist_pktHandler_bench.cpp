@@ -29,11 +29,9 @@ public:
 
     std::vector<RxPacket*> pkts;
     int pkt_case;
-    bool sbt_ret = true;
+    bool sbt_ret;
     std::atomic<bool> running{true};
-
-    std::atomic<bool> stop{false};
-    std::thread consumer;
+    std::vector<RxPacket*> spare_pkts;
     
     PendingQueue<RxPacket *, 256> pend_read;
     uint8_t sess_index;
@@ -41,8 +39,11 @@ public:
 public:
     void SetUp(const ::benchmark::State& st) 
     {
-        stop.store(false, std::memory_order_relaxed);
+        pin_to_cpu(6);
         pkts.clear();
+        
+        for(int i = 0; i < 2; i++)
+            spare_pkts.push_back(new RxPacket());
 
         txPkt_pool = std::make_unique<TxPacketPoolManager>();
         sess_mngr   = std::make_unique<SessionManager>(); 
@@ -80,33 +81,10 @@ public:
             __builtin_unreachable();
         }
 
-        consumer = std::thread([&]
-        {
-            pin_to_cpu(15);        
-
-            RxPacket* pkt;
-            RxPacket* neWpkt = new RxPacket();
-            
-            while(!stop.load(std::memory_order_acquire))
-            {
-                if (!receiver_to_parser.empty())
-                {
-                    receiver_to_parser.pop(pkt);
-                    network_io->free_pkt_list_.push(neWpkt);
-                }
-                else
-                { 
-                    _mm_pause();  
-                }
-            }
-        });
     }
 
     void TearDown(const ::benchmark::State& st) 
     {
-        stop.store(true, std::memory_order_release);
-        consumer.join();
-
         network_io.reset();
         login.reset();
         sbt.reset();
@@ -117,12 +95,9 @@ public:
 
 BENCHMARK_DEFINE_F(BM_SBTPktHandler, DiffCase)(benchmark::State& state)
 {
-    pin_to_cpu(6);
-
-    auto queue_push = state.range(1);
-
+    
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
     
     for(auto _ : state)
     {
@@ -141,10 +116,7 @@ BENCHMARK_DEFINE_F(BM_SBTPktHandler, DiffCase)(benchmark::State& state)
         for(auto* pkt : pkts)
         {
             sbt_ret = network_io->SBTPacketHandler(pkt, pkt->len, pend_read, sess_index);
-            if(queue_push && sbt_ret) 
-            { 
-                receiver_to_parser.push(pkt);
-            }
+            if(sbt_ret) receiver_to_parser.push(pkt);
         }
 
         uint64_t end = rdtsc_end();
@@ -154,11 +126,17 @@ BENCHMARK_DEFINE_F(BM_SBTPktHandler, DiffCase)(benchmark::State& state)
         state.SetIterationTime(elapsed * 1e-9);
         benchmark::ClobberMemory();
         latencies.push_back(end - start);
-
-         while(!receiver_to_parser.empty()) _mm_pause();
      
+        if(pkt_case == 3)
+        {
+            for(auto* p : spare_pkts)
+                network_io->free_pkt_list_.push(p);
+        }
+
+        RxPacket* pkt;
+        while(receiver_to_parser.pop(pkt));
     }
-   
+
     if (latencies.empty()) return;
 
     std::sort(latencies.begin(), latencies.end());
@@ -179,11 +157,6 @@ BENCHMARK_DEFINE_F(BM_SBTPktHandler, DiffCase)(benchmark::State& state)
     state.counters["|max_cycles|"] = latencies.back();
 }
 
-BENCHMARK_REGISTER_F(BM_SBTPktHandler, DiffCase)->Args({1, true})->UseManualTime()->Name("BM_SBTPktHandler_QueuePush_best");
-BENCHMARK_REGISTER_F(BM_SBTPktHandler, DiffCase)->Args({1, false})->UseManualTime()->Name("BM_SBTPktHandler_noQueuePush_best");
-
-BENCHMARK_REGISTER_F(BM_SBTPktHandler, DiffCase)->Args({2, true})->UseManualTime()->Name("BM_SBTPktHandler_QueuePush_normal");
-BENCHMARK_REGISTER_F(BM_SBTPktHandler, DiffCase)->Args({2, false})->UseManualTime()->Name("BM_SBTPktHandler_noQueuePush_normal");
-
-BENCHMARK_REGISTER_F(BM_SBTPktHandler, DiffCase)->Args({3, true})->UseManualTime()->Name("BM_SBTPktHandler_QueuePush_worst");
-BENCHMARK_REGISTER_F(BM_SBTPktHandler, DiffCase)->Args({3, false})->UseManualTime()->Name("BM_SBTPktHandler_noQueuePush_worst");
+BENCHMARK_REGISTER_F(BM_SBTPktHandler, DiffCase)->Arg(1)->UseManualTime()->Name("BM_SBTPktHandler_best");
+BENCHMARK_REGISTER_F(BM_SBTPktHandler, DiffCase)->Arg(2)->UseManualTime()->Name("BM_SBTPktHandler_normal");
+BENCHMARK_REGISTER_F(BM_SBTPktHandler, DiffCase)->Arg(3)->UseManualTime()->Name("BM_SBTPktHandler_worst");

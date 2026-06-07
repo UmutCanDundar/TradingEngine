@@ -7,7 +7,9 @@
 #include <ctime>
 
 Builder_FIX::Builder_FIX(SessionManager &sess_mngr) noexcept : sess_mngr_(sess_mngr)
-{  }
+{ 
+    init_time_table(); 
+}
 
 Buffer_FIX *Builder_FIX::build_resend(const Buffer_FIX *org_buf, uint8_t session_index) noexcept
 {
@@ -194,191 +196,54 @@ char* Builder_FIX::finalizeChecksum(char *buf, size_t len) noexcept
     return buf;
 }
 
-// std::pair<const char *, const size_t> Builder_FIX::transact_time() noexcept
-// {
-//     static thread_local char ts_buf[32];
-
-//     using namespace std::chrono;
-
-//     const auto now = system_clock::now();
-//     const std::time_t t = system_clock::to_time_t(now);
-
-//     std::tm tm{};
-//     gmtime_r(&t, &tm);
-
-//     const auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
-    
-//     const int written = std::snprintf(
-//         ts_buf, sizeof(ts_buf),
-//         "%04d%02d%02d-%02d:%02d:%02d.%03d",
-//         tm.tm_year + 1900, 
-//         tm.tm_mon + 1, 
-//         tm.tm_mday,
-//         tm.tm_hour, 
-//         tm.tm_min, 
-//         tm.tm_sec,
-//         static_cast<int>(ms.count())
-//     );
-
-//     return {ts_buf, static_cast<size_t>(written)};
-// }
-
-// static inline std::pair<const char*, size_t> epoch_to_transact_time(uint64_t ns) noexcept
-// {
-//     static thread_local char ts_buf[32];
-
-//     using namespace std::chrono;
-
-//     const system_clock::time_point tp{nanoseconds(ns)};
-//     const std::time_t t = system_clock::to_time_t(tp);
-
-//     std::tm tm{};
-//     gmtime_r(&t, &tm);
-
-//     const uint32_t ms = (ns / 1'000'000ULL) % 1000;
-
-//     const int written = std::snprintf(
-//         ts_buf, sizeof(ts_buf),
-//         "%04d%02d%02d-%02d:%02d:%02d.%03u",
-//         tm.tm_year + 1900,
-//         tm.tm_mon + 1,
-//         tm.tm_mday,
-//         tm.tm_hour,
-//         tm.tm_min,
-//         tm.tm_sec,
-//         ms
-//     );
-
-//     return {ts_buf, static_cast<size_t>(written)};
-// }
-
-std::pair<const char*, const size_t> Builder_FIX::transact_time() noexcept
+std::pair<const char*, size_t> Builder_FIX::transact_time() noexcept
 {
-    static thread_local char ts_buf[32];
-
     using namespace std::chrono;
 
-    const auto now = system_clock::now();
-    const std::time_t t = system_clock::to_time_t(now);
+    static thread_local char ts_buf[32];
 
-    std::tm tm{};
-    localtime_r(&t, &tm);
+    auto now = system_clock::now();
+    auto ts  = system_clock::to_time_t(now);
 
-    const auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+    uint32_t sec_of_day = ts % 86400;
 
     char* p = ts_buf;
 
-    // YYYY
-    const int y = tm.tm_year + 1900;
-    *p++ = '0' + (y / 1000) % 10;
-    *p++ = '0' + (y / 100) % 10;
-    *p++ = '0' + (y / 10) % 10;
-    *p++ = '0' + (y % 10);
-
-    // MM
-    const int mo = tm.tm_mon + 1;
-    *p++ = '0' + (mo / 10);
-    *p++ = '0' + (mo % 10);
-
-    // DD
-    const int d = tm.tm_mday;
-    *p++ = '0' + (d / 10);
-    *p++ = '0' + (d % 10);
-
-    *p++ = '-';
-
-    // HH
-    const int h = tm.tm_hour;
-    *p++ = '0' + (h / 10);
-    *p++ = '0' + (h % 10);
-
-    *p++ = ':';
-
-    // MM
-    const int m = tm.tm_min;
-    *p++ = '0' + (m / 10);
-    *p++ = '0' + (m % 10);
-
-    *p++ = ':';
-
-    // SS
-    const int s = tm.tm_sec;
-    *p++ = '0' + (s / 10);
-    *p++ = '0' + (s % 10);
+    memcpy(p, g_second_table[sec_of_day], 17);
+    p += 17;
 
     *p++ = '.';
 
-    // mmm
-    const int milli = static_cast<int>(ms.count());
-    *p++ = '0' + (milli / 100);
-    *p++ = '0' + (milli / 10) % 10;
-    *p++ = '0' + (milli % 10);
+    auto ms = duration_cast<milliseconds>(now.time_since_epoch()).count() % 1000;
 
-    return {ts_buf, static_cast<size_t>(p - ts_buf)};
-}
-
-std::pair<const char*, const size_t> Builder_FIX::epoch_to_transact_time(uint64_t ns) noexcept
-{
-    static thread_local char ts_buf[32];
-
-    using namespace std::chrono;
-
-    const system_clock::time_point tp{nanoseconds(ns)};
-    const std::time_t t = system_clock::to_time_t(tp);
-
-    std::tm tm{};
-    localtime_r(&t, &tm);
-
-    const uint32_t ms = (ns / 1'000'000ULL) % 1000;
-
-    char* p = ts_buf;
-
-    // YYYY
-    int y = tm.tm_year + 1900;
-    *p++ = '0' + (y / 1000) % 10;
-    *p++ = '0' + (y / 100) % 10;
-    *p++ = '0' + (y / 10) % 10;
-    *p++ = '0' + (y % 10);
-
-    // MM
-    int mo = tm.tm_mon + 1;
-    *p++ = '0' + (mo / 10);
-    *p++ = '0' + (mo % 10);
-
-    // DD
-    int d = tm.tm_mday;
-    *p++ = '0' + (d / 10);
-    *p++ = '0' + (d % 10);
-
-    *p++ = '-';
-
-    // HH
-    int h = tm.tm_hour;
-    *p++ = '0' + (h / 10);
-    *p++ = '0' + (h % 10);
-
-    *p++ = ':';
-
-    // MM
-    int m = tm.tm_min;
-    *p++ = '0' + (m / 10);
-    *p++ = '0' + (m % 10);
-
-    *p++ = ':';
-
-    // SS
-    int s = tm.tm_sec;
-    *p++ = '0' + (s / 10);
-    *p++ = '0' + (s % 10);
-
-    *p++ = '.';
-
-    // ms
     *p++ = '0' + (ms / 100);
     *p++ = '0' + (ms / 10) % 10;
     *p++ = '0' + (ms % 10);
 
-    return {ts_buf, static_cast<size_t>(p - ts_buf)};
+    return {ts_buf, (size_t)(p - ts_buf)};
+}
+
+std::pair<const char*, size_t> Builder_FIX::epoch_to_transact_time(uint64_t ns) noexcept
+{
+    static thread_local char ts_buf[32];
+
+    uint64_t sec = ns / 1'000'000'000ULL;
+    uint32_t ms  = (ns / 1'000'000ULL) % 1000;
+
+    uint32_t sec_of_day = sec % 86400;
+
+    char* p = ts_buf;
+
+    memcpy(p, g_second_table[sec_of_day], 17);
+    p += 17;
+
+    *p++ = '.';
+
+    *p++ = '0' + (ms / 100);
+    *p++ = '0' + (ms / 10) % 10;
+    *p++ = '0' + (ms % 10);
+
+    return {ts_buf, (size_t)(p - ts_buf)};
 }
 
 char* Builder_FIX::placeIntValue(uint32_t num, char *buf) noexcept
@@ -551,3 +416,137 @@ std::pair<const char *, size_t> Builder_FIX::findValue(const char *data, size_t 
 
     return {nullptr, 0};
 }
+
+
+
+
+// old versions of transact_time
+
+// std::pair<const char*, const size_t> Builder_FIX::transact_time() noexcept
+// {
+//     static thread_local char ts_buf[32];
+
+//     using namespace std::chrono;
+
+//     const auto now = system_clock::now();
+//     const std::time_t t = system_clock::to_time_t(now);
+
+//     std::tm tm{};
+//     localtime_r(&t, &tm);
+
+//     const auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+
+//     char* p = ts_buf;
+
+//     // YYYY
+//     const int y = tm.tm_year + 1900;
+//     *p++ = '0' + (y / 1000) % 10;
+//     *p++ = '0' + (y / 100) % 10;
+//     *p++ = '0' + (y / 10) % 10;
+//     *p++ = '0' + (y % 10);
+
+//     // MM
+//     const int mo = tm.tm_mon + 1;
+//     *p++ = '0' + (mo / 10);
+//     *p++ = '0' + (mo % 10);
+
+//     // DD
+//     const int d = tm.tm_mday;
+//     *p++ = '0' + (d / 10);
+//     *p++ = '0' + (d % 10);
+
+//     *p++ = '-';
+
+//     // HH
+//     const int h = tm.tm_hour;
+//     *p++ = '0' + (h / 10);
+//     *p++ = '0' + (h % 10);
+
+//     *p++ = ':';
+
+//     // MM
+//     const int m = tm.tm_min;
+//     *p++ = '0' + (m / 10);
+//     *p++ = '0' + (m % 10);
+
+//     *p++ = ':';
+
+//     // SS
+//     const int s = tm.tm_sec;
+//     *p++ = '0' + (s / 10);
+//     *p++ = '0' + (s % 10);
+
+//     *p++ = '.';
+
+//     // mmm
+//     const int milli = static_cast<int>(ms.count());
+//     *p++ = '0' + (milli / 100);
+//     *p++ = '0' + (milli / 10) % 10;
+//     *p++ = '0' + (milli % 10);
+
+//     return {ts_buf, static_cast<size_t>(p - ts_buf)};
+// }
+
+// std::pair<const char*, const size_t> Builder_FIX::epoch_to_transact_time(uint64_t ns) noexcept
+// {
+//     static thread_local char ts_buf[32];
+
+//     using namespace std::chrono;
+
+//     const system_clock::time_point tp{nanoseconds(ns)};
+//     const std::time_t t = system_clock::to_time_t(tp);
+
+//     std::tm tm{};
+//     localtime_r(&t, &tm);
+
+//     const uint32_t ms = (ns / 1'000'000ULL) % 1000;
+
+//     char* p = ts_buf;
+
+//     // YYYY
+//     int y = tm.tm_year + 1900;
+//     *p++ = '0' + (y / 1000) % 10;
+//     *p++ = '0' + (y / 100) % 10;
+//     *p++ = '0' + (y / 10) % 10;
+//     *p++ = '0' + (y % 10);
+
+//     // MM
+//     int mo = tm.tm_mon + 1;
+//     *p++ = '0' + (mo / 10);
+//     *p++ = '0' + (mo % 10);
+
+//     // DD
+//     int d = tm.tm_mday;
+//     *p++ = '0' + (d / 10);
+//     *p++ = '0' + (d % 10);
+
+//     *p++ = '-';
+
+//     // HH
+//     int h = tm.tm_hour;
+//     *p++ = '0' + (h / 10);
+//     *p++ = '0' + (h % 10);
+
+//     *p++ = ':';
+
+//     // MM
+//     int m = tm.tm_min;
+//     *p++ = '0' + (m / 10);
+//     *p++ = '0' + (m % 10);
+
+//     *p++ = ':';
+
+//     // SS
+//     int s = tm.tm_sec;
+//     *p++ = '0' + (s / 10);
+//     *p++ = '0' + (s % 10);
+
+//     *p++ = '.';
+
+//     // ms
+//     *p++ = '0' + (ms / 100);
+//     *p++ = '0' + (ms / 10) % 10;
+//     *p++ = '0' + (ms % 10);
+
+//     return {ts_buf, static_cast<size_t>(p - ts_buf)};
+// }

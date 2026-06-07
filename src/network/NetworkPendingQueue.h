@@ -32,7 +32,7 @@ public:
     {
         size_t next = (tail + 1) & (N - 1);
         if (next == head)
-            return false; // full
+            return false; 
         buf[tail] = b;
         tail = next;
         return true;
@@ -41,7 +41,7 @@ public:
     inline bool pop(T &b) noexcept
     {
         if (head == tail)
-            return false; // empty
+            return false;
         b = buf[head];
         head = (head + 1) & (N - 1);
         return true;
@@ -65,7 +65,7 @@ public:
     inline T back() noexcept
     {
         if (head == tail)
-            return nullptr; // empty
+            return nullptr; 
 
         size_t back = (head == 0) ? head : (tail - 1);
         return buf[back];
@@ -74,7 +74,7 @@ public:
     inline T front() noexcept
     {
         if (head == tail)
-            return nullptr; // empty
+            return nullptr; 
 
         return buf[head];
     }

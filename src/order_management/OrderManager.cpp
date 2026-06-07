@@ -15,7 +15,7 @@ OrderManager::OrderManager(spscMessageQueue_t &parser_to_store, spscOrderQueue_t
    market_orders_.reserve(ORDER_MAP_CAPACITY);
    our_orders_.reserve(ORDER_MAP_CAPACITY);
    our_orders_wtokenkey_.reserve(ORDER_MAP_CAPACITY);
-   awaitingAck_orders_.reserve(PENDING_ORDER_SIZE);
+   // awaitingAck_orders_.reserve(PENDING_ORDER_SIZE);
    nq_ouch_refnum_ordkey_.reserve(ORDER_MAP_CAPACITY);
    
    for (size_t i = MARKETORDER_LAST_INDEX; i < ORDER_POOL_CAPACITY;i++)
@@ -73,7 +73,8 @@ bool OrderManager::store() noexcept
 
 void OrderManager::add_awaitingAck_order(Order &order) noexcept
 {
-   awaitingAck_orders_.emplace(order.client_order_id, &order);
+   // awaitingAck_orders_.emplace(order.client_order_id, &order);
+   awaitingAck_orders_.insert(order.client_order_id, &order);
    pending_orders_[static_cast<size_t>(order.venue)][pending_next_slot++ & (PENDING_ORDER_SIZE - 1)].store(&order, std::memory_order_release);
 }
 
@@ -224,9 +225,9 @@ void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) no
    switch (msg->msg_type)
    {
    case '8': // ExecutionReport
-      if (hashtables_.is_duplicate_exec_id(msg->exec_id))
-         return;
-
+      // if (hashtables_.is_duplicate_exec_id(msg->exec_id)) // Commented out for tests since we use same order flow for every execution report in FIX session. 
+      //    return;
+      
       if (allowed_exec_type[static_cast<uint8_t>(msg->exec_type)])
          filler_fix_.fill_fix_exec_report(*order, *msg);
       else
@@ -241,7 +242,7 @@ void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) no
 
    // order->canModify = 0x00;
    awaitingAck_orders_.erase(client_order_id); // In FIX, ClOrdID is unique for every action (New/Replace/Cancel).
-
+    
    store_to_db_.push(fixMsg);
    store_to_db_.push(order);
    store_to_risk_.push(order);
@@ -628,7 +629,6 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                         if (order->pre_user_ref_num) 
                            nq_ouch_refnum_ordkey_.erase(order->pre_user_ref_num);
                         nq_ouch_refnum_ordkey_.insert_or_assign(order->user_ref_num, order_key);
-
                         awaitingAck_orders_.erase(client_order_id);
                      }
                      else if (UNLIKELY(order->canModify == 0x00))

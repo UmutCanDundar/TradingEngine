@@ -69,7 +69,7 @@ int main()
 
     consumer2 = std::thread([&]
     {
-        pin_to_cpu(4);
+        pin_to_cpu(2);
         Order* order;
         while (!stop2.load(std::memory_order_acquire))
             if (!store_to_strategy.pop(order)) _mm_pause();
@@ -77,7 +77,7 @@ int main()
 
     consumer3 = std::thread([&]
     {
-        pin_to_cpu(6);
+        pin_to_cpu(4);
         DbData_t DbData;
         while (!stop3.load(std::memory_order_acquire))
             if (!store_to_db.pop(DbData)) _mm_pause();
@@ -96,7 +96,7 @@ int main()
         order->protocol        = Protocol::OUCH;
         order->user_ref_num    = test_data_ordMngr::nasdaq_acc.user_ref_num;
         order->symbol          = {"AAPL"};
-        order->client_order_id = absl::Hash<std::string_view>{}(test_data_ordMngr::nasdaq_acc.cl_ord_id);
+        order->client_order_id    = absl::Hash<std::string_view>{}(std::string_view{test_data_ordMngr::nasdaq_acc.cl_ord_id, 14});
         std::strncpy(order->client_order_token.data(), test_data_ordMngr::nasdaq_acc.cl_ord_id, sizeof(test_data_ordMngr::nasdaq_acc.cl_ord_id));
 
         order_manager->add_awaitingAck_order(*order);
@@ -107,11 +107,16 @@ int main()
         for (size_t j = 1; j < 4; j++)
             parser_to_store.push(ord_manager_traffic[j]);
 
+        refresh_awaiting_map();
         asm volatile("" ::: "memory");
 
         bool processing = true;
         while (processing)
             processing = order_manager->store();
+
+        for(auto& [key, ord] : order_manager->our_orders_)
+            store_to_strategy_free_slot.push(ord);
+        order_manager->our_orders_.clear();
     };
 
     constexpr int WARMUP = 10'000;

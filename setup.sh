@@ -78,11 +78,6 @@ else
         "$THIRD_PARTY_DIR/clickhouse/clickhouse-cpp"
 fi
 
-# ── folly ─────────────────────────────────────────────────────────────────────
-clone_or_skip "folly" \
-    "https://github.com/facebook/folly" \
-    "$THIRD_PARTY_DIR/folly"
-
 echo ""
 info "All dependencies ready. You can now run: ./build.sh"
 echo ""

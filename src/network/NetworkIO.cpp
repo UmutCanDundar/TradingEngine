@@ -17,7 +17,6 @@
 #include <cerrno>
 #include <cstring>
 
-
 NetworkIO::NetworkIO(spscRxPacketQueue_t &receiver_to_parser, spscTxPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, const std::atomic<bool>& running_engine) noexcept
    :  receiver_to_parser_(receiver_to_parser),
       builder_to_sender_(builder_to_sender),
@@ -408,12 +407,13 @@ void NetworkIO::recv_send() noexcept
          int sock = socks_[index];
          auto& states = socket_states_[index];
 
-         if(UNLIKELY(sock == -1)) // Double-check for closed socketsa
+         if(UNLIKELY(sock == -1)) 
             continue;
 
          //TxPacket sending
          if (events[i].events & EPOLLOUT) // Check if event is writable (EPOLLOUT) ---
          {
+            
             if(UNLIKELY(states.connection_pending))
             {
                handleEINPROGRESS(sock,states,index);
@@ -514,10 +514,9 @@ void NetworkIO::recv_send() noexcept
                      
                      if (pend_read.back() && !(pend_read.back())->partial)
                        pend_read.swap_last_two();
-                     
-                     break;
                   }
                }
+               break;
             }
          }
       }
@@ -638,7 +637,7 @@ bool NetworkIO::SBTPacketHandler(RxPacket *rxPkt, const size_t recv_len, Pending
          pend_read.push(rxPkt_pending);
       
    }
-   end_of_loop:;
+   end_of_loop:
 
    if(data_offset >= recv_len) 
       return false;

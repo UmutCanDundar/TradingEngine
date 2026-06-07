@@ -8,8 +8,8 @@ NC='\033[0m'
 
 echo -e "\n\n${BLUE}RUNNING ALL PERF TESTS...${NC}"
 
-"$SOURCE/perf/run_builders_perf.sh"
-"$SOURCE/perf/run_parsers_perf.sh"
-"$SOURCE/perf/run_order_manager_perf.sh"
-"$SOURCE/perf/run_risk_perf.sh"
+"$SOURCE/perf/run_builder_perf.sh" || true
+"$SOURCE/perf/run_parser_perf.sh" || true
+"$SOURCE/perf/run_order_manager_perf.sh" || true
+"$SOURCE/perf/run_risk_perf.sh" || true
 

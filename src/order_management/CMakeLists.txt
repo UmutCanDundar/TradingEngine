@@ -12,7 +12,7 @@ target_link_libraries(order_management
         core
         ab_hash
         ab_flat_hash_map
-        folly
+        custom_map
         boost_headers
         database
         fillers

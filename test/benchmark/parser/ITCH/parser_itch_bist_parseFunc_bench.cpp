@@ -24,7 +24,7 @@ static void BM_Parser_ITCH_BIST_parseFunc(benchmark::State& state)
     Parser_ITCH_BIST parser{};
 
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
 
     for (auto _ : state)
     {

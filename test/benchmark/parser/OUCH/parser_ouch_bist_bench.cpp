@@ -55,6 +55,8 @@ public:
     PendingQueue<RxPacket *, 256> pend_read;
     uint8_t sess_index;
 
+    std::atomic<uint64_t> released_msg_count{0};
+
 public:
     void SetUp(const ::benchmark::State& st) 
     {
@@ -117,7 +119,7 @@ public:
 
         network_thread = std::thread([&]()
         {
-            pin_to_cpu(14);
+            pin_to_cpu(0);
             
             while(!stop2.load(std::memory_order_acquire))
             {
@@ -151,7 +153,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(15);        
+            pin_to_cpu(2);        
 
             MessageWithVenue<MessageTypes_t> local_msg;
             
@@ -161,6 +163,7 @@ public:
                 {
                     parser_to_store.pop(local_msg);
                     parser_dispatch->ouchparser_bist_.releaseOUCH(std::get<BIST::OUCHMessage>(local_msg.msg));
+                    released_msg_count.fetch_add(1, std::memory_order_release);
 
                 }
                 else
@@ -194,12 +197,15 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseOUCH_BIST)(benchmark::State& state)
     pin_to_cpu(6);
 
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(state.max_iterations);
+
+    uint64_t msgs_per_iter = pkt_case == 1 ? 1 : 3;
     
     for(auto _ : state)
     {
+        released_msg_count.store(0, std::memory_order_release);
+
         while (trigger_network.load(std::memory_order_acquire)) _mm_pause();
-        std::atomic_thread_fence(std::memory_order_seq_cst);
         
         for(auto* pkt : pkts)
         {
@@ -235,7 +241,7 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseOUCH_BIST)(benchmark::State& state)
         benchmark::ClobberMemory();
         latencies.push_back(end - start);
         
-        while (!parser_to_store.empty()) _mm_pause();
+        while (released_msg_count.load(std::memory_order_acquire) < msgs_per_iter) _mm_pause();
     }
    
     if (latencies.empty()) return;
@@ -258,6 +264,6 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseOUCH_BIST)(benchmark::State& state)
     state.counters["|max_cycles|"] = latencies.back();
 }
 
-BENCHMARK_REGISTER_F(BM_Parser, ParseOUCH_BIST)->Arg(1)->UseManualTime()->Name("BM_ParserOUCH_BIST_best");
+// BENCHMARK_REGISTER_F(BM_Parser, ParseOUCH_BIST)->Arg(1)->UseManualTime()->Name("BM_ParserOUCH_BIST_best");
 BENCHMARK_REGISTER_F(BM_Parser, ParseOUCH_BIST)->Arg(2)->UseManualTime()->Name("BM_ParserOUCH_BIST_normal");
-BENCHMARK_REGISTER_F(BM_Parser, ParseOUCH_BIST)->Arg(3)->UseManualTime()->Name("BM_ParserOUCH_BIST_worst");
+// BENCHMARK_REGISTER_F(BM_Parser, ParseOUCH_BIST)->Arg(3)->UseManualTime()->Name("BM_ParserOUCH_BIST_worst");

@@ -110,7 +110,7 @@ int main()
 
     consumer2 = std::thread([&]
     {
-        pin_to_cpu(4);
+        pin_to_cpu(2);
         OrderWithRejectReason orderWRR;
         while (!stop2.load(std::memory_order_acquire))
             if (!risk_to_strategy.pop(orderWRR)) _mm_pause();
@@ -142,7 +142,7 @@ int main()
     for (int i = 0; i < WARMUP; i++)
         run();
 
-    constexpr int N = 5'000'000;
+    constexpr int N = 10'000'000;
     for (int i = 0; i < N; i++)
         run();
 

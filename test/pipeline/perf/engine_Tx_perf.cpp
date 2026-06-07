@@ -45,7 +45,7 @@ struct FakeTCPServer
 
         accept_thread = std::thread([this]()
         {
-            pin_to_cpu(15);
+            pin_to_cpu(4);
             sockaddr_in client_addr{};
             socklen_t len = sizeof(client_addr);
             accepted.store(true, std::memory_order_seq_cst);
@@ -67,7 +67,7 @@ struct FakeTCPServer
     void recv_from_client()
     {
         uint8_t buf[4096];
-        ::recv(client_fd, buf, sizeof(buf), 0);
+        while (::recv(client_fd, buf, sizeof(buf), MSG_DONTWAIT) > 0);
     }
 
     void stop_server()
@@ -80,7 +80,7 @@ struct FakeTCPServer
 
 int main()
 {
-    pin_to_cpu(6);
+    pin_to_cpu(6, 0);
     Logger::Init();
 
     auto fix_server       = std::make_unique<FakeTCPServer>(FAKE_FIX_PORT);
@@ -127,8 +127,9 @@ int main()
     auto run_case = [&](int ord_case)
     {
         uint64_t before = engine->network_io_.pipeline_seq.load(std::memory_order_acquire);
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-
+        
+        asm volatile("" ::: "memory");
+        
         switch (ord_case)
         {
             case 1: engine->risk_.strategy_to_risk_.push(test_data_builder::fix_new_order2);    break;
@@ -136,7 +137,7 @@ int main()
             case 3: engine->risk_.strategy_to_risk_.push(test_data_builder::NQouch_new_order);  break;
             default: __builtin_unreachable();
         }
-
+        
         while (engine->network_io_.pipeline_seq.load(std::memory_order_acquire) <= before)
             _mm_pause();
 

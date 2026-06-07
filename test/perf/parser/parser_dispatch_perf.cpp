@@ -15,7 +15,7 @@
 
 int main()
 {
-    pin_to_cpu(6);
+    pin_to_cpu(6, 0);
 
     std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<SessionManager>      sess_mngr;
@@ -85,7 +85,7 @@ int main()
 
     network_thread = std::thread([&]
     {
-        pin_to_cpu(4);
+        pin_to_cpu(0);
         while (!stop2.load(std::memory_order_acquire))
         {
             if (trigger_network.load(std::memory_order_acquire))
@@ -113,7 +113,7 @@ int main()
 
     consumer = std::thread([&]
     {
-        pin_to_cpu(0);
+        pin_to_cpu(2);
         MessageWithVenue<MessageTypes_t> local_msg;
         FIXSessionMessage* sesMsg;
         while (!stop.load(std::memory_order_acquire))
@@ -141,10 +141,9 @@ int main()
     });
 
     auto run = [&]()
-    {
+    {   
         trigger_network.store(true, std::memory_order_release);
         while (trigger_network.load(std::memory_order_acquire)) _mm_pause();
-        std::atomic_thread_fence(std::memory_order_seq_cst);
 
         seq_fix.set_expected_seq(1);
         asm volatile("" ::: "memory");

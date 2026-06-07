@@ -86,6 +86,7 @@ public:
                        using T = std::remove_pointer_t<decltype(ptr)>;
                        release<T>(ptr); },
                    ouchMsg);
+        
     }
 
     inline BIST::OUCHMessage parse(const char *data) noexcept

@@ -39,7 +39,7 @@ void signal_handler(int)
 
 int main()
 {
-    configure_affinity(13);
+    configure_affinity(14);
     lock_memory();
 
     std::signal(SIGINT, signal_handler);

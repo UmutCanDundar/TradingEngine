@@ -73,7 +73,7 @@ struct ExchangeClientInfo_local
 
 struct Buffer_OBT
 {
-    char*    msg;
+    char* msg;
     uint16_t len; //SBT HEADER + MSG SIZE
 };
 

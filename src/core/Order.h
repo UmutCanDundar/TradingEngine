@@ -115,7 +115,7 @@ struct alignas(64) Order // 192B
    
    // 🟠 LOOKUP & ROUTING
    uint64_t order_id = 0;         // Exchange-assigned unique order ID (ITCH and Hash-based FIX)
-   uint64_t client_order_id = 0;  // Hash_based rclient_order_token
+   uint64_t client_order_id = 0;  // Hash_based client_order_token
    // Cache-Line 1
    
    uint64_t timestamp = 0;                     
@@ -147,5 +147,5 @@ struct alignas(64) Order // 192B
    Order& operator=(Order&&) = delete;
 };
 
-inline constexpr size_t ORDER_QUEUE_CAPACITY = 1024;
+inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;
 using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;

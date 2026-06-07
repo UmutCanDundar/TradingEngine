@@ -69,7 +69,7 @@ int main()
 
     consumer2 = std::thread([&]
     {
-        pin_to_cpu(4);
+        pin_to_cpu(2);
         Order* order;
         while (!stop2.load(std::memory_order_acquire))
             if (!store_to_strategy.pop(order)) _mm_pause();
@@ -77,7 +77,7 @@ int main()
 
     consumer3 = std::thread([&]
     {
-        pin_to_cpu(6);
+        pin_to_cpu(4);
         DbData_t DbData;
         while (!stop3.load(std::memory_order_acquire))
             if (!store_to_db.pop(DbData)) _mm_pause();

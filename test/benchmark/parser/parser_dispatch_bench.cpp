@@ -96,7 +96,7 @@ public:
 
         network_thread = std::thread([&]()
         {
-            pin_to_cpu(14);
+            pin_to_cpu(0);
             
             while(!stop2.load(std::memory_order_acquire))
             {
@@ -135,7 +135,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(15);        
+            pin_to_cpu(2);        
 
             MessageWithVenue<MessageTypes_t> local_msg;
             FIXSessionMessage* sesMsg;   
@@ -205,14 +205,13 @@ BENCHMARK_DEFINE_F(BM_Parser, MixedTraffic)(benchmark::State& state)
     auto& seq_fix = sess_mngr->getSessionState(sess_index_fix)->fix;
     
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
 
     for(auto _ : state)
     {          
         trigger_network.store(true, std::memory_order_release);
 
         while (trigger_network.load(std::memory_order_acquire)) _mm_pause();
-        std::atomic_thread_fence(std::memory_order_seq_cst);
 
         seq_fix.set_expected_seq(1);
 

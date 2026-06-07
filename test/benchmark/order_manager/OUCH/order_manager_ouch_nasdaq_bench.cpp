@@ -48,7 +48,7 @@ public:
         
         Order* order;
         while(store_to_strategy_free_slot.pop(order)) {}
-    
+
         hashtables    = std::make_unique<HashTables>();
         marketbook    = std::make_unique<MarketBook>(*hashtables);
     
@@ -89,7 +89,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(13);        
+            pin_to_cpu(0);        
 
             Order* order; 
             
@@ -104,7 +104,7 @@ public:
 
         consumer2 = std::thread([&]
         {
-            pin_to_cpu(14);        
+            pin_to_cpu(2);        
 
             Order* order; 
             
@@ -119,7 +119,7 @@ public:
 
         consumer3 = std::thread([&]
         {
-            pin_to_cpu(15);        
+            pin_to_cpu(4);        
 
             Order* order; 
             
@@ -150,7 +150,7 @@ public:
             order->protocol           = Protocol::OUCH;
             order->user_ref_num       = test_data_ordMngr::nasdaq_acc.user_ref_num;
             order->symbol             = {"AAPL"};
-            order->client_order_id    = absl::Hash<std::string_view>{}(test_data_ordMngr::nasdaq_acc.cl_ord_id);
+            order->client_order_id    = absl::Hash<std::string_view>{}(std::string_view{test_data_ordMngr::nasdaq_acc.cl_ord_id, 14});
             std::strncpy(order->client_order_token.data(), test_data_ordMngr::nasdaq_acc.cl_ord_id, sizeof(test_data_ordMngr::nasdaq_acc.cl_ord_id));
 
             order_manager->add_awaitingAck_order(*order);
@@ -170,6 +170,7 @@ public:
         marketbook.reset();
         hashtables.reset();
 
+      
     }
 };
 
@@ -178,7 +179,7 @@ BENCHMARK_DEFINE_F(BM_OrderManager, OuchNasdaq)(benchmark::State& state)
     pin_to_cpu(6);
 
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
 
     for(auto _ : state)
     {
@@ -207,7 +208,7 @@ BENCHMARK_DEFINE_F(BM_OrderManager, OuchNasdaq)(benchmark::State& state)
         for(auto& [key, ord] : order_manager->our_orders_)
             store_to_strategy_free_slot.push(ord);
         order_manager->our_orders_.clear();
-    
+
     }
    
     if (latencies.empty()) return;

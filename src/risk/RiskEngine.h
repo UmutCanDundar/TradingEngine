@@ -132,22 +132,18 @@ struct SymbolRisk // Fields are grouped by similar access patterns to optimize c
     std::atomic<int32_t> open_orders_count{0};
     uint8_t pad1[52];
 
-    // Cache line 2 — written on fill (Partial/Filled/Cancelled...)  
-    alignas(64)
-    std::atomic<int64_t> net_position{0};
-    std::atomic<int32_t> avg_entry_price{0};
-    int64_t cost_basis_scaled{0};
-    int64_t realized_pnl{0};
-    uint8_t pad2[32];
-
-    // Cache line 3 — written on market data update (ITCH)
+    // Cache line 2 — written on fill (Partial/Filled/Cancelled...) and ITCH updates(best bid/ask, unrealized PnL)
     alignas(64)
     std::atomic<int64_t> best_bid{0};
     std::atomic<int64_t> best_ask{0};
     int64_t unrealized_pnl{0};
-    uint8_t pad3[40];
+    int64_t cost_basis_scaled{0};
+    int64_t realized_pnl{0};
+    std::atomic<int64_t> net_position{0};
+    std::atomic<int32_t> avg_entry_price{0};
+    uint8_t pad2[12];
 
-    // Cache line 4 — rate limiter, check thread only
+    // Cache line 3 — rate limiter, check thread only
     alignas(64) 
     OrderRateLimit orderratelimit;
     CancelRateLimit cancelratelimit;
@@ -458,13 +454,14 @@ private:
     
 
     inline uint32_t check_acc_status(AccountStatus status) noexcept
-        {
-            if (UNLIKELY(status != AccountStatus::Active))
-                return static_cast<uint32_t>(RiskRejectReason::RestrictedAccountStatus);
+    {
+        if (UNLIKELY(status != AccountStatus::Active))
+            return static_cast<uint32_t>(RiskRejectReason::RestrictedAccountStatus);
 
-            return 0;
-        }
-        inline uint32_t check_free_margin(const int64_t balance, const int64_t total_unrealized_pnl, const int64_t estimated_notional, const int64_t used_margin) noexcept
+        return 0;
+    }
+
+    inline uint32_t check_free_margin(const int64_t balance, const int64_t total_unrealized_pnl, const int64_t estimated_notional, const int64_t used_margin) noexcept
     {
         const int64_t equity = balance + total_unrealized_pnl;
         const int64_t free_margin = equity - used_margin;
@@ -525,98 +522,6 @@ private:
             return static_cast<uint32_t>(RiskRejectReason::UnrealizedLossLimitExceeded);
         
         return 0;
-    }
-
-
-
-//     inline uint32_t check_account_risk(Order &order, AccountRisk &accRisk, const AccountLimit &accLim, SymbolRisk &symRisk, const int64_t price, const uint32_t qty) noexcept
-// {
-//     uint32_t reason = 0;
-//     const int64_t balance = accRisk.balance.load(std::memory_order_acquire);
-//     const int64_t avg = symRisk.avg_entry_price.load(std::memory_order_acquire);
-//     const int64_t best_bid = symRisk.best_bid.load(std::memory_order_acquire);
-
-//     const int64_t projected_realized = accRisk.daily_realized_pnl.load(std::memory_order_acquire)
-//         + (order.side == Side::Sell ? (price - avg) * qty : 0);
-
-//     const int64_t current_unrealized = accRisk.total_unrealized_pnl.load(std::memory_order_acquire);
-//     const int64_t projected_unrealized = order.side == Side::Buy
-//         ? current_unrealized + (best_bid - price) * qty
-//         : current_unrealized - (best_bid - avg) * qty;
-
-//     const int64_t projected_exposure = accRisk.current_exposure.load(std::memory_order_acquire) 
-//         + price * qty;
-//     const int64_t projected_leverage = balance > 0 ? projected_exposure * 10000 / balance : 0;
-
-//     reason |=
-//         check_acc_status(accRisk.status.load(std::memory_order_acquire)) |
-//         check_max_leverage(projected_leverage, accLim.max_leverage) |
-//         check_max_drawdown(projected_realized, accLim.max_daily_loss) |
-//         check_unrealized_loss(projected_unrealized, accLim.max_unrealized_loss);
-
-//     if (order.price > 0 && order.order_type == OrderType::Limit)
-//     {
-//         const int64_t estimated_notional = price * qty;
-//         const int64_t estimated_margin_needed = estimated_notional / projected_leverage * 1'000'000ULL;
-
-//         reason |=
-//             check_free_margin(balance, current_unrealized, estimated_margin_needed, accRisk.used_margin.load(std::memory_order_acquire)) |
-//             check_balance(balance, estimated_margin_needed) |
-//             check_max_notional(accRisk.current_exposure.load(std::memory_order_acquire), estimated_notional, accLim.max_notional);
-//     }
-
-//     return reason;
-// }
-
-    // inline uint32_t check_free_margin(const int64_t balance, const int64_t total_unrealized_pnl, const __int128 &estimated_margin_needed, const int64_t used_margin) noexcept
-    // {
-    //     const int64_t equity = balance + total_unrealized_pnl;
-    //     const int64_t free_margin = equity - used_margin;
-
-    //     if (UNLIKELY(free_margin < estimated_margin_needed))
-    //         return static_cast<uint32_t>(RiskRejectReason::FreeMarginInsufficient);
-        
-    //     return 0;
-    // }
-
-    // inline uint32_t check_balance(const int64_t balance, const int64_t &estimated_margin_needed) noexcept
-    // {
-    //     if (UNLIKELY(balance < estimated_margin_needed))
-    //         return static_cast<uint32_t>(RiskRejectReason::AccountBalanceInsufficient);
-        
-    //     return 0;
-    // }
-
-    // inline uint32_t check_max_leverage(const int64_t projected_leverage, const int64_t max_leverage) noexcept
-    // {
-    //     if (UNLIKELY(current_leverage > max_leverage))
-    //         return static_cast<uint32_t>(RiskRejectReason::MaxLeverageExceeded);
-        
-    //     return 0;
-    // }
-
-    // inline uint32_t check_max_notional(const int64_t projected_exposure, const int64_t max_notional) noexcept
-    // {
-    //     if (UNLIKELY(projected_exposure > max_notional))
-    //         return static_cast<uint32_t>(RiskRejectReason::MaxNotionalLimitExceeded);
-    //     return 0;
-        
-    // }
-
-    // inline uint32_t check_max_drawdown(const int64_t projected_realized_pnl, const int64_t max_daily_loss) noexcept
-    // {
-    //     if (UNLIKELY(projected_realized_pnl <= -max_daily_loss))
-    //         return static_cast<uint32_t>(RiskRejectReason::RealizedLossLimitExceeded);
-        
-    //     return 0;
-    // }
-
-    // inline uint32_t check_unrealized_loss(int64_t projected_unrealized, int64_t max_unrealized_loss) noexcept
-    // {
-    //     if (UNLIKELY(projected_unrealized <= -max_unrealized_loss))
-    //         return static_cast<uint32_t>(RiskRejectReason::UnrealizedLossLimitExceeded);
-    //     return 0;
-    // }
-    
+    }    
 };
 

@@ -59,7 +59,6 @@ bool Parser_Dispatch::dispatch() noexcept
 void Parser_Dispatch::flush_DbQueue() noexcept
 {
    DbData_t DbQueueItem;
-   //  static int msg2 = 0;
 
    while (db_to_parser_.pop(DbQueueItem))
    {   
@@ -81,7 +80,6 @@ void Parser_Dispatch::flush_DbQueue() noexcept
                     else if constexpr (std::is_same_v<T, MessageWithVenue<BIST::OUCHMessage>>)
                     {
                        ouchparser_bist_.releaseOUCH(item.msg);
-                     //   msg2++;
                     }
                     else if constexpr (std::is_same_v<T, MessageWithVenue<NASDAQ::ITCHMessage>>)
                     {
@@ -111,6 +109,7 @@ void Parser_Dispatch::proceedPendingFIX(auto* variant_msg, auto& seq_fix, Sessio
                        else
                        { 
                            parser_to_store_.push(MessageWithVenue<MessageTypes_t>(msg, Venue::BIST));
+                           // fixparser_.releaseFIX(msg);   
                        }
 
                        seqnum = msg->seqnum; 
@@ -147,7 +146,8 @@ void Parser_Dispatch::parseFIX(RxPacket *pkt) noexcept
             if (seq_fix.get_expected() == fixMsg->seqnum)   
             {
                   
-               parser_to_store_.push(MessageWithVenue<MessageTypes_t>(fixMsg, Venue::BIST));               
+               parser_to_store_.push(MessageWithVenue<MessageTypes_t>(fixMsg, Venue::BIST));
+               // fixparser_.releaseFIX(fixMsg);               
                seq_fix.increase_expected_seq();
                
                while(V_t* variant_msg = fixparser_.find_in_pending(seq_fix.get_expected()))
@@ -212,6 +212,8 @@ void Parser_Dispatch::parseITCH_BIST(RxPacket *pkt) noexcept
    {
       BIST::ITCHMessage itchMsg{itchparser_bist_.parse(pkt->data.data() + pkt->offsets[msg_index])};
       parser_to_store_.push(MessageWithVenue<MessageTypes_t>(itchMsg, Venue::BIST));
+
+      // itchparser_bist_.releaseITCH(itchMsg);
    }
 }
 
@@ -224,18 +226,19 @@ void Parser_Dispatch::parseITCH_NASDAQ(RxPacket *pkt) noexcept
       NASDAQ::ITCHMessage itchMsg{itchparser_nasdaq_.parse(pkt->data.data() + pkt->offsets[msg_index])};
       parser_to_store_.push(MessageWithVenue<MessageTypes_t>(itchMsg, Venue::NASDAQ));
       
+      // itchparser_nasdaq_.releaseITCH(itchMsg);
+   }
+
+   // BATCH START
       // std::array<MessageWithVenue<MessageTypes_t>, 3> batch;
       // size_t count = 0;
 
       // for (size_t i = 0; i < pkt->msg_count; ++i)
       //    batch[count++] = {itchparser_nasdaq_.parse(pkt->data.data() + pkt->offsets[i]), Venue::NASDAQ};
 
-      // // tek seferde push
       // for (size_t i = 0; i < count; ++i)
       //    parser_to_store_.push(batch[i]);
-
-      // itchparser_nasdaq_.releaseITCH(itchMsg);
-   }
+   // BATCH END
 }
 
 void Parser_Dispatch::parseOUCH_BIST(RxPacket *pkt) noexcept
@@ -244,7 +247,10 @@ void Parser_Dispatch::parseOUCH_BIST(RxPacket *pkt) noexcept
    {
       BIST::OUCHMessage ouchMsg{ouchparser_bist_.parse(pkt->data.data() + pkt->offsets[msg_index])};
       parser_to_store_.push(MessageWithVenue<MessageTypes_t>(ouchMsg, Venue::BIST));
+
+      // ouchparser_bist_.releaseOUCH(ouchMsg);
    }
+
 }
 
 void Parser_Dispatch::parseOUCH_NASDAQ(RxPacket *pkt) noexcept
@@ -253,5 +259,7 @@ void Parser_Dispatch::parseOUCH_NASDAQ(RxPacket *pkt) noexcept
    {
       NASDAQ::OUCHMessage ouchMsg{ouchparser_nasdaq_.parse(pkt->data.data() + pkt->offsets[msg_index])};
       parser_to_store_.push(MessageWithVenue<MessageTypes_t>(ouchMsg, Venue::NASDAQ));
+      
+      // ouchparser_nasdaq_.releaseOUCH(ouchMsg);
    }
 }

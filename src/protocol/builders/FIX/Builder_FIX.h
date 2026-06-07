@@ -200,9 +200,9 @@ private:
  
 
     // -------------------  UTIL FUNC --------------------
-    static std::pair<const char *, const size_t> transact_time() noexcept;
-public:
-    static std::pair<const char*, const size_t> epoch_to_transact_time(uint64_t ns) noexcept;
+    std::pair<const char*, size_t> transact_time() noexcept;
+public: /// For testing purposes only, not intended for external use.
+    std::pair<const char*, size_t> epoch_to_transact_time(uint64_t ns) noexcept;
 private:
     static char findType(const char *data) noexcept;
     static std::pair<const char *, size_t> findValue(const char *data, size_t len, std::string_view wantTag) noexcept;
@@ -269,6 +269,59 @@ private:
 
         return buf;
     }
-   
+    
+    // Precompute all possible second values for a given day and store in a static table to avoid expensive time formatting on each call.
+    char g_second_table[86400][17];
+
+    inline void init_time_table()
+    {
+        auto now = std::chrono::system_clock::now();
+        auto t = std::chrono::system_clock::to_time_t(now);
+        
+        std::tm tm;
+        localtime_r(&t, &tm);
+
+        for (int i = 0; i < 86400; ++i)
+        {
+            char* p = g_second_table[i];
+
+            tm.tm_hour = i / 3600;
+            tm.tm_min  = (i % 3600) / 60;
+            tm.tm_sec  = i % 60;
+
+            int y = tm.tm_year + 1900;
+            *p++ = '0' + (y / 1000) % 10;
+            *p++ = '0' + (y / 100) % 10;
+            *p++ = '0' + (y / 10) % 10;
+            *p++ = '0' + (y % 10);
+
+            int mo = tm.tm_mon + 1;
+            *p++ = '0' + (mo / 10);
+            *p++ = '0' + (mo % 10);
+
+            int d = tm.tm_mday;
+            *p++ = '0' + (d / 10);
+            *p++ = '0' + (d % 10);
+
+            *p++ = '-';
+
+            int h = tm.tm_hour;
+            *p++ = '0' + (h / 10);
+            *p++ = '0' + (h % 10);
+
+            *p++ = ':';
+
+            int m = tm.tm_min;
+            *p++ = '0' + (m / 10);
+            *p++ = '0' + (m % 10);
+
+            *p++ = ':';
+
+            int s = tm.tm_sec;
+            *p++ = '0' + (s / 10);
+            *p++ = '0' + (s % 10);
+        }
+    }
+
 };
 

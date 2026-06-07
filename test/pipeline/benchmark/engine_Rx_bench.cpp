@@ -51,7 +51,7 @@ struct FakeTCPServer
         
         accept_thread = std::thread([this]()
         {
-            pin_to_cpu(15);
+            pin_to_cpu(14);
 
             sockaddr_in client_addr{};
             socklen_t len = sizeof(client_addr);
@@ -196,28 +196,37 @@ public:
 
 BENCHMARK_DEFINE_F(BM_Pipeline_Rx, PerProtocolVenue)(benchmark::State& state)
 {
-    pin_to_cpu(6);
+    pin_to_cpu(6, 0);
 
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
 
     for (auto _ : state)
     {
         uint64_t before = engine->risk_.pipeline_seq.load(std::memory_order_acquire);
 
-        engine->ord_mngr_.add_awaitingAck_order(*test_data_builder::fix_new_order);
-        engine->ord_mngr_.add_awaitingAck_order(*test_data_builder::ouch_new_order);
-        engine->ord_mngr_.add_awaitingAck_order(*test_data_builder::NQouch_new_order);
-
-
         switch (pkt_case)
         {
-            case 1: fix_server->send_to_client(test_data_network::fix_order_ack2); break;
-            case 2: ouch_bist_server->send_to_client(test_data_network::ouch_bist_order_ack); break;
-            case 3: ouch_nq_server->send_to_client(test_data_network::ouch_nq_order_ack); break;
-            case 4: itch_bist_sender.send_to(test_data_network::itch_bist_add_order2); break;
-            case 5: itch_nq_sender.send_to(test_data_network::itch_nq_add_order); break;
-            default: __builtin_unreachable();
+            case 1:
+                engine->ord_mngr_.add_awaitingAck_order(*test_data_builder::fix_new_order); 
+                fix_server->send_to_client(test_data_network::fix_order_ack2);          
+                break;
+            case 2: 
+                engine->ord_mngr_.add_awaitingAck_order(*test_data_builder::ouch_new_order); 
+                ouch_bist_server->send_to_client(test_data_network::ouch_bist_order_ack); 
+                break;
+            case 3: 
+                engine->ord_mngr_.add_awaitingAck_order(*test_data_builder::NQouch_new_order); 
+                ouch_nq_server->send_to_client(test_data_network::ouch_nq_order_ack);    
+                break;
+            case 4: 
+                itch_bist_sender.send_to(test_data_network::itch_bist_add_order2);       
+                break;
+            case 5: 
+                itch_nq_sender.send_to(test_data_network::itch_nq_add_order);            
+                break;
+            default: 
+                __builtin_unreachable();
         }
 
         asm volatile("" ::: "memory");
@@ -240,7 +249,7 @@ BENCHMARK_DEFINE_F(BM_Pipeline_Rx, PerProtocolVenue)(benchmark::State& state)
     
         size_t used = engine->risk_.orderrisk_next_slot;
         for (size_t i = 0; i < used; i++)
-            engine->risk_.orderrisk_pool_[i & (ORDER_POOL_CAPACITY - 1)].active.store(false, std::memory_order_seq_cst);
+            engine->risk_.orderrisk_pool_[i & (ORDER_POOL_CAPACITY - 1)].active.store(false, std::memory_order_release);
         engine->risk_.orderrisk_next_slot = 0;
 
         const uint64_t hash = engine->hashtables_.hash_exec_id("EXEC00002");

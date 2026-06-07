@@ -16,7 +16,7 @@
 
 int main()
 {
-    pin_to_cpu(6);
+    pin_to_cpu(6, 0);
 
     std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<SessionManager>      sess_mngr;

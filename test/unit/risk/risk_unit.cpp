@@ -269,8 +269,8 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(symRisk4.net_position.load(),      0);
             EXPECT_EQ(symRisk4.cost_basis_scaled,        0);
             EXPECT_EQ(symRisk4.unrealized_pnl,           0);
-            EXPECT_EQ(symRisk4.best_bid.load(),                 0);
-            EXPECT_EQ(symRisk4.best_ask.load(),                 0);
+            EXPECT_EQ(symRisk4.best_bid.load(),          0);
+            EXPECT_EQ(symRisk4.best_ask.load(),          0);
         
             // ── OrderRisk ──
             EXPECT_EQ(ordRisk4->price.load(), 10000);
@@ -300,8 +300,8 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(symRisk5.net_position.load(),     0);
             EXPECT_EQ(symRisk5.unrealized_pnl,          0);
             EXPECT_EQ(symRisk5.cost_basis_scaled,       0);
-            EXPECT_EQ(symRisk5.best_bid.load(),                10000);
-            EXPECT_EQ(symRisk5.best_ask.load(),                0);
+            EXPECT_EQ(symRisk5.best_bid.load(),     10000);
+            EXPECT_EQ(symRisk5.best_ask.load(),         0);
         
 
 
@@ -332,17 +332,17 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk6.balance.load(),          balance_bist);
             EXPECT_EQ(accRisk6.current_leverage.load(), std::abs(notional_bist) * lev_scale / balance_bist); 
             EXPECT_EQ(accRisk6.daily_realized_pnl.load(), 0);
-            EXPECT_EQ(accRisk6.total_unrealized_pnl.load(), 0);
+            EXPECT_EQ(accRisk6.total_unrealized_pnl.load(), -100000);
             EXPECT_EQ(accRisk6.open_orders_count.load(), 2);
         
             // ── SymbolRisk ──
-            EXPECT_EQ(symRisk6.open_orders_count.load(),       2);
+            EXPECT_EQ(symRisk6.open_orders_count.load(),           2);
             EXPECT_EQ(symRisk6.pending_notional_scaled.load(), notional_bist - nominal_fix); 
             EXPECT_EQ(symRisk6.net_position.load(),     net_pos_bist);
-            EXPECT_EQ(symRisk6.unrealized_pnl,     0);
+            EXPECT_EQ(symRisk6.unrealized_pnl,               -100000);
             EXPECT_EQ(symRisk6.cost_basis_scaled,       nominal_bist);
             EXPECT_EQ(symRisk6.best_bid.load(),                10000);
-            EXPECT_EQ(symRisk6.best_ask.load(),                0);
+            EXPECT_EQ(symRisk6.best_ask.load(),                    0);
         
             // ── OrderRisk ──
             EXPECT_EQ(ordRisk6->price.load(), 15000);
@@ -397,6 +397,9 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             net_pos_bist += order->last_exec_quantity * side_mult_ouch;
             nominal_bist += nominal_ouch;
 
+            avg_price = nominal_bist / net_pos_bist;
+            pnl_bist = (symRisk8.best_bid.load() - avg_price) * net_pos_bist;
+
             // ── AccountRisk ──
             EXPECT_EQ(accRisk8.current_exposure.load(), notional_bist); 
             EXPECT_EQ(accRisk8.positional_exposure.load(), std::abs(nominal_bist)); 
@@ -449,7 +452,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(symRisk9.best_ask.load(),                0);
         
 
-
         // ─────────────────────────────────────────────────────────────────────────────
         // arr[9] → NASDAQ OUCH Executed (AAPL)
         // ─────────────────────────────────────────────────────────────────────────────
@@ -467,8 +469,10 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             int64_t nominal_nasdaq = order->price * order->last_exec_quantity * side_mult_NQouch;
             int64_t net_pos_nasdaq = order->last_exec_quantity * side_mult_NQouch; 
             balance_nasdaq -= std::abs(nominal_nasdaq) + (std::abs(nominal_nasdaq) * fee_rate_nasdaq / fee_scale);
-            
 
+            auto avg_nasdaq = nominal_nasdaq / net_pos_nasdaq; 
+            auto pnl_nasdaq = (symRisk10.best_bid.load() - avg_nasdaq) * net_pos_nasdaq;
+            
             // ── AccountRisk ──
             EXPECT_EQ(accRisk10.current_exposure.load(), notional_nasdaq); 
             EXPECT_EQ(accRisk10.positional_exposure.load(), std::abs(nominal_nasdaq)); 
@@ -476,14 +480,14 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk10.balance.load(),          balance_nasdaq);
             EXPECT_EQ(accRisk10.current_leverage.load(), std::abs(notional_nasdaq) * lev_scale / balance_nasdaq); 
             EXPECT_EQ(accRisk10.daily_realized_pnl.load(), 0);
-            EXPECT_EQ(accRisk10.total_unrealized_pnl.load(), 0);
+            EXPECT_EQ(accRisk10.total_unrealized_pnl.load(), pnl_nasdaq);
             EXPECT_EQ(accRisk10.open_orders_count.load(), 1);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk10.open_orders_count.load(),       1);
             EXPECT_EQ(symRisk10.pending_notional_scaled.load(), notional_nasdaq - nominal_nasdaq);
             EXPECT_EQ(symRisk10.net_position.load(),     net_pos_nasdaq);
-            EXPECT_EQ(symRisk10.unrealized_pnl,          0);
+            EXPECT_EQ(symRisk10.unrealized_pnl,          pnl_nasdaq);
             EXPECT_EQ(symRisk10.cost_basis_scaled,       nominal_nasdaq);
             EXPECT_EQ(symRisk10.best_bid.load(),                10000);
             EXPECT_EQ(symRisk10.best_ask.load(),                0);
@@ -561,7 +565,6 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             ASSERT_EQ(ordRisk12, nullptr);
         
 
-
         // ─────────────────────────────────────────────────────────────────────────────
         // arr[12] → NASDAQ ITCH Delete (AAPL)
         // ─────────────────────────────────────────────────────────────────────────────
@@ -576,11 +579,11 @@ TEST(RiskEngineTest, MixedMessageTraffic)
         
             // ── AccountRisk ──
             EXPECT_EQ(accRisk13.daily_realized_pnl.load(), 0);
-            EXPECT_EQ(accRisk13.total_unrealized_pnl.load(), 0);
+            EXPECT_EQ(accRisk13.total_unrealized_pnl.load(), pnl_nasdaq);
 
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk13.net_position.load(),     net_pos_nasdaq);
-            EXPECT_EQ(symRisk13.unrealized_pnl,          0);
+            EXPECT_EQ(symRisk13.unrealized_pnl,          pnl_nasdaq);
             EXPECT_EQ(symRisk13.cost_basis_scaled,       nominal_nasdaq);
             EXPECT_EQ(symRisk13.best_bid.load(),                0);
             EXPECT_EQ(symRisk13.best_ask.load(),                0);
@@ -607,14 +610,14 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             EXPECT_EQ(accRisk14.balance.load(),          balance_nasdaq);
             EXPECT_EQ(accRisk14.current_leverage.load(), std::abs(notional_nasdaq) * lev_scale / balance_nasdaq); 
             EXPECT_EQ(accRisk14.daily_realized_pnl.load(), 0);
-            EXPECT_EQ(accRisk14.total_unrealized_pnl.load(), 0);
+            EXPECT_EQ(accRisk14.total_unrealized_pnl.load(), pnl_nasdaq);
             EXPECT_EQ(accRisk14.open_orders_count.load(), 0);
         
             // ── SymbolRisk ──
             EXPECT_EQ(symRisk14.open_orders_count.load(),       0);
             EXPECT_EQ(symRisk14.pending_notional_scaled.load(), 0);
             EXPECT_EQ(symRisk14.net_position.load(),     net_pos_nasdaq);
-            EXPECT_EQ(symRisk14.unrealized_pnl,          0);
+            EXPECT_EQ(symRisk14.unrealized_pnl,          pnl_nasdaq);
             EXPECT_EQ(symRisk14.cost_basis_scaled,       nominal_nasdaq);
             EXPECT_EQ(symRisk14.best_bid.load(),                0);
             EXPECT_EQ(symRisk14.best_ask.load(),                0);

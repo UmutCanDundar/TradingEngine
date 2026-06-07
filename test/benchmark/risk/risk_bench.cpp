@@ -98,7 +98,7 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(14);        
+            pin_to_cpu(0);        
 
             Order* order; 
             
@@ -113,7 +113,7 @@ public:
 
         consumer2 = std::thread([&]
         {
-            pin_to_cpu(15);        
+            pin_to_cpu(2);        
 
             OrderWithRejectReason orderWRR; 
             
@@ -146,12 +146,12 @@ public:
 //========================================================
     BENCHMARK_DEFINE_F(BM_Risk, Update)(benchmark::State& state)
     {
-        pin_to_cpu(6);
+        pin_to_cpu(4);
         
         int order_case = state.range(0);
 
         std::vector<uint64_t> latencies;
-        latencies.reserve(100000);
+        latencies.reserve(1000000);
 
         for(auto _ : state)
         {
@@ -215,7 +215,7 @@ public:
         pin_to_cpu(6);
 
         std::vector<uint64_t> latencies;
-        latencies.reserve(100000);
+        latencies.reserve(1000000);
 
         for(auto _ : state)
         {

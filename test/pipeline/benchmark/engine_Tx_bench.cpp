@@ -51,7 +51,7 @@ struct FakeTCPServer
 
         accept_thread = std::thread([this]()
         {
-            pin_to_cpu(15);
+            pin_to_cpu(4);
 
             sockaddr_in client_addr{};
             socklen_t len = sizeof(client_addr);
@@ -86,7 +86,7 @@ struct FakeTCPServer
     void recv_from_client()
     {
         uint8_t buf[4096];
-        ::recv(client_fd, buf, sizeof(buf), 0);
+        while (::recv(client_fd, buf, sizeof(buf), MSG_DONTWAIT) > 0);
     }
 
     void stop_server()
@@ -111,6 +111,8 @@ public:
 
     void SetUp(const ::benchmark::State& st) override
     {
+        
+
         Logger::Init();
 
         fix_server = std::make_unique<FakeTCPServer>(FAKE_FIX_PORT);
@@ -181,17 +183,15 @@ public:
 
 BENCHMARK_DEFINE_F(BM_Pipeline_Tx, PerProtocolVenue)(benchmark::State& state)
 {
-    pin_to_cpu(6);
-
+    pin_to_cpu(6, 0);
+    
     std::vector<uint64_t> latencies;
-    latencies.reserve(100'000);
+    latencies.reserve(1000000);
 
     for (auto _ : state)
     {
         uint64_t before = engine->network_io_.pipeline_seq.load(std::memory_order_acquire);
-        std::atomic_thread_fence(std::memory_order_seq_cst);
 
-    
         asm volatile("" ::: "memory");
         auto     wall_start = std::chrono::high_resolution_clock::now();
         uint64_t tsc_start  = rdtsc_start();

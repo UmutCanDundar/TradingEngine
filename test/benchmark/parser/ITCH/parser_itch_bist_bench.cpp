@@ -45,6 +45,8 @@ public:
     std::atomic<bool> stop{false};
     std::thread consumer;
 
+    std::atomic<uint64_t> released_msg_count{0};
+
 public:
     void SetUp(const ::benchmark::State& st) 
     {
@@ -95,8 +97,8 @@ public:
 
         consumer = std::thread([&]
         {
-            pin_to_cpu(15);        
-
+            pin_to_cpu(0);   
+    
             MessageWithVenue<MessageTypes_t> local_msg;
             
             while(!stop.load(std::memory_order_acquire))
@@ -105,6 +107,7 @@ public:
                 {
                     parser_to_store.pop(local_msg);
                     parser_dispatch->itchparser_bist_.releaseITCH(std::get<BIST::ITCHMessage>(local_msg.msg));
+                    released_msg_count.fetch_add(1, std::memory_order_release);
                 }
                 else
                 { 
@@ -135,12 +138,17 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseITCH_BIST)(benchmark::State& state)
     pin_to_cpu(6);
 
     std::vector<uint64_t> latencies;
-    latencies.reserve(100000);
+    latencies.reserve(1000000);
     
+    uint64_t msgs_per_iter = pkt_case == 1 ? 1 : 3;
+
     for(auto _ : state)
     {
+        released_msg_count.store(0, std::memory_order_release);
+
         for(auto* pkt : pkts)
             pkt->msg_count = 0;
+
         
         asm volatile("" ::: "memory");
         auto wall_start = std::chrono::high_resolution_clock::now();
@@ -148,6 +156,7 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseITCH_BIST)(benchmark::State& state)
 
         for (auto* pkt : pkts)
             parser_dispatch->parseITCH_BIST(pkt);
+
 
         uint64_t end = rdtsc_end();
         auto wall_end = std::chrono::high_resolution_clock::now();
@@ -157,8 +166,8 @@ BENCHMARK_DEFINE_F(BM_Parser, ParseITCH_BIST)(benchmark::State& state)
         benchmark::ClobberMemory();
         latencies.push_back(end - start);
 
-        while (!parser_to_store.empty())
-            _mm_pause();
+        while (released_msg_count.load(std::memory_order_acquire) < msgs_per_iter) _mm_pause();
+
     }
    
     if (latencies.empty()) return;

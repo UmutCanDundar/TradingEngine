@@ -57,7 +57,7 @@
 #include <type_traits>
 #include <algorithm>
 #include <utility>
-#include <map>
+// #include <map>
 
 #include <absl/container/btree_map.h>
 #include <boost/lockfree/spsc_queue.hpp>
@@ -104,7 +104,7 @@ private:
     using PartialFIXBufferPool_t = std::array<PartialFIXBuffer, FIX_POOL_CAPACITY>;
 
     using FIXPendingMap_t = absl::btree_map<uint32_t, std::variant<FIXMessage *, FIXSessionMessage *>>;
-    // std::map<uint32_t, std::variant<FIXMessage *, FIXSessionMessage *>> pending_to_store_map_;
+    // std::map<uint32_t, std::variant<FIXMessage *, FIXSessionMessage *>> pending_to_store_map_; // it is used to see std::map vs absl::btree_map 
     FIXPendingMap_t pending_to_store_map_;
     spscFIXQueue_t free_fixMsg_list_;
     spscFIXSesQueue_t free_fixSesMsg_list_;
@@ -238,7 +238,6 @@ public:
 
     inline void releaseFIX(FIXMessage* fixMsg) noexcept
     {       
-        // static int rel = 0;
         free_fixMsg_list_.push(fixMsg);
     }
     inline void releaseFIX(FIXSessionMessage* fixSesMsg) noexcept

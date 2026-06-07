@@ -515,7 +515,6 @@ void ClickhouseWriter::insert(const Order *order)
    col_last_update_time->Append(order->last_update_time);
    block.AppendColumn("last_update_time", col_last_update_time);
 
-   // Venue & Protocol
    auto col_venue = std::make_shared<ColumnString>();
    col_venue->Append(venue_to_string(order->venue));
    block.AppendColumn("venue", col_venue);
@@ -524,7 +523,6 @@ void ClickhouseWriter::insert(const Order *order)
    col_protocol->Append(protocol_to_string(order->protocol));
    block.AppendColumn("protocol", col_protocol);
 
-   // Order ve Client ID
    auto col_order_id = std::make_shared<ColumnUInt64>();
    col_order_id->Append(order->order_id);
    block.AppendColumn("order_id", col_order_id);
@@ -533,7 +531,6 @@ void ClickhouseWriter::insert(const Order *order)
    col_client_order_id->Append(order->client_order_id);
    block.AppendColumn("client_order_id", col_client_order_id);
 
-   // Fiyat ve Miktarlar
    auto col_price = std::make_shared<ColumnInt64>();
    col_price->Append(order->price);
    block.AppendColumn("price", col_price);
@@ -550,32 +547,26 @@ void ClickhouseWriter::insert(const Order *order)
    col_remaining_quantity->Append(order->remaining_quantity);
    block.AppendColumn("remaining_quantity", col_remaining_quantity);
 
-   // Symbol (fixed 8-byte array -> string)
    auto col_symbol = std::make_shared<ColumnString>();
    col_symbol->Append(symbol);
    block.AppendColumn("symbol", col_symbol);
 
-   // Instrument ID
    auto col_instrument_id = std::make_shared<ColumnUInt32>();
    col_instrument_id->Append(order->instrument_id);
    block.AppendColumn("instrument_id", col_instrument_id);
 
-   // Side (0 = Buy, 1 = Sell)
    auto col_side = std::make_shared<ColumnUInt8>();
    col_side->Append(static_cast<uint8_t>(order->side));
    block.AppendColumn("side", col_side);
 
-   // Status (uint8 enum)
    auto col_status = std::make_shared<ColumnString>();
    col_status->Append(status_to_string(order->status));
    block.AppendColumn("status", col_status);
 
-   // Mesaj Tipi (uint16)
    auto col_message_type = std::make_shared<ColumnUInt16>();
    col_message_type->Append(order->message_type);
    block.AppendColumn("message_type", col_message_type);
 
-   // Taktik parametreler
    auto col_time_in_force = std::make_shared<ColumnUInt8>();
    col_time_in_force->Append(static_cast<uint8_t>(order->time_in_force));
    block.AppendColumn("time_in_force", col_time_in_force);

@@ -20,6 +20,7 @@
 
 int main()
 {
+    pin_to_cpu(6);
 
     std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<HashTables>          hashtables;
@@ -91,7 +92,7 @@ int main()
 
     consumer = std::thread([&]
     {
-        pin_to_cpu(15);
+        pin_to_cpu(0);
 
         TxPacket* txPkt;
 
@@ -102,7 +103,7 @@ int main()
         }
     });
 
-    pin_to_cpu(6);
+    
 
     auto& seq_fix = sess_mngr->getSessionState(sess_index)->fix;
 

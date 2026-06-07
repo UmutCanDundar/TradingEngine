@@ -16,7 +16,7 @@
 
 int main()
 {
-    pin_to_cpu(6);
+    pin_to_cpu(6, 0);
 
     std::unique_ptr<TxPacketPoolManager> txPkt_pool;
     std::unique_ptr<SessionManager>      sess_mngr;
@@ -84,7 +84,7 @@ int main()
 
     network_thread = std::thread([&]
     {
-        pin_to_cpu(4);
+        pin_to_cpu(0);
         bool sbt_ret = true;
         while (!stop2.load(std::memory_order_acquire))
         {
@@ -105,7 +105,7 @@ int main()
 
     consumer = std::thread([&]
     {
-        pin_to_cpu(0);
+        pin_to_cpu(2);
         MessageWithVenue<MessageTypes_t> local_msg;
         while (!stop.load(std::memory_order_acquire))
         {
@@ -122,7 +122,6 @@ int main()
     auto run = [&]()
     {
         while (trigger_network.load(std::memory_order_acquire)) _mm_pause();
-        std::atomic_thread_fence(std::memory_order_seq_cst);
 
         for (auto* p : pkts) { p->msg_count = 0; p->consumed = false; }
         rest_ouch_msg = static_cast<ssize_t>(pkts.size());
