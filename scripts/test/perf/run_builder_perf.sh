@@ -69,11 +69,11 @@ perf stat \
     "$TEST_BIN" 2>&1 || true
 
 # ==================================================
-# PERF RECORD + REPORT >1% || TOP 20
+# perf record -F 99999 + REPORT >1% || TOP 20
 # ==================================================
 
 run_section "8. PERF RECORD - CPU + BRANCH (>1% || TOP 20)"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
     -e cpu_core/cycles/,cpu_core/instructions/,cpu_core/branches/,cpu_core/branch-misses/ \
     -e cpu_atom/cycles/,cpu_atom/instructions/,cpu_atom/branches/,cpu_atom/branch-misses/ \
     -o "$PERF_DATA_DIR/builder_cpu.data" \
@@ -87,7 +87,7 @@ perf report --stdio \
     | head -20 || true
 
 run_section "9. PERF RECORD - DCACHE (>1% || TOP 20)"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
     -e cpu_core/L1-dcache-load-misses/,cpu_core/LLC-load-misses/ \
     -o "$PERF_DATA_DIR/builder_dcache.data" \
     "$TEST_BIN" >/dev/null 2>&1 || true
@@ -99,7 +99,7 @@ perf report --stdio \
     | head -20 || true
 
 run_section "10. PERF RECORD - ICACHE (>1% || TOP 20)"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
     -e cpu_core/L1-icache-load-misses/ \
     -o "$PERF_DATA_DIR/builder_icache.data" \
     "$TEST_BIN" >/dev/null 2>&1 || true
@@ -111,7 +111,7 @@ perf report --stdio \
     | head -20 || true
 
 run_section "11. PERF RECORD - TLB (>1% || TOP 20)"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
     -e cpu_core/dTLB-load-misses/,cpu_core/iTLB-load-misses/ \
     -o "$PERF_DATA_DIR/builder_tlb.data" \
     "$TEST_BIN" >/dev/null 2>&1 || true
@@ -141,7 +141,7 @@ perf c2c report --stdio --stats \
 run_section "13. FLAMEGRAPH"
 if command -v stackcollapse-perf.pl &>/dev/null && \
    command -v flamegraph.pl &>/dev/null; then
-    perf record -g -m 256M -F 999 \
+    perf record -F 99999 -g -m 256M  \
         -e cpu_core/cycles/ \
         -o "$PERF_DATA_DIR/builder_flame.data" \
         -- "$TEST_BIN" >/dev/null 2>&1 || true

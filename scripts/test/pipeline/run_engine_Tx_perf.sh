@@ -74,7 +74,7 @@ PERF_PID=$!; sleep 30 && kill -SIGINT $PERF_PID 2>/dev/null &
 SLEEP_PID=$!; wait $PERF_PID 2>/dev/null || true; kill $SLEEP_PID 2>/dev/null || true
 
 run_section "6. PERF RECORD - CPU + BRANCH (>1% || TOP 20) - P-CORE"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
     -e cpu_core/cycles/,cpu_core/instructions/,cpu_core/branches/,cpu_core/branch-misses/ \
     -o "$PERF_DATA_DIR/engine_Tx_cpu_pcore.data" \
     -- "$TEST_BIN" >/dev/null 2>&1 &
@@ -87,7 +87,7 @@ perf report --stdio -i "$PERF_DATA_DIR/engine_Tx_cpu_pcore.data" \
     | head -20 || true
 
 run_section "6. PERF RECORD - CPU + BRANCH (>1% || TOP 20) - E-CORE"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
     -e cpu_atom/cycles/,cpu_atom/instructions/,cpu_atom/branches/,cpu_atom/branch-misses/ \
     -o "$PERF_DATA_DIR/engine_Tx_cpu_ecore.data" \
     -- "$TEST_BIN" >/dev/null 2>&1 &
@@ -100,7 +100,7 @@ perf report --stdio -i "$PERF_DATA_DIR/engine_Tx_cpu_ecore.data" \
     | head -20 || true
 
 run_section "7. PERF RECORD - DCACHE (>1% || TOP 20)"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
     -e cpu_core/L1-dcache-load-misses/,cpu_core/LLC-load-misses/ \
     -o "$PERF_DATA_DIR/engine_Tx_dcache.data" \
     -- "$TEST_BIN" >/dev/null 2>&1 &
@@ -112,7 +112,7 @@ perf report --stdio -i "$PERF_DATA_DIR/engine_Tx_dcache.data" 2>/dev/null \
     | head -20 || true
 
 run_section "8. PERF RECORD - ICACHE (>1% || TOP 20)"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
     -e cpu_core/L1-icache-load-misses/ \
     -e cpu_atom/L1-icache-load-misses/ \
     -o "$PERF_DATA_DIR/engine_Tx_icache.data" \
@@ -125,7 +125,7 @@ perf report --stdio -i "$PERF_DATA_DIR/engine_Tx_icache.data" 2>/dev/null \
     | head -20 || true
 
 run_section "9. PERF RECORD - TLB (>1% || TOP 20)"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
     -e cpu_core/dTLB-load-misses/,cpu_core/iTLB-load-misses/ \
     -e cpu_atom/dTLB-load-misses/,cpu_atom/iTLB-load-misses/ \
     -o "$PERF_DATA_DIR/engine_Tx_tlb.data" \
@@ -149,7 +149,7 @@ perf c2c report --stdio --stats \
 run_section "11. FLAMEGRAPH"
 if command -v stackcollapse-perf.pl &>/dev/null && \
    command -v flamegraph.pl &>/dev/null; then
-    perf record -g -m 64M -F 9999 \
+    perf record -F 99999 -g -m 64M -F 9999 \
         -e cpu_core/cycles/,cpu_atom/cycles/ \
         -o "$PERF_DATA_DIR/engine_Tx_flame.data" \
         -- "$TEST_BIN" >/dev/null 2>&1 &

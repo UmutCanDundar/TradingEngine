@@ -56,7 +56,7 @@ run_section "5. PERF STAT - TLB"
 perf stat -e cpu_core/dTLB-load-misses/,cpu_core/iTLB-load-misses/ "$TEST_BIN" 2>&1 || true
 
 run_section "6. PERF RECORD - CPU + BRANCH (>1% || TOP 20)"
-perf record -g -m 256M \
+perf record -F 99999 -g -m 256M \
   -e cpu_core/cycles/,cpu_core/instructions/,cpu_core/branches/,cpu_core/branch-misses/ \
   -e cpu_atom/cycles/,cpu_atom/instructions/,cpu_atom/branches/,cpu_atom/branch-misses/ \
     -o "$PERF_DATA_DIR/itch_nasdaq_cpu.data" "$TEST_BIN" >/dev/null 2>&1 || true
@@ -67,7 +67,7 @@ perf report --stdio -i "$PERF_DATA_DIR/itch_nasdaq_cpu.data" \
     | head -20 || true
 
 run_section "7. PERF RECORD - DCACHE (>1% || TOP 20)"
-perf record -g -m 256M -e cpu_core/L1-dcache-load-misses/,cpu_core/LLC-load-misses/ \
+perf record -F 99999 -g -m 256M -e cpu_core/L1-dcache-load-misses/,cpu_core/LLC-load-misses/ \
     -o "$PERF_DATA_DIR/itch_nasdaq_dcache.data" "$TEST_BIN" >/dev/null 2>&1 || true
 perf report --stdio -i "$PERF_DATA_DIR/itch_nasdaq_dcache.data" 2>/dev/null \
     | grep -E "^\s+[0-9]+\.[0-9]+%" \
@@ -75,7 +75,7 @@ perf report --stdio -i "$PERF_DATA_DIR/itch_nasdaq_dcache.data" 2>/dev/null \
     | head -20 || true
 
 run_section "8. PERF RECORD - ICACHE (>1% || TOP 20)"
-perf record -g -m 256M -e cpu_core/L1-icache-load-misses/ \
+perf record -F 99999 -g -m 256M -e cpu_core/L1-icache-load-misses/ \
     -o "$PERF_DATA_DIR/itch_nasdaq_icache.data" "$TEST_BIN" >/dev/null 2>&1 || true
 perf report --stdio -i "$PERF_DATA_DIR/itch_nasdaq_icache.data" 2>/dev/null \
     | grep -E "^\s+[0-9]+\.[0-9]+%" \
@@ -83,7 +83,7 @@ perf report --stdio -i "$PERF_DATA_DIR/itch_nasdaq_icache.data" 2>/dev/null \
     | head -20 || true
 
 run_section "9. PERF RECORD - TLB (>1% || TOP 20)"
-perf record -g -m 256M -e cpu_core/dTLB-load-misses/,cpu_core/iTLB-load-misses/ \
+perf record -F 99999 -g -m 256M -e cpu_core/dTLB-load-misses/,cpu_core/iTLB-load-misses/ \
     -o "$PERF_DATA_DIR/itch_nasdaq_tlb.data" "$TEST_BIN" >/dev/null 2>&1 || true
 perf report --stdio -i "$PERF_DATA_DIR/itch_nasdaq_tlb.data" 2>/dev/null \
     | grep -E "^\s+[0-9]+\.[0-9]+%" \
@@ -98,7 +98,7 @@ perf c2c report --stdio --stats \
 
 run_section "11. FLAMEGRAPH"
 if command -v stackcollapse-perf.pl &>/dev/null && command -v flamegraph.pl &>/dev/null; then
-    perf record -g -m 256M -F 999 \
+    perf record -F 99999 -g -m 256M  \
         -e cpu_core/cycles/ \
         -o "$PERF_DATA_DIR/itch_nasdaq_flame.data" -- "$TEST_BIN" >/dev/null 2>&1 || true
     perf script -i "$PERF_DATA_DIR/itch_nasdaq_flame.data" \

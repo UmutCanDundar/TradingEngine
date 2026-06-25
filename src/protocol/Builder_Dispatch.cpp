@@ -18,10 +18,9 @@ Builder_Dispatch::Builder_Dispatch(spscTxPacketQueue_t &builder_to_sender, spscO
 
 std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> Builder_Dispatch::makeBuilderLookUpTable() noexcept
 {
-   std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> Builder_table{};  // 3/8 being used
+   std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> Builder_table{};  // 3/6 being used
 
    Builder_table[static_cast<size_t>(Protocol::FIX)][static_cast<size_t>(Venue::BIST)] = &Builder_Dispatch::buildFIX;
-
    Builder_table[static_cast<size_t>(Protocol::OUCH)][static_cast<size_t>(Venue::BIST)] = &Builder_Dispatch::buildOUCH_BIST;
    Builder_table[static_cast<size_t>(Protocol::OUCH)][static_cast<size_t>(Venue::NASDAQ)] = &Builder_Dispatch::buildOUCH_NASDAQ;
 

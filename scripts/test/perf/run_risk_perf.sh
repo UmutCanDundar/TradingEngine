@@ -75,7 +75,7 @@ system_info() {
         "$TEST_BIN1" 2>&1 || true
 
     run_section "6. PERF RECORD - CPU + BRANCH (>1% || TOP 20)"
-    perf record -g -m 256M \
+    perf record -F 99999 -g -m 256M \
         -e cpu_core/cycles/,cpu_core/instructions/,cpu_core/branches/,cpu_core/branch-misses/ \
     -e cpu_atom/cycles/,cpu_atom/instructions/,cpu_atom/branches/,cpu_atom/branch-misses/ \
         -o "$PERF_DATA_DIR/risk_update_cpu.data" \
@@ -89,7 +89,7 @@ system_info() {
        | head -20 || true
 
     run_section "7. PERF RECORD - DCACHE (>1% || TOP 20)"
-    perf record -g -m 256M \
+    perf record -F 99999 -g -m 256M \
         -e cpu_core/L1-dcache-load-misses/,cpu_core/LLC-load-misses/ \
         -o "$PERF_DATA_DIR/risk_update_dcache.data" \
         "$TEST_BIN1" >/dev/null 2>&1 || true
@@ -101,7 +101,7 @@ system_info() {
        | head -20 || true
 
     run_section "8. PERF RECORD - ICACHE (>1% || TOP 20)"
-    perf record -g -m 256M \
+    perf record -F 99999 -g -m 256M \
         -e cpu_core/L1-icache-load-misses/ \
         -o "$PERF_DATA_DIR/risk_update_icache.data" \
         "$TEST_BIN1" >/dev/null 2>&1 || true
@@ -113,7 +113,7 @@ system_info() {
        | head -20 || true
 
     run_section "9. PERF RECORD - TLB (>1% || TOP 20)"
-    perf record -g -m 256M \
+    perf record -F 99999 -g -m 256M \
         -e cpu_core/dTLB-load-misses/,cpu_core/iTLB-load-misses/ \
         -o "$PERF_DATA_DIR/risk_update_tlb.data" \
         "$TEST_BIN1" >/dev/null 2>&1 || true
@@ -135,7 +135,7 @@ system_info() {
     run_section "11. FLAMEGRAPH"
     if command -v stackcollapse-perf.pl &>/dev/null && \
        command -v flamegraph.pl &>/dev/null; then
-        perf record -g -m 256M -F 999 \
+        perf record -F 99999 -g -m 256M  \
         -e cpu_core/cycles/ \
             -o "$PERF_DATA_DIR/risk_update_flame.data" \
             -- "$TEST_BIN1" >/dev/null 2>&1 || true
@@ -186,7 +186,7 @@ system_info() {
         "$TEST_BIN2" 2>&1 || true
 
     run_section "6. PERF RECORD - CPU + BRANCH (>1% || TOP 20)"
-    perf record -g -m 256M \
+    perf record -F 99999 -g -m 256M \
         -e cpu_core/cycles/,cpu_core/instructions/,cpu_core/branches/,cpu_core/branch-misses/ \
         -e cpu_atom/cycles/,cpu_atom/instructions/,cpu_atom/branches/,cpu_atom/branch-misses/ \
         -o "$PERF_DATA_DIR/risk_check_cpu.data" \
@@ -200,7 +200,7 @@ system_info() {
        | head -20 || true
 
     run_section "7. PERF RECORD - DCACHE (>1% || TOP 20)"
-    perf record -g -m 256M \
+    perf record -F 99999 -g -m 256M \
         -e cpu_core/L1-dcache-load-misses/,cpu_core/LLC-load-misses/ \
         -o "$PERF_DATA_DIR/risk_check_dcache.data" \
         "$TEST_BIN2" >/dev/null 2>&1 || true
@@ -212,7 +212,7 @@ system_info() {
        | head -20 || true
 
     run_section "8. PERF RECORD - ICACHE (>1% || TOP 20)"
-    perf record -g -m 256M \
+    perf record -F 99999 -g -m 256M \
         -e cpu_core/L1-icache-load-misses/ \
         -o "$PERF_DATA_DIR/risk_check_icache.data" \
         "$TEST_BIN2" >/dev/null 2>&1 || true
@@ -224,7 +224,7 @@ system_info() {
        | head -20 || true
 
     run_section "9. PERF RECORD - TLB (>1% || TOP 20)"
-    perf record -g -m 256M \
+    perf record -F 99999 -g -m 256M \
         -e cpu_core/dTLB-load-misses/,cpu_core/iTLB-load-misses/ \
         -o "$PERF_DATA_DIR/risk_check_tlb.data" \
         "$TEST_BIN2" >/dev/null 2>&1 || true
@@ -246,7 +246,7 @@ system_info() {
     run_section "11. FLAMEGRAPH"
     if command -v stackcollapse-perf.pl &>/dev/null && \
        command -v flamegraph.pl &>/dev/null; then
-        perf record -g -m 256M -F 999 \
+        perf record -F 99999 -g -m 256M  \
         -e cpu_core/cycles/ \
             -o "$PERF_DATA_DIR/risk_check_flame.data" \
             -- "$TEST_BIN2" >/dev/null 2>&1 || true
