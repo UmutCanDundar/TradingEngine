@@ -112,7 +112,6 @@ public:
 public:
 
     static_assert(is_power_of_two_v<N>, "ConcurrentFixedFlatMap: N must be power-of-two (e.g. 256, 1024, 65536).");
-    // static_assert(N >= 128, "ConcurrentFixedFlatMap: N must be at least 128 to maintain performance (load factor ≤ 0.50).");
 
     static constexpr size_type capacity    = N;
     static constexpr size_type index_mask  = N - 1; 

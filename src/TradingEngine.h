@@ -98,7 +98,7 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     // =========================
     // QUEUES (LAYER 1)
     // =========================                         // Type Definition Location
-    spscRxPacketQueue_t receiver_to_parser_;            // NetworkPackets.h
+    spscRxPacketQueue_t receiver_to_parser_;             // NetworkPackets.h
     spscMessageQueue_t parser_to_store_;                 // MessageWithVenue.h
     spscOrderQueue_t store_to_risk_;                     // Order.h
     spscOrderQueue_t store_to_strategy_;                 // Order.h
@@ -110,7 +110,7 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     spscDbQueue_t store_to_db_;                          // DbTypes.h
     spscDbQueue_t db_to_parser_;                         // DbTypes.h
     spscFIXTxSessionQueue_t parser_to_fixbuilder_tx_;    // FIXMessage.h
-    spscFIXRxSessionQueue_t parser_to_fixbuilder_rx_;  // FIXMessage.h
+    spscFIXRxSessionQueue_t parser_to_fixbuilder_rx_;    // FIXMessage.h
 
     // =========================
     // COMPONENTS (LAYER 2)

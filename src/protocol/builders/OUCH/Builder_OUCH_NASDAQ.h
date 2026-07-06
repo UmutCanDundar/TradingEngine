@@ -36,7 +36,7 @@
 // - After observing real traffic patterns, message-type–specific prefilled templates may be introduced
 //   to further reduce runtime instruction count. In such a design, invariant fields would be written
 //   once at initialization time, and only truly dynamic fields (e.g., quantity, price, order IDs)
-//   would be patched per message, trading memory for lower instruction and store pressure on hot paths.(*)TESTED-see benchmark reports
+//   would be patched per message, trading memory for lower instruction and store pressure on hot paths.
 // ======================================================================================================
 
 //FUNC_PTR NO-PRE-FILL
@@ -53,7 +53,7 @@
 
 class SoupBinTcp;
 
-struct Buffer_ONQ // May be separated per msg type after observing real traffic to avoid unnecessary set to all fields
+struct Buffer_ONQ 
 {
     static constexpr size_t MAX_MSG_SIZE = 126;
 
@@ -158,6 +158,7 @@ private:
 };
 
 
+// DISCARDED ALTERNATIVE 
 
 //FUNC_PTR PRE-FILL
 

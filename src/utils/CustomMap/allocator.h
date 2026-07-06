@@ -93,7 +93,7 @@ public:
     }
 
     // Free once for all, there is no deallocation of individual elements.
-    void deallocate([[maybe_unused]] pointer p, [[maybe_unused]] size_type n = 1) noexcept {} // std::allocator_traits compatibility but no-op
+    void deallocate([[maybe_unused]] pointer p, [[maybe_unused]] size_type n = 1) noexcept {} 
     void reset() noexcept { cursor_ = buffer_; }
 
     

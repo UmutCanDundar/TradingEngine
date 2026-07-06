@@ -240,8 +240,8 @@ void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) no
       return;
    }
 
-   // order->canModify = 0x00;
-   awaitingAck_orders_.erase(client_order_id); // In FIX, ClOrdID is unique for every action (New/Replace/Cancel).
+   // order->canModify = 0x00; not required in testing mode.
+   awaitingAck_orders_.erase(client_order_id); 
     
    store_to_db_.push(fixMsg);
    store_to_db_.push(order);

@@ -320,38 +320,3 @@ private:
     }
 };
 
-
-//  inline uint64_t parsePrice(std::string_view price_str, uint8_t price_scale_shifts) noexcept // price_scale_shifts(only zeros): 4 for 10000
-//     {
-//         static constexpr uint64_t pow10[] = {1, 10, 100, 1000, 10000, 100000, 1000000};
-//         uint64_t result = 0;
-       
-//         uint8_t frac_digits = 0;
-//         bool seen_dot = false;
-
-//         for (const auto c : price_str)
-//         {
-//             if (c == '.')
-//             {
-//                 seen_dot = true;
-//                 continue;
-//             }
-
-//             if(seen_dot)
-//             {
-//                 if(frac_digits >= price_scale_shifts)
-//                 break;
-                
-//                 frac_digits++;
-//             }
-                
-//             if (LIKELY(c >= '0' && c <= '9'))
-//             {
-//                 result = result * 10 + (c - '0');
-//             }
-//         }
-
-//         result *= pow10[price_scale_shifts - frac_digits];
-
-//         return result;
-//     }

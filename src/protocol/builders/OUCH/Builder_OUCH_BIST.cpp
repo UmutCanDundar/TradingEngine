@@ -59,6 +59,7 @@ std::array<ExchangeClientInfo_local, ACC_COUNT> Builder_OUCH_BIST::initialize_ex
 
 
 
+// DISCARDED ALTERNATIVES
 
 // FUNC-PTR NO-PRE-FILL
 
@@ -101,7 +102,6 @@ std::array<ExchangeClientInfo_local, ACC_COUNT> Builder_OUCH_BIST::initialize_ex
 
 //     return eci_local;
 // }
-
 
 
 

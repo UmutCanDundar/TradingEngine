@@ -36,7 +36,7 @@
 // - After observing real traffic patterns, message-type–specific prefilled templates may be introduced
 //   to further reduce runtime instruction count. In such a design, invariant fields would be written
 //   once at initialization time, and only truly dynamic fields (e.g., quantity, price, order IDs)
-//   would be patched per message, trading memory for lower instruction and store pressure on hot paths.(*)TESTED - see benchmark report
+//   would be patched per message, trading memory for lower instruction and store pressure on hot paths.
 // ======================================================================================================
 
 //FUNC_PTR PRE-FILL
@@ -87,11 +87,9 @@ struct Buffer_OBT_Enter : Buffer_OBT
         std::memset(data, ' ', ENTER_SIZE);
         data[3] = 'O';
         data[36] = 0;
-        // std::memset(data + 53, ' ', 15);
         Endian::write_u64_be(data + 100, 0);
         data[108] = 1;
         data[109] = data[110] = data[111] = 0;
-        // std::memset(data + 112, ' ', 3);
         std::memset(data + 115, 0, 2); 
     }
 };
@@ -106,7 +104,6 @@ struct Buffer_OBT_Replace : Buffer_OBT
         std::memset(data, ' ', REPLACE_SIZE);
         data[3] = 'U';
         data[44] = 0;
-        // std::memset(data + 61, ' ', 15); 
         Endian::write_u64_be(data + 108, 0);
         data[116] = 1;
         std::memset(data + 117, 0, 8); 
@@ -217,8 +214,9 @@ private:
 
 
 
+// DISCARDED ALTERNATIVES
 
-//FUNC-PTR NO-PRE-FILL
+//FUNC-PTR NO-PRE-FILL 
 
 // #pragma once
 
@@ -337,11 +335,6 @@ private:
 //             &Builder_OUCH_BIST::buildCancelByOrderID
 //     };
 // };
-
-
-
-
-
 
 
 // SWITCH-CASE PRE-FILL

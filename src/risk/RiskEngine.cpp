@@ -127,7 +127,7 @@ bool RiskEngine::check_risk() noexcept
 
         // ===== PRE-RISK CHECKS (FAST-FAIL)=====
         if (check_venue_halt_and_circuit(*order, *symmeta) /* || 
-            check_order_rate_limit(accRisk, symRisk, *order) */) // this check need to be commented out during benchmark test
+            check_order_rate_limit(accRisk, symRisk, *order) */) // this check needs to be commented out during benchmark test
             continue;
         if(UNLIKELY(order->status == Status::CancelRequest)) 
         {
