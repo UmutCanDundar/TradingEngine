@@ -1,7 +1,6 @@
 #pragma once
 
 #include "slot.h"
-#include "allocator.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -25,6 +24,12 @@
 //   - V: trivially copyable
 //   - Single concurrent insert (writer), single concurrent lookup/erase (reader)
 // ================================================================================
+
+template<size_t N>
+struct is_power_of_two : std::bool_constant<(N > 0) && !(N & (N - 1))> {};
+
+template<size_t N>
+inline constexpr bool is_power_of_two_v = is_power_of_two<N>::value;
 
 template<
     HashableKey K,
@@ -102,8 +107,6 @@ public:
 
 
 private:
-public:
-
     alignas(64) slot_type slots_[N]{};
     alignas(64) std::atomic<size_type> size_{0};
     [[no_unique_address]] Hash hash_fn_{};
