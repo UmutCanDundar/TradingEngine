@@ -74,10 +74,10 @@ class Builder_FIX;
 class TradingEngine
 {
 public:
-    TradingEngine() noexcept;
+    TradingEngine();
     ~TradingEngine() noexcept;
 
-    void start() noexcept;
+    void start();
     void stop() noexcept;
 
 private:

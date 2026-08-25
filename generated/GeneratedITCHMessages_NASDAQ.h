@@ -138,9 +138,9 @@ struct ITCHTradingStateMessage {
 
 enum class ITCHTypes : size_t {   A = 0,  F = 1,  X = 2,  E = 3,  C = 4,  D = 5,  U = 6,  P = 7,  S = 8,  R = 9,  H = 10,  unknownITCHtype = 99 };
 
-inline std::array<size_t, 11> ITCHSizeOfs = {  36, 40, 23, 31, 36, 19, 35, 37, 12, 39, 25, };
+inline constexpr std::array<size_t, 11> ITCHSizeOfs = {  36, 40, 23, 31, 36, 19, 35, 37, 12, 39, 25, };
 
-inline constexpr size_t itchMessageIndex(char type) {
+inline size_t itchMessageIndex(char type) noexcept {
 
    switch(type) {
       case 'A': return static_cast<size_t>(ITCHTypes::A);

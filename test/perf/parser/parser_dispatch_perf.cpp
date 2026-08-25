@@ -42,7 +42,7 @@ int main()
     std::thread consumer;
     std::thread network_thread;
 
-    PendingQueue<RxPacket*, 256> pend_read;
+    CustomQueue<RxPacket*, 256> pend_read;
 
     txPkt_pool  = std::make_unique<TxPacketPoolManager>();
     sess_mngr   = std::make_unique<SessionManager>();

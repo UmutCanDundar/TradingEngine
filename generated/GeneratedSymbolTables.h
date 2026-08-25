@@ -6,17 +6,17 @@
 #include <cstdint>
 #include <span>
 
-struct SymbolIndex { const char* symbol; uint32_t index; };
+struct SymbolIndex { const char* symbol{nullptr}; uint32_t index; }; // 12B > safe to copy
 
-constexpr std::array<SymbolIndex, 1> BIST_symbols = {{
+inline constexpr std::array<const SymbolIndex, 1> BIST_symbols = {{
     {"GARAN", 0},
 }};
 
-constexpr std::array<SymbolIndex, 1> NASDAQ_symbols = {{
+inline constexpr std::array<const SymbolIndex, 1> NASDAQ_symbols = {{
     {"AAPL", 0},
 }};
 
-inline auto all_symbol_tables = std::to_array<std::span<const SymbolIndex>>({
+inline constexpr auto all_symbol_tables = std::to_array<std::span<const SymbolIndex>>({
     std::span{BIST_symbols},
     std::span{NASDAQ_symbols},
 });

@@ -36,7 +36,7 @@
 //      Therefore, such core components MUST be heap-allocated regardless of their raw size.
 //
 //  - Tag handlers are intentionally dispatched via a function table. Since this path is
-//    memory-bound (dominated by sequential byte scanning and memory accesses), so inline or constexpr 
+//    memory-bound (dominated by sequential byte scanning and memory accesses), so or constexpr 
 //    dispatch was not expected to provide meaningful latency improvement upfront and inlining all 
 //    handlers would cause code bloat and instruction cache pressure. After profiling, frequently-hit 
 //    (hot) tags may be separated and inlined via switch-case or template dispatch, while cold tags remain 
@@ -127,10 +127,10 @@ private:
 public:
     Parser_FIX(spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx) noexcept;
     
-    bool handle_sesMsg(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix, SessionState &state) noexcept;
-    char find_type(const char *data) noexcept;
+    static bool handle_sesMsg(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix, SessionState &state) noexcept;
+    static char find_type(const char *data) noexcept;
     void resend_logic(uint32_t msg_seqnum, Sequence_FIX &seq_fix) noexcept;
-    void resend_logic_logon(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix) noexcept;
+    void resend_logic_logon(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix);
     std::pair<char *, size_t> nextFixMsg(RxPacket *pkt, size_t &data_offset) noexcept;
 
     template <typename T>
@@ -236,17 +236,17 @@ public:
         return msg;
     }
 
-    inline void releaseFIX(FIXMessage* fixMsg) noexcept
+    void releaseFIX(FIXMessage* fixMsg) noexcept
     {       
         free_fixMsg_list_.push(fixMsg);
     }
-    inline void releaseFIX(FIXSessionMessage* fixSesMsg) noexcept
+    void releaseFIX(FIXSessionMessage* fixSesMsg) noexcept
     {
         free_fixSesMsg_list_.push(fixSesMsg);
     }
 
     template<typename T>
-    inline void push_pending(T* msg) noexcept
+    void push_pending(T* msg) 
     {
         using type_t = std::conditional_t<std::is_same_v<T, FIXMessage>, FIXMessage*, FIXSessionMessage*>;
 
@@ -255,7 +255,7 @@ public:
             std::variant<FIXMessage *, FIXSessionMessage *>{std::in_place_type<type_t>, msg});
     }
 
-    inline std::variant<FIXMessage*, FIXSessionMessage*>* find_in_pending(const uint32_t expected) noexcept
+    std::variant<FIXMessage*, FIXSessionMessage*>* find_in_pending(uint32_t expected) noexcept
     {
         auto it = pending_to_store_map_.find(expected);
         if (it == pending_to_store_map_.end())
@@ -264,14 +264,14 @@ public:
         return &it->second;
     }
 
-    inline void pop_pending(const auto seqnum) noexcept
+    void pop_pending(auto seqnum) noexcept
     {
        pending_to_store_map_.erase(seqnum);
     }
 
 private:
 
-    static inline uint64_t parseNum(std::string_view strnum) noexcept
+    static uint64_t parseNum(std::string_view strnum) noexcept
     {
         uint64_t result = 0;
         for (char c : strnum)
@@ -284,13 +284,13 @@ private:
         return result;
     }
 
-    static inline uint8_t parseChar(std::string_view str) noexcept
+    static uint8_t parseChar(std::string_view str) noexcept
     {
         return static_cast<uint8_t>(str[0]);
     }
 
     template<uint8_t Scale>
-    static inline uint64_t parsePrice(std::string_view price_str) noexcept
+    static uint64_t parsePrice(std::string_view price_str) noexcept
     {
         static constexpr uint64_t pow10[] = {
             1ULL, 10ULL, 100ULL, 1000ULL, 10000ULL, 100000ULL, 1000000ULL

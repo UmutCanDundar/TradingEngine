@@ -47,14 +47,12 @@ private:
     std::thread risk_update_thread_;
 
 public:
-    RiskFlow(RiskEngine &risk) noexcept;
+    RiskFlow(RiskEngine &risk);
 
     RiskFlow(const RiskFlow &) = delete;
     RiskFlow &operator=(const RiskFlow &) = delete;
-    RiskFlow(RiskFlow &&) = delete;
-    RiskFlow &operator=(RiskFlow &&) = delete;
 
-    void start() noexcept;
+    void start();
     void stop() noexcept;
 
 private:

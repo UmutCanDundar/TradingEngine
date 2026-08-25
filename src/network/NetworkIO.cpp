@@ -17,7 +17,7 @@
 #include <cerrno>
 #include <cstring>
 
-NetworkIO::NetworkIO(spscRxPacketQueue_t &receiver_to_parser, spscTxPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, const std::atomic<bool>& running_engine) noexcept
+NetworkIO::NetworkIO(spscRxPacketQueue_t &receiver_to_parser, spscTxPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, const std::atomic<bool>& running_engine) 
    :  receiver_to_parser_(receiver_to_parser),
       builder_to_sender_(builder_to_sender),
       sess_mngr_(sess_mngr),
@@ -32,7 +32,7 @@ NetworkIO::NetworkIO(spscRxPacketQueue_t &receiver_to_parser, spscTxPacketQueue_
          free_pkt_list_.push(&packet_pool_[i]);
 }
 
-std::array<int, MAX_SESSIONS> NetworkIO::Init_Sockets() noexcept
+std::array<int, MAX_SESSIONS> NetworkIO::Init_Sockets() 
 {
    std::array<int, MAX_SESSIONS> socks{};
    for (size_t index = 0; index < MAX_SESSIONS; index++)
@@ -49,7 +49,7 @@ std::array<int, MAX_SESSIONS> NetworkIO::Init_Sockets() noexcept
    return socks;
 }
 
-void NetworkIO::makeSocketNonBlocking(const int sock) noexcept
+void NetworkIO::makeSocketNonBlocking(int sock) noexcept
 {
    int flags;
 
@@ -89,7 +89,7 @@ int NetworkIO::createEpoll() noexcept
    return epoll_fd;
 }
 
-void NetworkIO::addEpoll(const int sock, const uint64_t epoll_data, const uint32_t events) noexcept
+void NetworkIO::addEpoll(int sock, uint64_t epoll_data, uint32_t events) const 
 {
    if (sock < 0)
    {
@@ -111,7 +111,7 @@ void NetworkIO::addEpoll(const int sock, const uint64_t epoll_data, const uint32
    }
 }
 
-void NetworkIO::modEpoll(const int sock, const uint64_t epoll_data, const uint32_t events) noexcept
+void NetworkIO::modEpoll(int sock, uint64_t epoll_data, uint32_t events) const noexcept
 {
 
    epoll_event ev{};
@@ -128,7 +128,7 @@ void NetworkIO::modEpoll(const int sock, const uint64_t epoll_data, const uint32
    }
 }
 
-int NetworkIO::createSocket(const size_t index, Protocol prot) noexcept
+int NetworkIO::createSocket(size_t index, Protocol prot) 
 {
    int sock_type = (prot == Protocol::ITCH) ? SOCK_DGRAM : SOCK_STREAM;
    int sock = -1;
@@ -183,7 +183,7 @@ int NetworkIO::createSocket(const size_t index, Protocol prot) noexcept
    return sock;
 }
 
-void NetworkIO::closeSocket(const uint8_t index) noexcept
+void NetworkIO::closeSocket(uint8_t index) noexcept
 {
    int sock = socks_[index];
 
@@ -198,7 +198,7 @@ void NetworkIO::closeSocket(const uint8_t index) noexcept
    socks_[index] = -1;
 }
 
-int NetworkIO::setupSocket(const int sock, const SessionContext& cxt) noexcept 
+int NetworkIO::setupSocket(int sock, const SessionContext& cxt) 
 {
    uint8_t index = cxt.socket_index;
    uint64_t epoll_data = epollPackData(index, cxt.venue, cxt.protocol);
@@ -370,7 +370,7 @@ int NetworkIO::setupSocket(const int sock, const SessionContext& cxt) noexcept
    return sock;
 }
 
-int NetworkIO::reconnect(uint8_t index) noexcept
+int NetworkIO::reconnect(uint8_t index) 
 {
    auto *cxt = sess_mngr_.getSessionContext(index);
 
@@ -380,7 +380,7 @@ int NetworkIO::reconnect(uint8_t index) noexcept
    return sock;
 }
 
-void NetworkIO::recv_send() noexcept
+void NetworkIO::recv_send() 
 {
    constexpr int MAX_EVENTS = 10;
    epoll_event events[MAX_EVENTS];
@@ -523,7 +523,7 @@ void NetworkIO::recv_send() noexcept
    }
 }
 
-void NetworkIO::handleEINPROGRESS(const int sock, SocketState& states, const uint8_t index) noexcept 
+void NetworkIO::handleEINPROGRESS(int sock, SocketState& states, uint8_t index) 
 {      
       int error = 0;
       socklen_t len = sizeof(error);
@@ -590,7 +590,7 @@ void NetworkIO::handleEINPROGRESS(const int sock, SocketState& states, const uin
       }
 }
 
-bool NetworkIO::SBTPacketHandler(RxPacket *rxPkt, const size_t recv_len, PendingQueue<RxPacket *, PENDING_CAPACITY>& pend_read, const size_t index) noexcept 
+bool NetworkIO::SBTPacketHandler(RxPacket *rxPkt, size_t recv_len, CustomQueue<RxPacket *, PENDING_CAPACITY>& pend_read, size_t index) 
 {
    uint16_t data_offset = 0;
    auto *next_pkt_start = rxPkt->data.data();
@@ -711,7 +711,7 @@ bool NetworkIO::SBTPacketHandler(RxPacket *rxPkt, const size_t recv_len, Pending
    return true;
 }
 
-void NetworkIO::send(TxPacket& txPkt, const int sock, const uint8_t index, SocketState &states) noexcept
+void NetworkIO::send(TxPacket& txPkt, int sock, uint8_t index, SocketState &states) 
 {
    while (txPkt.offset < txPkt.len)
    {
@@ -749,15 +749,14 @@ void NetworkIO::send(TxPacket& txPkt, const int sock, const uint8_t index, Socke
    states.active_pkt = nullptr;
 }
 
-NetworkIO::~NetworkIO() noexcept
+NetworkIO::~NetworkIO() 
 {
    for (uint8_t index = 0; index < MAX_SESSIONS; index++)
    {
       if (joined_ips[index] != 0)
       {
             ip_mreq mreq{{joined_ips[index]}, {htonl(INADDR_ANY)}};
-            if (::setsockopt(socks_[index], IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) 
-               LOG_ERROR("DROP_MEMBER_ERROR");
+            ::setsockopt(socks_[index], IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
       }
       closeSocket(index);
    }

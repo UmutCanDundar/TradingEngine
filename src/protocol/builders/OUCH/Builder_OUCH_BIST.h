@@ -22,16 +22,12 @@
 //
 // DEVELOPER NOTES (PRE-PROFILING):
 // - The builder path is largely memory-bound due to sequential buffer writes, multiple memcpy/memset
-//   operations, and fixed-layout binary message construction; therefore, forcing inline or constexpr
+//   operations, and fixed-layout binary message construction; therefore, forcing or constexpr
 //   dispatch upfront is not expected to yield meaningful latency improvements.
 //   Dispatch is currently implemented via a function table for correctness and clarity. Since the number
 //   of message types is small, this can be revisited after profiling: hot paths may be converted to
 //   switch-case dispatch to enable inlining and reduce instruction count, provided instruction cache
-//   pressure remains acceptable.(*)TESTED - see benchmark report
-//
-// - Message builders are marked inline for clarity and future flexibility;
-//   however, due to function-pointer-based dispatch, they are not expected
-//   to inline in the current design.
+//   pressure remains acceptable.(*)TESTED
 //  
 // - After observing real traffic patterns, message-type–specific prefilled templates may be introduced
 //   to further reduce runtime instruction count. In such a design, invariant fields would be written
@@ -59,9 +55,9 @@ struct ExchangeClientInfo_local
     char client_account[16]; // Client/Account for DM
     char exchange_info[32];  // Account number (first 16 used) for EQM
 
-    ExchangeClientInfo_local() = default;
+    ExchangeClientInfo_local() noexcept = default;
 
-    ExchangeClientInfo_local(const std::string_view cl_acc, const std::string_view exc_info) 
+    ExchangeClientInfo_local(const std::string_view cl_acc, const std::string_view exc_info) noexcept
     {
         std::memset(client_account, ' ', 16);
         std::memset(exchange_info, ' ', 32);
@@ -162,10 +158,7 @@ public:
     Buffer_OBT* build(const Order &order) noexcept;
 
 private:
-    std::array<ExchangeClientInfo_local, ACC_COUNT> initialize_exc_info(SessionManager &sess_mngr) noexcept;
-    
-
-    inline void buildEnterOrder(const Order &order, char *buf) noexcept
+    void buildEnterOrder(const Order &order, char *buf) const noexcept
     {
         std::memcpy(buf + 1, &order.client_order_token, order.real_cl_ord_token_len);
         Endian::write_u32_be(buf + 15, order.instrument_id);
@@ -177,7 +170,7 @@ private:
         std::memcpy(buf + 65, eci_local_[order.account_index].exchange_info, 32);
     }
 
-    inline void buildReplaceOrder(const Order &order, char *buf) noexcept
+    void buildReplaceOrder(const Order &order, char *buf) const noexcept
     {
         std::memcpy(buf + 1, &order.fix_org_order_id, 14);
         std::memcpy(buf + 15, &order.client_order_token, order.real_cl_ord_token_len);
@@ -189,19 +182,21 @@ private:
         *(buf + 113) = 1;
     }
 
-    inline void buildCancelOrder(const Order &order, char *buf) noexcept
+    void buildCancelOrder(const Order &order, char *buf) const noexcept
     {
         std::memcpy(buf + 1, &order.client_order_token, 14);      
     }
 
-    inline void buildCancelByOrderID(const Order &order, char *buf) noexcept
+    void buildCancelByOrderID(const Order &order, char *buf) const noexcept
     {
         Endian::write_u32_be(buf + 1, order.instrument_id);
         *(buf + 5) = order.side == Side::Buy ? 'B' : 'S';
         Endian::write_u64_be(buf + 6, order.order_id);
     }
     
-    using OuchHandlerFunc = void (Builder_OUCH_BIST::*)(const Order &order, char *buf) noexcept;
+    static std::array<ExchangeClientInfo_local, ACC_COUNT> initialize_exc_info(SessionManager &sess_mngr) noexcept;
+
+    using OuchHandlerFunc = void (Builder_OUCH_BIST::*)(const Order &order, char *buf) const noexcept;
     static constexpr std::array<OuchHandlerFunc, 4> OuchMessageBuilders =
     {
             &Builder_OUCH_BIST::buildEnterOrder,
@@ -282,7 +277,7 @@ private:
 //     std::array<ExchangeClientInfo_local, ACC_COUNT> initialize_exc_info(SessionManager &sess_mngr) noexcept;
     
 
-//     inline void buildEnterOrder(const Order &order, char *buf) noexcept
+//     void buildEnterOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.client_order_token, order.real_cl_ord_token_len);
 //         Endian::write_u32_be(buf + 15, order.instrument_id);
@@ -302,7 +297,7 @@ private:
 //         std::memset(buf + 112, 0, 2);
 //     }
 
-//     inline void buildReplaceOrder(const Order &order, char *buf) noexcept
+//     void buildReplaceOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.fix_org_order_id, 14);
 //         std::memcpy(buf + 15, &order.client_order_token, order.real_cl_ord_token_len);
@@ -314,12 +309,12 @@ private:
 //         *(buf + 113) = 1;
 //     }
 
-//     inline void buildCancelOrder(const Order &order, char *buf) noexcept
+//     void buildCancelOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.client_order_token, 14);
 //     }
 
-//     inline void buildCancelByOrderID(const Order &order, char *buf) noexcept
+//     void buildCancelByOrderID(const Order &order, char *buf) noexcept
 //     {
 //         Endian::write_u32_be(buf + 1, order.instrument_id);
 //         *(buf + 5) = order.side == Side::Buy ? 'B' : 'S';
@@ -409,7 +404,7 @@ private:
 //     std::array<ExchangeClientInfo_local, ACC_COUNT> initialize_exc_info(SessionManager &sess_mngr) noexcept;
     
 
-//     __attribute__((always_inline)) inline char* buildEnterOrder(const Order &order, char *buf) noexcept
+//     __attribute__((always_inline)) char* buildEnterOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.client_order_token, order.real_cl_ord_token_len);
 //         Endian::write_u32_be(buf + 15, order.instrument_id);
@@ -423,7 +418,7 @@ private:
 //         return buf;
 //     }
 
-//     __attribute__((always_inline)) inline char* buildReplaceOrder(const Order &order, char *buf) noexcept
+//     __attribute__((always_inline)) char* buildReplaceOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.fix_org_order_id, 14);
 //         std::memcpy(buf + 15, &order.client_order_token, order.real_cl_ord_token_len);
@@ -437,14 +432,14 @@ private:
 //         return buf;
 //     }
 
-//     __attribute__((always_inline)) inline char* buildCancelOrder(const Order &order, char *buf) noexcept
+//     __attribute__((always_inline)) char* buildCancelOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.client_order_token, 14);
       
 //         return buf;
 //     }
 
-//     __attribute__((always_inline)) inline char* buildCancelByOrderID(const Order &order, char *buf) noexcept
+//     __attribute__((always_inline)) char* buildCancelByOrderID(const Order &order, char *buf) noexcept
 //     {
 //         Endian::write_u32_be(buf + 1, order.instrument_id);
 //         *(buf + 5) = order.side == Side::Buy ? 'B' : 'S';
@@ -560,7 +555,7 @@ private:
 //     std::array<ExchangeClientInfo_local, ACC_COUNT> initialize_exc_info(SessionManager &sess_mngr) noexcept;
     
 
-//     inline char* buildEnterOrder(const Order &order, char *buf) noexcept
+//     char* buildEnterOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.client_order_token, order.real_cl_ord_token_len);
 //         Endian::write_u32_be(buf + 15, order.instrument_id);
@@ -574,7 +569,7 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildReplaceOrder(const Order &order, char *buf) noexcept
+//     char* buildReplaceOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.fix_org_order_id, 14);
 //         std::memcpy(buf + 15, &order.client_order_token, order.real_cl_ord_token_len);
@@ -588,14 +583,14 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildCancelOrder(const Order &order, char *buf) noexcept
+//     char* buildCancelOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.client_order_token, 14);
       
 //         return buf;
 //     }
 
-//     inline char* buildCancelByOrderID(const Order &order, char *buf) noexcept
+//     char* buildCancelByOrderID(const Order &order, char *buf) noexcept
 //     {
 //         Endian::write_u32_be(buf + 1, order.instrument_id);
 //         *(buf + 5) = order.side == Side::Buy ? 'B' : 'S';
@@ -678,7 +673,7 @@ private:
 //     std::array<ExchangeClientInfo_local, ACC_COUNT> initialize_exc_info(SessionManager &sess_mngr) noexcept;
     
 
-//     inline char* buildEnterOrder(const Order &order, char *buf) noexcept
+//     char* buildEnterOrder(const Order &order, char *buf) noexcept
 //     {
 //         *buf = 'O';
 //         std::memcpy(buf + 1, &order.client_order_token, order.real_cl_ord_token_len);
@@ -702,7 +697,7 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildReplaceOrder(const Order &order, char *buf) noexcept
+//     char* buildReplaceOrder(const Order &order, char *buf) noexcept
 //     {
 //         *buf = 'U';
 //         std::memcpy(buf + 1, &order.fix_org_order_id, 14);
@@ -720,7 +715,7 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildCancelOrder(const Order &order, char *buf) noexcept
+//     char* buildCancelOrder(const Order &order, char *buf) noexcept
 //     {
 //         *buf = 'X';
 //         std::memcpy(buf + 1, &order.client_order_token, 14);
@@ -728,7 +723,7 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildCancelByOrderID(const Order &order, char *buf) noexcept
+//     char* buildCancelByOrderID(const Order &order, char *buf) noexcept
 //     {
 //         *buf = 'Y';
 //         Endian::write_u32_be(buf + 1, order.instrument_id);
@@ -824,7 +819,7 @@ private:
 //     std::array<ExchangeClientInfo_local, ACC_COUNT> initialize_exc_info(SessionManager &sess_mngr) noexcept;
     
 
-//     inline char* buildEnterOrder(const Order &order, char *buf) noexcept
+//     char* buildEnterOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.client_order_token, order.real_cl_ord_token_len);
 //         Endian::write_u32_be(buf + 15, order.instrument_id);
@@ -838,7 +833,7 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildReplaceOrder(const Order &order, char *buf) noexcept
+//     char* buildReplaceOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.fix_org_order_id, 14);
 //         std::memcpy(buf + 15, &order.client_order_token, order.real_cl_ord_token_len);
@@ -852,14 +847,14 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildCancelOrder(const Order &order, char *buf) noexcept
+//     char* buildCancelOrder(const Order &order, char *buf) noexcept
 //     {
 //         std::memcpy(buf + 1, &order.client_order_token, 14);
       
 //         return buf;
 //     }
 
-//     inline char* buildCancelByOrderID(const Order &order, char *buf) noexcept
+//     char* buildCancelByOrderID(const Order &order, char *buf) noexcept
 //     {
 //         Endian::write_u32_be(buf + 1, order.instrument_id);
 //         *(buf + 5) = order.side == Side::Buy ? 'B' : 'S';
@@ -942,7 +937,7 @@ private:
 //     std::array<ExchangeClientInfo_local, ACC_COUNT> initialize_exc_info(SessionManager &sess_mngr) noexcept;
     
 
-//     inline char* buildEnterOrder(const Order &order, char *buf) noexcept
+//     char* buildEnterOrder(const Order &order, char *buf) noexcept
 //     {
 //         *buf = 'O';
 //         std::memcpy(buf + 1, &order.client_order_token, order.real_cl_ord_token_len);
@@ -966,7 +961,7 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildReplaceOrder(const Order &order, char *buf) noexcept
+//     char* buildReplaceOrder(const Order &order, char *buf) noexcept
 //     {
 //         *buf = 'U';
 //         std::memcpy(buf + 1, &order.fix_org_order_id, 14);
@@ -984,7 +979,7 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildCancelOrder(const Order &order, char *buf) noexcept
+//     char* buildCancelOrder(const Order &order, char *buf) noexcept
 //     {
 //         *buf = 'X';
 //         std::memcpy(buf + 1, &order.client_order_token, 14);
@@ -992,7 +987,7 @@ private:
 //         return buf;
 //     }
 
-//     inline char* buildCancelByOrderID(const Order &order, char *buf) noexcept
+//     char* buildCancelByOrderID(const Order &order, char *buf) noexcept
 //     {
 //         *buf = 'Y';
 //         Endian::write_u32_be(buf + 1, order.instrument_id);

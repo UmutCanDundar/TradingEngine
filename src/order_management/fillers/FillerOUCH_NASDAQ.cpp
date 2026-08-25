@@ -9,7 +9,7 @@
 
 FillerOUCH_NASDAQ::FillerOUCH_NASDAQ(OrderManager &om) noexcept : ord_mngr_(om) {}
 
-void FillerOUCH_NASDAQ::fill_ouch_accepted(Order &order, const NASDAQ::RX::OUCHOrderAcceptedMessage &msg) noexcept
+void FillerOUCH_NASDAQ::fill_ouch_accepted(Order &order, const NASDAQ::RX::OUCHOrderAcceptedMessage &msg) const noexcept
 {
 
     order.price = static_cast<int64_t>(msg.price);
@@ -22,7 +22,7 @@ void FillerOUCH_NASDAQ::fill_ouch_accepted(Order &order, const NASDAQ::RX::OUCHO
     order.last_update_time = order.timestamp;
 }
 
-void FillerOUCH_NASDAQ::fill_ouch_replaced(Order &order, const NASDAQ::RX::OUCHOrderReplacedMessage &msg) noexcept // For now, only used for qty modification
+void FillerOUCH_NASDAQ::fill_ouch_replaced(Order &order, const NASDAQ::RX::OUCHOrderReplacedMessage &msg) const noexcept // For now, only used for qty modification
 {
 
     order.price = static_cast<int64_t>(msg.price);
@@ -38,7 +38,7 @@ void FillerOUCH_NASDAQ::fill_ouch_replaced(Order &order, const NASDAQ::RX::OUCHO
     order.user_ref_num = msg.user_ref_num;
 }
 
-void FillerOUCH_NASDAQ::fill_ouch_cancelled(Order &order, const NASDAQ::RX::OUCHOrderCancelledMessage &msg) noexcept
+void FillerOUCH_NASDAQ::fill_ouch_cancelled(Order &order, const NASDAQ::RX::OUCHOrderCancelledMessage &msg) const noexcept
 {
     
     order.last_update_time = order.timestamp;
@@ -48,7 +48,7 @@ void FillerOUCH_NASDAQ::fill_ouch_cancelled(Order &order, const NASDAQ::RX::OUCH
     order.cancelled_count++;
 }
 
-void FillerOUCH_NASDAQ::fill_ouch_executed(Order &order, const NASDAQ::RX::OUCHOrderExecutedMessage &msg) noexcept
+void FillerOUCH_NASDAQ::fill_ouch_executed(Order &order, const NASDAQ::RX::OUCHOrderExecutedMessage &msg) const noexcept
 {
 
     order.price = static_cast<int64_t>(msg.price);
@@ -75,7 +75,7 @@ void FillerOUCH_NASDAQ::fill_ouch_rejected(Order &order, const NASDAQ::RX::OUCHO
     }
 }
 
-void FillerOUCH_NASDAQ::fill_ouch_modified(Order &order, const NASDAQ::RX::OUCHOrderModifiedMessage &msg) noexcept
+void FillerOUCH_NASDAQ::fill_ouch_modified(Order &order, const NASDAQ::RX::OUCHOrderModifiedMessage &msg) const noexcept
 {
     order.replaced_quantity = static_cast<int32_t>(msg.quantity - order.remaining_quantity);
     order.remaining_quantity = msg.quantity;

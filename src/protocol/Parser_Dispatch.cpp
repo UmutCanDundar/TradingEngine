@@ -3,11 +3,12 @@
 #include "Parser_FIX.h"
 #include "SessionManager.h"
 
+#include <functional>
 #include <type_traits>
 
 Parser_Dispatch::Parser_Dispatch(spscRxPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXRxSessionQueue_t &parser_to_fixbuilder_rx, spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx,
                                  SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX& fixparser) noexcept
-                                 : parser_table_(makeParserLookUpTable()), receiver_to_parser_(receiver_to_parser), parser_to_store_(parser_to_store), parser_to_fixbuilder_rx_(parser_to_fixbuilder_rx), 
+                                 : receiver_to_parser_(receiver_to_parser), parser_to_store_(parser_to_store), parser_to_fixbuilder_rx_(parser_to_fixbuilder_rx), 
                                  parser_to_fixbuilder_tx_(parser_to_fixbuilder_tx), sess_mngr_(sess_mngr), db_to_parser_(db_to_parser), network_io_(network_io), fixparser_(fixparser)
 {}
 
@@ -15,18 +16,20 @@ std::array<std::array<Parser_Dispatch::ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT>
 {
    std::array<std::array<Parser_Dispatch::ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> parser_table{};
 
-   parser_table[static_cast<size_t>(Protocol::FIX)][static_cast<size_t>(Venue::BIST)] = &Parser_Dispatch::parseFIX;
+   parser_table[to_underlying(Protocol::FIX)][to_underlying(Venue::BIST)] = &Parser_Dispatch::parseFIX;
 
-   parser_table[static_cast<size_t>(Protocol::ITCH)][static_cast<size_t>(Venue::BIST)] = &Parser_Dispatch::parseITCH_BIST;
-   parser_table[static_cast<size_t>(Protocol::ITCH)][static_cast<size_t>(Venue::NASDAQ)] = &Parser_Dispatch::parseITCH_NASDAQ;
+   parser_table[to_underlying(Protocol::ITCH)][to_underlying(Venue::BIST)] = &Parser_Dispatch::parseITCH_BIST;
+   parser_table[to_underlying(Protocol::ITCH)][to_underlying(Venue::NASDAQ)] = &Parser_Dispatch::parseITCH_NASDAQ;
 
-   parser_table[static_cast<size_t>(Protocol::OUCH)][static_cast<size_t>(Venue::BIST)] = &Parser_Dispatch::parseOUCH_BIST;
-   parser_table[static_cast<size_t>(Protocol::OUCH)][static_cast<size_t>(Venue::NASDAQ)] = &Parser_Dispatch::parseOUCH_NASDAQ;
+   parser_table[to_underlying(Protocol::OUCH)][to_underlying(Venue::BIST)] = &Parser_Dispatch::parseOUCH_BIST;
+   parser_table[to_underlying(Protocol::OUCH)][to_underlying(Venue::NASDAQ)] = &Parser_Dispatch::parseOUCH_NASDAQ;
 
    return parser_table;
 }
 
-bool Parser_Dispatch::dispatch() noexcept
+std::array<std::array<Parser_Dispatch::ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> Parser_Dispatch::parser_table_ = makeParserLookUpTable();
+
+bool Parser_Dispatch::dispatch() 
 {
    RxPacket *pkt = nullptr;
    receiver_to_parser_.pop(pkt);
@@ -47,7 +50,8 @@ bool Parser_Dispatch::dispatch() noexcept
       flush_DbQueue();
       PktCount = 1;
    }
-   (this->*parser_table_[static_cast<size_t>(pkt->protocol)][static_cast<size_t>(pkt->venue)])(pkt);
+
+   std::invoke(parser_table_[to_underlying(pkt->protocol)][to_underlying(pkt->venue)], this, pkt);
    
    if(pkt->release_this_pkt)
       network_io_.releasePacket(pkt);
@@ -119,7 +123,7 @@ void Parser_Dispatch::proceedPendingFIX(auto* variant_msg, auto& seq_fix, Sessio
    fixparser_.pop_pending(seqnum);
 }
 
-void Parser_Dispatch::parseFIX(RxPacket *pkt) noexcept
+void Parser_Dispatch::parseFIX(RxPacket *pkt) 
 {
    uint8_t sess_index = sess_mngr_.getSessionIndex(pkt->venue, pkt->protocol);
    SessionState *state = sess_mngr_.getSessionState(sess_index);

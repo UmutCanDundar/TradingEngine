@@ -30,7 +30,7 @@ Buffer_FIX *Builder_FIX::build_resend(const Buffer_FIX *org_buf, uint8_t session
     return temp_buffer;
 }
 
-char *Builder_FIX::buildHeader(char *buf, size_t body_len, const size_t msg_index, const VenueUserInfo_FIX &auth_fix, Sequence_FIX &seq_fix) noexcept
+char *Builder_FIX::buildHeader(char *buf, size_t body_len, size_t msg_index, const VenueUserInfo_FIX &auth_fix, Sequence_FIX &seq_fix) const noexcept
 {
     const uint32_t next_seqnum = seq_fix.get_next_seq();
     const uint8_t seqnum_digits = digit(next_seqnum);
@@ -49,7 +49,7 @@ char *Builder_FIX::buildHeader(char *buf, size_t body_len, const size_t msg_inde
     return buf;
 }
 
-char *Builder_FIX::buildHeader(const Buffer_FIX *org_buf, char *temp, const VenueUserInfo_FIX &auth_fix) noexcept
+char *Builder_FIX::buildHeader(const Buffer_FIX *org_buf, char *temp, const VenueUserInfo_FIX &auth_fix) const noexcept
 {
     const char* data = org_buf->data;
     const size_t buf_len = org_buf->len;
@@ -76,7 +76,7 @@ char *Builder_FIX::buildHeader(const Buffer_FIX *org_buf, char *temp, const Venu
     return temp;
 }
 
-char* Builder_FIX::buildLogon(char *buf, uint8_t session_index, const bool reset) noexcept
+char* Builder_FIX::buildLogon(char *buf, uint8_t session_index, bool reset) const noexcept
 {
     auto &seq_fix = sess_mngr_.getSessionState(session_index)->fix;
     auto &fix_auth = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
@@ -91,21 +91,21 @@ char* Builder_FIX::buildLogon(char *buf, uint8_t session_index, const bool reset
 
     return buf;
 }
-char* Builder_FIX::buildTestRequest(char *buf) noexcept
+char* Builder_FIX::buildTestRequest(char *buf) const noexcept
 {
     uint32_t test_req_counter = 1;
     buf = addTag("112=", 4, test_req_counter++, buf);
 
     return buf;
 }
-char* Builder_FIX::buildSequenceReset(char *buf, const uint32_t new_seq) noexcept
+char* Builder_FIX::buildSequenceReset(char *buf, uint32_t new_seq) const noexcept
 {
     buf = addTag("123=", 4, "Y", 1, buf);
     buf = addTag("36=", 3, new_seq, buf);
 
     return buf;
 }
-char* Builder_FIX::buildResendRequest(char *buf, const uint32_t begin_seq, const uint32_t end_seq) noexcept
+char* Builder_FIX::buildResendRequest(char *buf, uint32_t begin_seq, uint32_t end_seq) const noexcept
 {
     buf = addTag("7=", 2, begin_seq, buf);
     buf = addTag("16=", 3, end_seq, buf);
@@ -113,7 +113,7 @@ char* Builder_FIX::buildResendRequest(char *buf, const uint32_t begin_seq, const
     return buf;
 }
 
-char* Builder_FIX::buildNewOrderSingle(const Order &order, char *buf, uint8_t session_index) noexcept
+char* Builder_FIX::buildNewOrderSingle(const Order &order, char *buf, uint8_t session_index) const noexcept
 {
     auto &fix_auth = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
         
@@ -137,7 +137,7 @@ char* Builder_FIX::buildNewOrderSingle(const Order &order, char *buf, uint8_t se
     return buf;
 }
 
-char* Builder_FIX::buildCancelRequest(const Order &order, char *buf) noexcept
+char* Builder_FIX::buildCancelRequest(const Order &order, char *buf) const noexcept
 {
     buf = addTag("41=", 3, "NONE", 4, buf);
     buf = addTag("37=", 3, order.order_id, buf);
@@ -153,7 +153,7 @@ char* Builder_FIX::buildCancelRequest(const Order &order, char *buf) noexcept
     return buf;
 }
 
-char* Builder_FIX::buildCancelReplaceRequest(const Order &order, char *buf, uint8_t session_index) noexcept
+char* Builder_FIX::buildCancelReplaceRequest(const Order &order, char *buf, uint8_t session_index) const noexcept
 {
     auto &fix_auth = sess_mngr_.getSessionAuth(sess_mngr_.getSessionContext(session_index)->tcp_index)->fix;
 
@@ -179,7 +179,7 @@ char* Builder_FIX::buildCancelReplaceRequest(const Order &order, char *buf, uint
     return buf;
 }
 
-char* Builder_FIX::finalizeChecksum(char *buf, size_t len) noexcept
+char* Builder_FIX::finalizeChecksum(char *buf, size_t len) const noexcept
 {
     uint32_t cksum = 0;
     for (size_t i = 0; i < len; ++i)
@@ -196,7 +196,7 @@ char* Builder_FIX::finalizeChecksum(char *buf, size_t len) noexcept
     return buf;
 }
 
-std::pair<const char*, size_t> Builder_FIX::transact_time() noexcept
+std::pair<const char*, size_t> Builder_FIX::transact_time() const noexcept
 {
     using namespace std::chrono;
 
@@ -223,7 +223,7 @@ std::pair<const char*, size_t> Builder_FIX::transact_time() noexcept
     return {ts_buf, (size_t)(p - ts_buf)};
 }
 
-std::pair<const char*, size_t> Builder_FIX::epoch_to_transact_time(uint64_t ns) noexcept
+std::pair<const char*, size_t> Builder_FIX::epoch_to_transact_time(uint64_t ns) const noexcept
 {
     static thread_local char ts_buf[32];
 

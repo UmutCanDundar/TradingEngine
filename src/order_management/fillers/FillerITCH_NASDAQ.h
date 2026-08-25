@@ -44,10 +44,10 @@ public:
 
     void fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMessage &msg, Venue venue) noexcept;
     void fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMPIDMessage &msg, Venue venue) noexcept;
-    void fill_itch_cancel(Order &order, const NASDAQ::ITCHCancelMessage &msg) noexcept;
-    void fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedMessage &msg) noexcept;
-    void fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedWithPriceMessage &msg) noexcept;
-    void fill_itch_delete(Order &order, const NASDAQ::ITCHDeleteMessage &msg) noexcept;
+    void fill_itch_cancel(Order &order, const NASDAQ::ITCHCancelMessage &msg) const noexcept;
+    void fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedMessage &msg) const noexcept;
+    void fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedWithPriceMessage &msg) const noexcept;
+    void fill_itch_delete(Order &order, const NASDAQ::ITCHDeleteMessage &msg) const noexcept;
     void fill_itch_replace(Order &order, const NASDAQ::ITCHReplaceMessage &msg, Venue venue) noexcept;
     void fill_itch_trade(Order &order, const NASDAQ::ITCHTradeMessage &msg, Venue venue) noexcept;
     

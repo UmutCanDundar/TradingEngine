@@ -4,6 +4,8 @@
 #include "SoupBinTcp.h"
 #include "SessionManager.h"
 
+#include <functional>
+
 Builder_OUCH_BIST::Builder_OUCH_BIST(SoupBinTcp &sbt, SessionManager &sess_mngr) noexcept : eci_local_(initialize_exc_info(sess_mngr)), sbt_(sbt) 
 {}
 
@@ -30,7 +32,7 @@ Buffer_OBT* Builder_OUCH_BIST::build(const Order &order) noexcept
     char *buf = buffer->msg;
     buf = sbt_.WriteSBTHeaderForDataPacket(buf, buffer->len);
 
-    (this->*OuchMessageBuilders[order.message_type])(order, buf);
+    std::invoke(OuchMessageBuilders[order.message_type], this, order, buf);
 
     return buffer;
 }

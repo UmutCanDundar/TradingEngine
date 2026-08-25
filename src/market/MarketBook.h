@@ -39,36 +39,33 @@
 
 #include <absl/container/btree_map.h>
 
+using common_function::to_underlying;
+
+struct SymbolBook
+{
+    std::array<absl::btree_map<int64_t, uint32_t>, 2> bid_ask_trees_;
+    std::atomic<int64_t> best_bid{0};
+    std::atomic<int64_t> best_ask{0};
+    std::atomic<uint32_t> best_bid_qty{0};
+    std::atomic<uint32_t> best_ask_qty{0};
+
+    SymbolBook() = default;
+    SymbolBook(const SymbolBook&) = delete;
+    SymbolBook& operator=(const SymbolBook&) = delete;
+};
+
 class MarketBook
 {
 private:
     static constexpr size_t MAX_SYMBOL_COUNT = 512; 
 
-    HashTables &hashtables_;
-
-    struct SymbolBook
-    {
-        
-
-        std::array<absl::btree_map<int64_t, uint32_t>, 2> bid_ask_trees_;
-        std::atomic<int64_t> best_bid{0};
-        std::atomic<int64_t> best_ask{0};
-        std::atomic<uint32_t> best_bid_qty{0};
-        std::atomic<uint32_t> best_ask_qty{0};
-
-        SymbolBook() noexcept = default;
-        SymbolBook(const SymbolBook&) = delete;
-        SymbolBook& operator=(const SymbolBook&) = delete;
-        SymbolBook(SymbolBook&&) = delete;
-        SymbolBook& operator=(SymbolBook&&) = delete;
-    };
-
     std::array<std::array<SymbolBook, MAX_SYMBOL_COUNT>, VENUE_COUNT> symbolbooks_;
+    HashTables &hashtables_;
 
 public:
     MarketBook(HashTables &hashtables) noexcept;
 
-    inline void add_order(const Order &order) noexcept
+    void add_order(const Order &order)
     {
         if (UNLIKELY(order.isOurOrder))
             return;
@@ -77,7 +74,7 @@ public:
         if(!symBook)
             return;
         
-        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
+        auto &tree = (*symBook).bid_ask_trees_[to_underlying(order.side)];
 
         auto it = tree.find(order.price);
         if (it == tree.end())
@@ -91,7 +88,7 @@ public:
             update_only_best_qty(*symBook, order.side);
         }
     }
-    inline void modify_order(const Order &order, uint32_t newQuantity) noexcept
+    void modify_order(const Order &order, uint32_t newQuantity) 
     {
         if (UNLIKELY(order.isOurOrder))
             return;
@@ -100,7 +97,7 @@ public:
         if(!symBook)
             return;
         
-        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
+        auto &tree = (*symBook).bid_ask_trees_[to_underlying(order.side)];
 
 
         int64_t diff = static_cast<int64_t>(newQuantity) - static_cast<int64_t>(order.quantity);
@@ -124,7 +121,7 @@ public:
 
         
     }
-    inline void cancel_order(const Order &order) noexcept
+    void cancel_order(const Order &order) noexcept
     {
         if (UNLIKELY(order.isOurOrder))
             return;
@@ -133,7 +130,7 @@ public:
         if(!symBook)
             return;
 
-        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
+        auto &tree = (*symBook).bid_ask_trees_[to_underlying(order.side)];
 
 
         auto it = tree.find(order.price);
@@ -151,7 +148,7 @@ public:
             }
         }
     }
-    inline void delete_order(const Order &order) noexcept
+    void delete_order(const Order &order) noexcept
     {
         if (UNLIKELY(order.isOurOrder))
             return;
@@ -160,7 +157,7 @@ public:
         if(!symBook)
             return;
         
-        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
+        auto &tree = (*symBook).bid_ask_trees_[to_underlying(order.side)];
 
         auto it = tree.find(order.price);
         if (LIKELY(it != tree.end()))
@@ -177,7 +174,7 @@ public:
             }
         }
     }
-    inline void exec_order(const Order &order) noexcept
+    void exec_order(const Order &order) noexcept
     {
         if (UNLIKELY(order.isOurOrder))
             return;
@@ -186,7 +183,7 @@ public:
         if(!symBook)
             return;
         
-        auto &tree = (*symBook).bid_ask_trees_[static_cast<size_t>(order.side)];
+        auto &tree = (*symBook).bid_ask_trees_[to_underlying(order.side)];
 
 
         auto it = tree.find(order.price);
@@ -205,35 +202,35 @@ public:
         }
     }
 
-    inline SymbolBook* get_symBook(const Order &order) noexcept
+    SymbolBook* get_symBook(const Order &order) noexcept
     {
-        auto venue_index = static_cast<size_t>(order.venue);
+        auto venue_index = to_underlying(order.venue);
         auto sym_index = order.symbol_index;
         return (sym_index != UINT32_MAX) ? &symbolbooks_[venue_index][sym_index] : nullptr;
     }
 
-    inline int64_t best_bid(const SymbolBook &symBook) const noexcept
+    int64_t best_bid(const SymbolBook &symBook) const noexcept
     {
         return symBook.best_bid.load(std::memory_order_acquire);
     }
-    inline int64_t best_ask(const SymbolBook &symBook) const noexcept
+    int64_t best_ask(const SymbolBook &symBook) const noexcept
     {
         return symBook.best_ask.load(std::memory_order_acquire);
     }
-    inline uint32_t best_bid_qty(const SymbolBook &symBook) const noexcept
+    uint32_t best_bid_qty(const SymbolBook &symBook) const noexcept
     {
         return symBook.best_bid_qty.load(std::memory_order_acquire);
     }
-    inline uint32_t best_ask_qty(const SymbolBook &symBook) const noexcept
+    uint32_t best_ask_qty(const SymbolBook &symBook) const noexcept
     {
         return symBook.best_ask_qty.load(std::memory_order_acquire);
     }
 
-    void flush(const uint8_t venue_index, const uint32_t symbol_index) noexcept;
+    void flush(uint8_t venue_index, uint32_t symbol_index) noexcept;
 
 private:
 
-    inline void update_best_bid_ask(SymbolBook &symBook, const Side side) const noexcept
+    static void update_best_bid_ask(SymbolBook &symBook, Side side) noexcept
     {
         if(side == Side::Buy)
         {
@@ -247,29 +244,29 @@ private:
         }  
     }
 
-    inline void update_only_best_qty(SymbolBook &symBook, const Side side) const noexcept
+    static void update_only_best_qty(SymbolBook &symBook, Side side) noexcept
     {
         side == Side::Buy ? update_best_bid_qty(symBook) : update_best_ask_qty(symBook);
     }
 
-    inline void update_best_bid(SymbolBook &symBook) const noexcept
+    static void update_best_bid(SymbolBook &symBook) noexcept
     {
         int64_t new_best_bid = symBook.bid_ask_trees_[0].empty() ? 0 : symBook.bid_ask_trees_[0].rbegin()->first;
         symBook.best_bid.store(new_best_bid, std::memory_order_release);  
     }
 
-    inline void update_best_ask(SymbolBook &symBook) const noexcept
+    static void update_best_ask(SymbolBook &symBook) noexcept
     {
         int64_t new_best_ask = symBook.bid_ask_trees_[1].empty() ? 0 : symBook.bid_ask_trees_[1].begin()->first;
         symBook.best_ask.store(new_best_ask, std::memory_order_release);
     }
 
-    inline void update_best_bid_qty(SymbolBook &symBook) const noexcept
+    static void update_best_bid_qty(SymbolBook &symBook) noexcept
     {
         uint32_t new_best_bid_qty = symBook.bid_ask_trees_[0].empty() ? 0 : symBook.bid_ask_trees_[0].rbegin()->second;
         symBook.best_bid_qty.store(new_best_bid_qty, std::memory_order_release);
     }
-    inline void update_best_ask_qty(SymbolBook &symBook) const noexcept
+    static void update_best_ask_qty(SymbolBook &symBook) noexcept
     {
         uint32_t new_best_ask_qty = symBook.bid_ask_trees_[1].empty() ? 0 : symBook.bid_ask_trees_[1].begin()->second;
         symBook.best_ask_qty.store(new_best_ask_qty, std::memory_order_release);

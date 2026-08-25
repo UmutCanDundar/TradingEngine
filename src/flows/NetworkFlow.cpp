@@ -3,12 +3,12 @@
 
 #include <immintrin.h>
 
-NetworkFlow::NetworkFlow(NetworkIO &netIO) noexcept
+NetworkFlow::NetworkFlow(NetworkIO &netIO) 
     : netIO_(netIO)
 {
 }
 
-void NetworkFlow::start() noexcept
+void NetworkFlow::start()
 {
     running_.store(true, std::memory_order_release);
 

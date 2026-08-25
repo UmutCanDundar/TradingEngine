@@ -42,9 +42,9 @@ private:
     spscDbQueue_t &db_to_parser_;
 
 public:
-    ClickhouseWriter(spscDbQueue_t &store_to_db, spscDbQueue_t &db_to_parser, const std::string &host = "127.0.0.1", int port = 9000) noexcept;
+    ClickhouseWriter(spscDbQueue_t &store_to_db, spscDbQueue_t &db_to_parser, const std::string &host = "127.0.0.1", int port = 9000);
 
-    bool store() noexcept;
+    bool store();
    
 private:
     void insert(const MessageWithVenue<BIST::ITCHMessage> &itchMsg);
@@ -53,7 +53,7 @@ private:
     void insert(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg);
     void insert(const MessageWithVenue<FIXMessage *> &fixMsg);
     void insert(const MessageWithVenue<FIXSessionMessage *> &fixMsg);
-    void insert(const Order *order);
+    void insert(const Order* order);
 
     std::string_view venue_to_string(Venue venue) noexcept;
     std::string_view protocol_to_string(Protocol protocol) noexcept;

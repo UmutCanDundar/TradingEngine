@@ -267,7 +267,7 @@ def msg_size(msg, msg_idx):
        
 def generate_arr(messages):
      all_msg_count = len(messages)
-     line = [f"\n\ninline std::array<size_t, {all_msg_count}> ITCHSizeOfs = {{ "]
+     line = [f"\n\ninline constexpr std::array<size_t, {all_msg_count}> ITCHSizeOfs = {{ "]
      for i, msg in enumerate(messages):
          msg_bytes = msg_size(msg, i)
          line.append(f"{msg_bytes},")
@@ -275,7 +275,7 @@ def generate_arr(messages):
      return" ".join(line)
 
 def generate_func(messages):
-    line = [f"\n\ninline constexpr size_t itchMessageIndex(char type) {{\n"]
+    line = [f"\n\ninline size_t itchMessageIndex(char type) noexcept {{\n"]
     line.append("   switch(type) {")
     for i, msg in enumerate(messages):
         messagetype = messagetype_index(msg)

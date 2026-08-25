@@ -72,8 +72,8 @@ class Builder_Dispatch
 private:
   
     using BuilderFunc = void (Builder_Dispatch::*)(Order*) noexcept;
-    std::array<std::array<BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> makeBuilderLookUpTable() noexcept; 
-    std::array<std::array<BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> builder_table_;
+    static std::array<std::array<BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> makeBuilderLookUpTable() noexcept; 
+    static std::array<std::array<BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> builder_table_;
     
     spscTxPacketQueue_t& builder_to_sender_;
     spscOrderQueue_t &risk_to_builder_;
@@ -94,7 +94,7 @@ public:
     Builder_Dispatch(spscTxPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXRxSessionQueue_t &parser_to_fixbuilder_rx, spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx, 
                      SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr, Parser_FIX& fixParser) noexcept;
 
-    bool dispatch() noexcept;
+    bool dispatch();
 
 private:
     void buildFIX(Order *order) noexcept;
@@ -102,7 +102,7 @@ private:
     void buildOUCH_NASDAQ(Order* order) noexcept;
 
     void buildFIX_ses_in(FIXSessionMessage &fixSesMsg, uint8_t session_index) noexcept;
-    void buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t session_index) noexcept;
+    void buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t session_index);
     void buildFIX_app(Order* order, uint8_t session_index) noexcept;
    
 };

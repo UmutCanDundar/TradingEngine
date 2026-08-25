@@ -16,7 +16,7 @@ enum class ErrorName : uint8_t {
     CouldNotOpenFile = 1,
 };
 
- inline constexpr std::array<ErrorStrategy, 128> errno_strategies = {
+ inline const std::array<ErrorStrategy, 128> errno_strategies = {
     ErrorStrategy::Ignore, // 0: Success
     ErrorStrategy::Abort, // 1: Operation not permitted 
     ErrorStrategy::Ignore, // 2: No such file or directory
@@ -146,7 +146,7 @@ enum class ErrorName : uint8_t {
     ErrorStrategy::Ignore, // 126: Required key not available
     ErrorStrategy::Ignore, // 127: Key has expired
 };
- inline constexpr std::array<ErrorStrategy, 2> error_strategies = {
+ inline const std::array<ErrorStrategy, 2> error_strategies = {
     ErrorStrategy::Abort,
     ErrorStrategy::Abort,
 };

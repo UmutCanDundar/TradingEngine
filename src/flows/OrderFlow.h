@@ -49,14 +49,12 @@ private:
     std::thread ch_writer_thread_;
 
 public:
-    OrderFlow(OrderManager &ord_mngr, ClickhouseWriter& ch_writer) noexcept;
+    OrderFlow(OrderManager &ord_mngr, ClickhouseWriter& ch_writer);
 
     OrderFlow(const OrderFlow &) = delete;
     OrderFlow &operator=(const OrderFlow &) = delete;
-    OrderFlow(OrderFlow &&) = delete;
-    OrderFlow &operator=(OrderFlow &&) = delete;
 
-    void start() noexcept;
+    void start();
     void stop() noexcept;
 
 private:

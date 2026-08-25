@@ -8,14 +8,13 @@
 // ============================
 // Constructor & Public Methods
 // ============================
-OrderManager::OrderManager(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscOrderQueue_t &store_to_risk, spscDbQueue_t &store_to_db, MarketBook &marketbook,HashTables &hashtables) noexcept
+OrderManager::OrderManager(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscOrderQueue_t &store_to_risk, spscDbQueue_t &store_to_db, MarketBook &marketbook,HashTables &hashtables) 
     : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_risk_(store_to_risk), store_to_db_(store_to_db), marketbook_(marketbook), hashtables_(hashtables)
 {
    
    market_orders_.reserve(ORDER_MAP_CAPACITY);
    our_orders_.reserve(ORDER_MAP_CAPACITY);
    our_orders_wtokenkey_.reserve(ORDER_MAP_CAPACITY);
-   // awaitingAck_orders_.reserve(PENDING_ORDER_SIZE);
    nq_ouch_refnum_ordkey_.reserve(ORDER_MAP_CAPACITY);
    
    for (size_t i = MARKETORDER_LAST_INDEX; i < ORDER_POOL_CAPACITY;i++)
@@ -45,37 +44,32 @@ bool OrderManager::store() noexcept
          return false;
    }
 
-   const bool is_fix_session_msg =
-       std::visit([this, msgWithVenue](const auto &inner_msg) -> bool
-                  {
-          using MsgType = std::decay_t<decltype(inner_msg)>;
+   bool msg_handled = std::visit([this, &msgWithVenue](const auto& inner_msg) {
 
-          if constexpr (std::is_same_v<MsgType, FIXSessionMessage*>)
-          {
-             auto msgWvenue = MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue};
-             store_to_db_.push(msgWvenue);
-             return true; 
-          }
-          return false; }, msgWithVenue.msg);
-
-   if (is_fix_session_msg)
-      return false;
-
-   std::visit([this, &msgWithVenue](const auto &inner_msg)
-   {        
       using MsgType = std::decay_t<decltype(inner_msg)>;
-      auto msgWvenue = MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue}; 
-      this->store<MsgType>(msgWvenue); 
+      auto msgWvenue = MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue};
+
+      if constexpr (std::is_same_v<MsgType, FIXSessionMessage*>)
+      { 
+         store_to_db_.push(msgWvenue);
+         return false;
+      }
+      else
+      {
+         this->store<MsgType>(msgWvenue); 
+         return true;
+      }
+
    }, msgWithVenue.msg);
 
-   return true;
+   
+   return msg_handled;
 }
 
 void OrderManager::add_awaitingAck_order(Order &order) noexcept
 {
-   // awaitingAck_orders_.emplace(order.client_order_id, &order);
    awaitingAck_orders_.insert(order.client_order_id, &order);
-   pending_orders_[static_cast<size_t>(order.venue)][pending_next_slot++ & (PENDING_ORDER_SIZE - 1)].store(&order, std::memory_order_release);
+   pending_orders_[to_underlying(order.venue)][pending_next_slot++ & (PENDING_ORDER_SIZE - 1)].store(&order, std::memory_order_release);
 }
 
 // ============================
@@ -89,7 +83,7 @@ Order* OrderManager::add_our_order(Order *order, const OrderKey& order_key) noex
          our_next_slot = MARKETORDER_LAST_INDEX;
 
       Order* order_to_release = &order_pool_[our_next_slot++];
-      auto& orderhistory_for_a_venue = our_orders_all_venue_[static_cast<size_t>(order_to_release->venue)];
+      auto& orderhistory_for_a_venue = our_orders_all_venue_[to_underlying(order_to_release->venue)];
       auto& orderhistory_for_a_symbol = orderhistory_for_a_venue[order_to_release->symbol_index];
 
       release_order(orderhistory_for_a_symbol, *order_to_release);
@@ -97,7 +91,7 @@ Order* OrderManager::add_our_order(Order *order, const OrderKey& order_key) noex
    
    our_orders_[order_key] = order;
 
-   auto &orderhistory_for_a_venue = our_orders_all_venue_[static_cast<size_t>(order->venue)];
+   auto &orderhistory_for_a_venue = our_orders_all_venue_[to_underlying(order->venue)];
    auto &orderhistory_for_a_symbol = orderhistory_for_a_venue[order->symbol_index];
    orderhistory_for_a_symbol.push(order);
 
@@ -118,8 +112,8 @@ Order* OrderManager::add_market_order(const OrderKey& order_key) noexcept
       market_orders_.erase(OrderKey{
                            order_pool_[market_next_slot].
                            order_id, order_pool_[market_next_slot].instrument_id, 
-                           static_cast<std::underlying_type_t<Venue>>(order_pool_[market_next_slot].venue), 
-                           static_cast<std::underlying_type_t<Side>>(order_pool_[market_next_slot].side)}
+                           static_cast<uint8_t>(order_pool_[market_next_slot].venue), 
+                           static_cast<uint8_t>(order_pool_[market_next_slot].side)}
       );
    }
 
@@ -193,7 +187,7 @@ void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) no
    auto order_key = OrderKey {
                     order_id, 
                     order_book_id, 
-                    static_cast<std::underlying_type_t<Venue>>(Venue::BIST), 
+                    static_cast<uint8_t>(Venue::BIST), 
                     side
    };
    
@@ -260,11 +254,11 @@ void OrderManager::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchM
                  if constexpr (requires { msg->order_id; } || std::is_same_v<MsgType, BIST::ITCHTradeMessage>)
                  {
                      uint64_t order_id = msg->order_id;
-                     auto side = static_cast<std::underlying_type_t<Side>>((msg->side == 'B') ? Side::Buy : Side::Sell);
+                     auto side = static_cast<uint8_t>((msg->side == 'B') ? Side::Buy : Side::Sell);
                      order = this->get_order_from_market_map(OrderKey{
                                                                     order_id, 
                                                                     msg->order_book_id, 
-                                                                    static_cast<std::underlying_type_t<Venue>>(Venue::BIST), 
+                                                                    static_cast<uint8_t>(Venue::BIST), 
                                                                     side}
                      );
 
@@ -278,7 +272,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchM
                            order = this->add_market_order(OrderKey{
                                                           order_id, 
                                                           msg->order_book_id, 
-                                                          static_cast<std::underlying_type_t<Venue>>(Venue::BIST), 
+                                                          static_cast<uint8_t>(Venue::BIST), 
                                                           side}
                            );
 
@@ -344,7 +338,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchM
                  }
                  else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderBookFlushMessage>)
                  {
-                    const auto venue_index = static_cast<std::underlying_type_t<Venue>>(Venue::BIST);
+                    const auto venue_index = to_underlying(Venue::BIST);
                     const auto symbol = instrument_cache_[venue_index].find(msg->order_book_id)->second->symbol;
                     const auto symbol_index = hashtables_.getIndex(venue_index, symbol);
                     this->marketbook_.flush(venue_index, symbol_index);
@@ -388,11 +382,11 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itc
                            if (awaitingAck_orders_.size() > 0 && is_matched_pending_order(*msg)) // For AddOrder messsage types (ignore our orders)
                               return;
                            
-                           auto side = static_cast<std::underlying_type_t<Side>>((msg->side == 'B') ? Side::Buy : Side::Sell);
+                           auto side = static_cast<uint8_t>((msg->side == 'B') ? Side::Buy : Side::Sell);
                            auto orderkey = OrderKey{
                                              order_id, 
                                              msg->stock_locate, 
-                                             static_cast<std::underlying_type_t<Venue>>(Venue::BIST), 
+                                             static_cast<uint8_t>(Venue::BIST), 
                                              side};
 
                            order = this->add_market_order(orderkey);
@@ -446,7 +440,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itc
                         filler_itch_nq_.fill_itch_trade(*order, *msg, Venue::NASDAQ);
                      }
 
-                     // order->canModify = 0x00;
+                     // order->canModify = 0x00; not required in testing mode.
 
                      this->store_to_db_.push(order);
                      this->store_to_risk_.push(order);
@@ -494,11 +488,11 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
                  if constexpr (requires { msg->order_id; })
                  {
                      uint64_t order_id = msg->order_id;
-                     auto side = static_cast<std::underlying_type_t<Side>>((msg->side == 'B') ? Side::Buy : Side::Sell);
+                     auto side = static_cast<uint8_t>((msg->side == 'B') ? Side::Buy : Side::Sell);
                      auto order_key = OrderKey{
                                        order_id, 
                                        msg->order_book_id, 
-                                       static_cast<std::underlying_type_t<Venue>>(Venue::BIST), 
+                                       static_cast<uint8_t>(Venue::BIST), 
                                        side
                      };
                      
@@ -536,7 +530,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
                         filler_ouch_bist_.fill_ouch_cancelled(*order, *msg);
                      }
 
-                     // order->canModify = 0x00;
+                     // order->canModify = 0x00; not required in testing mode.
 
                      this->store_to_db_.push(order);
                      this->store_to_risk_.push(order);
@@ -565,7 +559,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
                     {
                        filler_ouch_bist_.fill_ouch_executed(*order, *msg);
 
-                     //   order->canModify = 0x00;
+                     //   order->canModify = 0x00; not required in testing mode.
 
                        this->store_to_risk_.push(order);
                        this->store_to_strategy_.push(order);
@@ -593,7 +587,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                  {
                      
                      uint64_t order_id = msg->order_reference_number;
-                     auto side = static_cast<std::underlying_type_t<Side>>((msg->side == 'B') ? Side::Buy : Side::Sell);
+                     auto side = static_cast<uint8_t>((msg->side == 'B') ? Side::Buy : Side::Sell);
 
                      if constexpr (!std::is_same_v<MsgType, NASDAQ::RX::OUCHOrderAcceptedMessage>)
                      {
@@ -604,7 +598,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                         order = this->get_order_from_our_map(OrderKey{
                                                             order_id, 
                                                             stock_locate, 
-                                                            static_cast<std::underlying_type_t<Venue>>(Venue::NASDAQ), 
+                                                            static_cast<uint8_t>(Venue::NASDAQ), 
                                                             side}
                         );
                      }
@@ -620,7 +614,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                         auto order_key = OrderKey{
                                            order_id, 
                                            order->instrument_id, 
-                                           static_cast<std::underlying_type_t<Venue>>(Venue::NASDAQ), 
+                                           static_cast<uint8_t>(Venue::NASDAQ), 
                                            side 
                         };
                         
@@ -697,7 +691,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                            return;
                         }
 
-                        // order->canModify = 0x00;
+                        // order->canModify = 0x00; not required in testing mode.
 
                         this->store_to_db_.push(order);
                         this->store_to_risk_.push(order);
@@ -714,21 +708,21 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
 // ==================
 // Metadata Handlers
 // ==================
-void OrderManager::handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg) noexcept
+void OrderManager::handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg) 
 {
    uint64_t symbol_pack;
    std::memcpy(&symbol_pack, msg.symbol, 8);
    sympack_symid_.emplace(symbol_pack, msg.order_book_id);
 
-   auto [it, inserted] = instrument_cache_[static_cast<size_t>(Venue::BIST)].emplace(msg.order_book_id, std::make_unique<SymbolMeta>(msg.order_book_id, msg.round_lot_size, msg.symbol));
+   auto [it, inserted] = instrument_cache_[to_underlying(Venue::BIST)].emplace(msg.order_book_id, std::make_unique<SymbolMeta>(msg.order_book_id, msg.round_lot_size, msg.symbol));
 }
-void OrderManager::handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage &msg) noexcept
+void OrderManager::handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage &msg) 
 {
    uint64_t symbol_pack;
    std::memcpy(&symbol_pack, msg.stock, 8);
    sympack_symid_.emplace(symbol_pack, msg.stock_locate);
 
-   auto [it, inserted] = instrument_cache_[static_cast<size_t>(Venue::NASDAQ)].emplace(msg.stock_locate, std::make_unique<SymbolMeta>(msg.stock_locate, msg.round_lot_size, msg.stock));
+   auto [it, inserted] = instrument_cache_[to_underlying(Venue::NASDAQ)].emplace(msg.stock_locate, std::make_unique<SymbolMeta>(msg.stock_locate, msg.round_lot_size, msg.stock));
 
    static constexpr std::array<std::pair<std::pair<int64_t, int64_t>, uint64_t>, 5> nasdaq_tick_size_ranges = 
    {{{{0, 199999}, 1},
@@ -743,7 +737,7 @@ void OrderManager::handle_instrument_definition(const NASDAQ::ITCHStockDirectory
 
 void OrderManager::handle_tick_size_definition(const BIST::ITCHTickSizeTableEntryMessage &msg) noexcept
 {
-   auto symbolmeta_it = instrument_cache_[static_cast<size_t>(Venue::BIST)].find(msg.order_book_id);
+   auto symbolmeta_it = instrument_cache_[to_underlying(Venue::BIST)].find(msg.order_book_id);
 
    SymbolMeta &symbolmeta = *(symbolmeta_it->second);
 
@@ -794,10 +788,9 @@ void OrderManager::handle_tick_size_definition(auto &tick_size_table, int64_t pr
 // ======================
 // System Event Handlers
 // ======================
-void OrderManager::handle_flush_status(const uint8_t venue_index, const uint32_t symbol_index) noexcept
+void OrderManager::handle_flush_status(uint8_t venue_index, uint32_t symbol_index) noexcept
 {
-
-   for (auto &order : our_orders_all_venue_[venue_index][symbol_index].orders)
+   for (auto* order : our_orders_all_venue_[venue_index][symbol_index].orders)
    {
       if (!order)
          continue;
@@ -826,7 +819,7 @@ void OrderManager::handle_flush_status(const uint8_t venue_index, const uint32_t
 
 void OrderManager::update_venue_halt_status(Venue venue, uint8_t halted, uint8_t circuit_breaker) noexcept
 {
-   auto venue_index = static_cast<size_t>(venue);
+   auto venue_index = to_underlying(venue);
    auto &flags = venue_flags_[venue_index].flags;
 
    flags.fetch_or(halted, std::memory_order_release);
@@ -835,10 +828,10 @@ void OrderManager::update_venue_halt_status(Venue venue, uint8_t halted, uint8_t
 
 void OrderManager::update_symbol_halt_status(uint64_t instrument_id, Venue venue, bool halted) noexcept
 {
-   instrument_cache_[static_cast<size_t>(venue)][instrument_id]->halted.store(halted, std::memory_order_release);
+   instrument_cache_[to_underlying(venue)][instrument_id]->halted.store(halted, std::memory_order_release);
 }
 
 void OrderManager::update_symbol_flush_status(uint64_t instrument_id, Venue venue, bool flushed) noexcept
 {
-   instrument_cache_[static_cast<size_t>(venue)][instrument_id]->flushed.store(flushed, std::memory_order_release);
+   instrument_cache_[to_underlying(venue)][instrument_id]->flushed.store(flushed, std::memory_order_release);
 }

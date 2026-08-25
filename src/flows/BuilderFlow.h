@@ -46,14 +46,12 @@ private:
     std::thread builder_thread_;
 
 public:
-    BuilderFlow(Builder_Dispatch &Builder_dispatch) noexcept;
+    BuilderFlow(Builder_Dispatch &Builder_dispatch);
 
-    BuilderFlow(const BuilderFlow &) = delete;
-    BuilderFlow &operator=(const BuilderFlow &) = delete;
-    BuilderFlow(BuilderFlow &&) = delete;
-    BuilderFlow &operator=(BuilderFlow &&) = delete;
-
-    void start() noexcept;
+    BuilderFlow (const BuilderFlow &) = delete;
+    BuilderFlow& operator=(const BuilderFlow &) = delete;
+ 
+    void start();
     void stop() noexcept;
 
 private:

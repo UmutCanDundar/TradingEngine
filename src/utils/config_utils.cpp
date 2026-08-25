@@ -6,7 +6,7 @@
 #include <sched.h>
 #include <sys/mman.h>
 
-void lock_memory() noexcept
+void lock_memory()
 {
    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0)
    {
@@ -14,7 +14,7 @@ void lock_memory() noexcept
    }
 }
 
-void configure_realtime(const int priority) noexcept
+void configure_realtime(int priority) 
 {
    struct sched_param sched;
    sched.sched_priority = priority;
@@ -25,7 +25,7 @@ void configure_realtime(const int priority) noexcept
    }
 }
 
-void configure_affinity(const int cpu_id) noexcept
+void configure_affinity(int cpu_id)
 {
    cpu_set_t cpuset;
    CPU_ZERO(&cpuset);

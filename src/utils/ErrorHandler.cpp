@@ -30,7 +30,7 @@ bool ErrorHandler::BackoffRetry_errno(uint8_t max_retry) noexcept
    return false;
 }
 
-bool ErrorHandler::handleError(int err, uint8_t max_retry) noexcept
+bool ErrorHandler::handleError(int err, uint8_t max_retry) 
 {
    char errmsg [LOG_BUF_SIZE];
    auto _ = strerror_r(err, errmsg, LOG_BUF_SIZE);
@@ -74,7 +74,7 @@ bool ErrorHandler::BackoffRetry_error(uint8_t max_retry) noexcept
    return false;
 }
 
-bool ErrorHandler::handleError(ErrorName err, uint8_t max_retry) noexcept
+bool ErrorHandler::handleError(ErrorName err, uint8_t max_retry) 
 {
    switch (error_strategies[static_cast<uint8_t>(err)])
    {

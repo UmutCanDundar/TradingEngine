@@ -1,7 +1,7 @@
 #include "TradingEngine.h"
 #include "Protocol-Venue.h"
 
-TradingEngine::TradingEngine() noexcept
+TradingEngine::TradingEngine() 
     : 
       // ----- CORE -----
       hashtables_(),
@@ -79,7 +79,7 @@ TradingEngine::~TradingEngine() noexcept
     stop();
 }
 
-void TradingEngine::start() noexcept
+void TradingEngine::start() 
 {
     running_.store(true, std::memory_order_release);
 

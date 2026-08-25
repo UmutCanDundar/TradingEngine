@@ -9,12 +9,12 @@ with open("../../generated/GeneratedSymbolTables.h", "w") as f:
     f.write("#pragma once\n\n")
     f.write("#include <array>\n#include <cstdint>\n#include <span>\n\n")
 
-    f.write("struct SymbolIndex { const char* symbol; uint32_t index; };\n\n")
+    f.write("struct SymbolIndex { const char* symbol{nullptr}; uint32_t index; }; // 12B > safe to copy\n\n")
 
     for ven_sym in venue_symbols:
       for ven,syms in ven_sym.items():
          size = next_pow2(len(syms))
-         f.write(f"constexpr std::array<SymbolIndex, {size}> {ven}_symbols = {{{{\n")
+         f.write(f"inline constexpr std::array<const SymbolIndex, {size}> {ven}_symbols = {{{{\n")
          for syms in ven_sym.values():
             for i, sym in enumerate(syms):
                f.write(f'    {{"{sym}", {i}}},\n')
@@ -22,7 +22,7 @@ with open("../../generated/GeneratedSymbolTables.h", "w") as f:
                f.write('    {"", UINT32_MAX},\n')
       f.write("}};\n\n")
 
-    f.write("inline auto all_symbol_tables = std::to_array<std::span<const SymbolIndex>>({\n")  
+    f.write("inline constexpr auto all_symbol_tables = std::to_array<std::span<const SymbolIndex>>({\n")  
     for ven_sym in venue_symbols:
        for ven in ven_sym.keys():
           f.write(f'    std::span{{{ven}_symbols}},\n')

@@ -12,6 +12,7 @@ target_link_libraries(core
         types_fix
         types_itch
         types_ouch
+        utils
     PRIVATE 
         generated_headers
         project_options

@@ -46,14 +46,12 @@ private:
     std::thread parser_thread_;
 
 public:
-    ParserFlow(Parser_Dispatch &parser_dispatch) noexcept;
+    ParserFlow(Parser_Dispatch &parser_dispatch);
 
     ParserFlow(const ParserFlow &) = delete;
     ParserFlow &operator=(const ParserFlow &) = delete;
-    ParserFlow(ParserFlow &&) = delete;
-    ParserFlow &operator=(ParserFlow &&) = delete;
 
-    void start() noexcept;
+    void start();
     void stop() noexcept;
 
 private:

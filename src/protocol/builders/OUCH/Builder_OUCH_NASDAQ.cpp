@@ -3,6 +3,8 @@
 #include "Builder_OUCH_NASDAQ.h"
 #include "SoupBinTcp.h"
 
+#include <functional>
+
 Builder_OUCH_NASDAQ::Builder_OUCH_NASDAQ(SoupBinTcp &sbt) noexcept : sbt_(sbt) {}
 
 Buffer_ONQ* Builder_OUCH_NASDAQ::build(Order &order) noexcept
@@ -13,11 +15,14 @@ Buffer_ONQ* Builder_OUCH_NASDAQ::build(Order &order) noexcept
     char *buf = buffer->msg;
     buffer->len = msg_sizes[order.message_type];
     buf = sbt_.WriteSBTHeaderForDataPacket(buf, buffer->len);
-    (this->*OuchMessageBuilders[order.message_type])(order, buf);
+
+    std::invoke(OuchMessageBuilders[order.message_type], this, order, buf);
 
     return buffer;
 }
 
+
+// DISCARDED ALTERNATIVE
 
 //FUNC-PTR PRE_FILL
 

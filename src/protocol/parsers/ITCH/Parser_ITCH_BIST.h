@@ -70,19 +70,19 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     MessagePools<BIST::ITCHMessageTypes> itch_pools_;
 
     using MessageHandlerFunc = void (*)(Parser_ITCH_BIST&, const char*, BIST::ITCHMessage&) noexcept;
-    static const std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
-    static const std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
+    static std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
+    static std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
 
 public:
     Parser_ITCH_BIST() noexcept;
 
     template <typename T>
-    inline void release(T *itchMsg)
+    void release(T *itchMsg) noexcept
     {
         itch_pools_.get_pool<T>().release(itchMsg);
     }
 
-    inline void releaseITCH(BIST::ITCHMessage itchMsg)
+    void releaseITCH(BIST::ITCHMessage itchMsg) noexcept
     {
         std::visit([this](auto *ptr)
                    {
@@ -91,7 +91,7 @@ public:
                    itchMsg);
     }
 
-    inline BIST::ITCHMessage parse(const char *data) noexcept
+    BIST::ITCHMessage parse(const char *data) noexcept
     {
         BIST::ITCHMessage ITCHmsg;
         size_t index = BIST::itchMessageIndex(*data);
@@ -100,7 +100,7 @@ public:
         return ITCHmsg;
     }
 
-    inline void ItchPacketHandler(RxPacket *pkt) noexcept 
+    void ItchPacketHandler(RxPacket *pkt) const noexcept 
     {
         size_t offset = 0;
         auto* data = pkt->data.data();

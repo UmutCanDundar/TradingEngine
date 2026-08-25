@@ -29,18 +29,19 @@
 #include "common.h"
 #include "SessionManager.h"
 #include "NetworkPackets.h"
-#include "NetworkPendingQueue.h"
+#include "CustomQueue.h"
 #include "Protocol-Venue.h"
 
 #include <array>
 #include <cstdint>
 #include <cstddef>
 
+using common_function::to_underlying;
 
 class LoginController;
 class SoupBinTcp;
-template <typename T, size_t Capacity>
-class PendingQueue;
+template <typename T, size_t Capacity> requires (std::is_pointer_v<T> && std::has_single_bit(Capacity))
+class CustomQueue;
 
 struct SocketState
 {
@@ -65,8 +66,8 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
   static constexpr size_t PARTIAL_PACKET_POOL_CAPACITY = 16;
   static constexpr size_t PENDING_CAPACITY = 256;
 
-  using PendingIN = std::array<PendingQueue<TxPacket *, PENDING_CAPACITY>, MAX_SESSIONS>;
-  using PendingOUT = std::array<PendingQueue<RxPacket *, PENDING_CAPACITY>, MAX_SESSIONS>; 
+  using PendingIN = std::array<CustomQueue<TxPacket *, PENDING_CAPACITY>, MAX_SESSIONS>;
+  using PendingOUT = std::array<CustomQueue<RxPacket *, PENDING_CAPACITY>, MAX_SESSIONS>; 
   using PacketPool = std::array<RxPacket, PACKET_POOL_CAPACITY>;
   using PartialPacketPool = std::array<RxPacket*, PARTIAL_PACKET_POOL_CAPACITY>;
   size_t next_partialpkt = 0;
@@ -92,12 +93,12 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
   const std::atomic<bool> &running_engine_;
   
 public:
-  NetworkIO(spscRxPacketQueue_t &receiver_to_parser, spscTxPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, const std::atomic<bool>& running_engine) noexcept;
-  ~NetworkIO() noexcept;
+  NetworkIO(spscRxPacketQueue_t &receiver_to_parser, spscTxPacketQueue_t &builder_to_sender, SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, const std::atomic<bool>& running_engine);
+  ~NetworkIO();
 
-  void recv_send() noexcept;
+  void recv_send();
   
-  inline void releasePacket(RxPacket *pkt) noexcept
+  void releasePacket(RxPacket *pkt) noexcept
   {
     pkt->msg_count = 0;
     free_pkt_list_.push(pkt);
@@ -106,21 +107,22 @@ public:
   private:
   public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     //COLD 
-    std::array<int, MAX_SESSIONS> Init_Sockets() noexcept;
-    void makeSocketNonBlocking(int sock) noexcept;
-    int createEpoll() noexcept;
-    void modEpoll(const int sock, const uint64_t epoll_data, const uint32_t events) noexcept;
-    void addEpoll(const int sock, const uint64_t epoll_data, const uint32_t events) noexcept;
-    int setupSocket(int sock, const SessionContext& cxt) noexcept;
-    int createSocket(size_t index, Protocol prot) noexcept;
-    int reconnect(uint8_t index) noexcept;
+    std::array<int, MAX_SESSIONS> Init_Sockets();
+    void addEpoll(int sock, uint64_t epoll_data, uint32_t events) const;
+    void modEpoll(int sock, uint64_t epoll_data, uint32_t events) const noexcept;
+    int setupSocket(int sock, const SessionContext& cxt);
+    int reconnect(uint8_t index);
     void closeSocket(uint8_t index) noexcept;
+    static void makeSocketNonBlocking(int sock) noexcept;
+    static int createEpoll() noexcept;
+    static int createSocket(size_t index, Protocol prot);
    
     //HOT
-    void send(TxPacket &txPkt, const int sock, const uint8_t index, SocketState &states) noexcept;
-    void handleEINPROGRESS(const int sock, SocketState &states, const uint8_t index) noexcept;
-    bool SBTPacketHandler(RxPacket* rxPkt, const size_t len, PendingQueue<RxPacket *, PENDING_CAPACITY>& pend_read, const size_t index) noexcept;
-    inline void trySend(TxPacket &txPkt) noexcept 
+    void send(TxPacket &txPkt, int sock, uint8_t index, SocketState &states);
+    void handleEINPROGRESS(int sock, SocketState &states, uint8_t index);
+    bool SBTPacketHandler(RxPacket* rxPkt, size_t len, CustomQueue<RxPacket *, PENDING_CAPACITY>& pend_read, size_t index);
+    
+    void trySend(TxPacket &txPkt) 
     {
       size_t index = txPkt.sock_index;
       int sock = socks_[index];
@@ -148,18 +150,18 @@ public:
       }
     }
 
-    static inline uint64_t epollPackData(size_t socket_index, Venue ven, Protocol prot) noexcept
+    static uint64_t epollPackData(size_t socket_index, Venue ven, Protocol prot) noexcept
     {
       uint64_t data = 0;
       data |= static_cast<uint64_t>(socket_index);
-      data |= (static_cast<uint64_t>(static_cast<uint8_t>(ven))) << 8;
-      data |= (static_cast<uint64_t>(static_cast<uint8_t>(prot))) << 16;
+      data |= (to_underlying(ven)) << 8;
+      data |= (to_underlying(prot)) << 16;
 
       return data;
     } 
 
     template <typename T>
-    static inline T epollUnpackData(uint64_t data) noexcept
+    static T epollUnpackData(uint64_t data) noexcept
     {
       if constexpr (std::is_same_v<T, size_t>)
         return static_cast<size_t>(data & 0xFF);

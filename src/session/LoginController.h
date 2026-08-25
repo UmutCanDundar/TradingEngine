@@ -70,9 +70,9 @@ public:
     LoginController(SoupBinTcp &sbt, Builder_FIX &builder_fix, SessionManager &sess_mngr) noexcept;
     
     void LoginAttempt(TxPacket& login_pkt, const uint8_t index, SessionState& state) noexcept;
-    LoginDecision LoginDecider(SessionState* state) noexcept;
+    LoginDecision LoginDecider(SessionState* state) const noexcept;
    
-    static inline uint64_t NowNs() noexcept
+    static uint64_t NowNs() noexcept
     {
         timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -81,7 +81,7 @@ public:
 
 private:
    
-    static inline uint64_t compute_backoff_ns(uint32_t retry_count) noexcept
+    static uint64_t compute_backoff_ns(uint32_t retry_count) noexcept
     {
         uint64_t interval = MIN_LOGIN_INTERVAL_NS << retry_count;
 

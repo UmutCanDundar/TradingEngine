@@ -10,9 +10,9 @@
 
 #include <nlohmann/json.hpp>
 
-Limits::Limits(HashTables &hashtables) noexcept : hashtables_(hashtables), symbol_limits_(initialize_symbollimits()), account_limits_(initialize_accountlimits()) {}
+Limits::Limits(HashTables &hashtables) : hashtables_(hashtables), symbol_limits_(initialize_symbollimits()), account_limits_(initialize_accountlimits()) {}
 
-std::array<std::vector<SymbolLimit>, VENUE_COUNT> Limits::initialize_symbollimits() noexcept
+std::array<std::vector<SymbolLimit>, VENUE_COUNT> Limits::initialize_symbollimits() const 
 {
     std::array<std::vector<SymbolLimit>, VENUE_COUNT> SymbolLimits{};
 
@@ -65,7 +65,7 @@ std::array<std::vector<SymbolLimit>, VENUE_COUNT> Limits::initialize_symbollimit
     return SymbolLimits;
 }
 
-std::array<AccountLimit, VENUE_COUNT> Limits::initialize_accountlimits() noexcept
+std::array<AccountLimit, VENUE_COUNT> Limits::initialize_accountlimits() const
 {
     std::array<AccountLimit, VENUE_COUNT> AccountLimits{};
 

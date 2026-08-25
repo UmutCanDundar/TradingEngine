@@ -8,9 +8,11 @@
 
 #include <cstdint>
 
+using common_function::to_underlying;
+
 FillerITCH_BIST::FillerITCH_BIST(OrderManager &om) noexcept : ord_mngr_(om) {}
 
-void FillerITCH_BIST::fill_itch_add(Order &order, const BIST::ITCHAddOrderMessage &msg, Venue venue) noexcept
+void FillerITCH_BIST::fill_itch_add(Order &order, const BIST::ITCHAddOrderMessage &msg, Venue venue) const noexcept
 {
     order.price = static_cast<int64_t>(msg.price);
     order.quantity = static_cast<uint32_t>(msg.quantity);
@@ -23,7 +25,7 @@ void FillerITCH_BIST::fill_itch_add(Order &order, const BIST::ITCHAddOrderMessag
     if (symbolmeta)
     {
         order.symbol = symbolmeta->symbol;
-        order.symbol_index = ord_mngr_.hashtables_.getIndex(static_cast<size_t>(venue), order.symbol);
+        order.symbol_index = ord_mngr_.hashtables_.getIndex(to_underlying(venue), order.symbol);
     }
     else
     {
@@ -41,7 +43,7 @@ void FillerITCH_BIST::fill_itch_add(Order &order, const BIST::ITCHAddOrderMessag
     order.cancelled_count = 0;
 }
 
-void FillerITCH_BIST::fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedMessage &msg) noexcept
+void FillerITCH_BIST::fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedMessage &msg) const noexcept
 {
     order.filled_quantity += msg.executed_quantity;
     order.last_exec_quantity = msg.executed_quantity;
@@ -55,13 +57,13 @@ void FillerITCH_BIST::fill_itch_exec_report(Order &order, const BIST::ITCHOrderE
     order.message_type = msg.message_type;
 }
 
-void FillerITCH_BIST::fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedWithPriceMessage &msg) noexcept
+void FillerITCH_BIST::fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedWithPriceMessage &msg) const noexcept
 {
     fill_itch_exec_report(order, *reinterpret_cast<const BIST::ITCHOrderExecutedMessage *>(&msg));
     order.price = static_cast<int64_t>(msg.trade_price);
 }
 
-void FillerITCH_BIST::fill_itch_delete(Order &order, const BIST::ITCHOrderDeleteMessage &msg) noexcept
+void FillerITCH_BIST::fill_itch_delete(Order &order, const BIST::ITCHOrderDeleteMessage &msg) const noexcept
 {
     order.status = Status::Deleted;
     order.last_update_time = msg.timestamp_ns;
@@ -85,7 +87,7 @@ void FillerITCH_BIST::fill_itch_trade(Order &order, const BIST::ITCHTradeMessage
     if (symbolmeta)
     {
         order.symbol = symbolmeta->symbol;
-        order.symbol_index = ord_mngr_.hashtables_.getIndex(static_cast<size_t>(venue), order.symbol);
+        order.symbol_index = ord_mngr_.hashtables_.getIndex(to_underlying(venue), order.symbol);
     }
     else
     {

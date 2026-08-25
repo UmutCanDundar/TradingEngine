@@ -67,19 +67,19 @@ private:
     MessagePools<BIST::OUCHMessageTypes> ouch_pools_;
 
     using MessageHandlerFunc = void (*)(Parser_OUCH_BIST&, const char *, BIST::OUCHMessage &) noexcept;
-    static const std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
-    static const std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
+    static std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
+    static std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
 
 public:
     Parser_OUCH_BIST() noexcept;
 
     template <typename T>
-    inline void release(T *ouchMsg)
+    void release(T *ouchMsg) noexcept
     {
         ouch_pools_.get_pool<T>().release(ouchMsg);
     }
 
-    inline void releaseOUCH(BIST::OUCHMessage &ouchMsg)
+    void releaseOUCH(BIST::OUCHMessage &ouchMsg) noexcept
     {
         std::visit([this](auto *ptr)
                    {
@@ -89,7 +89,7 @@ public:
         
     }
 
-    inline BIST::OUCHMessage parse(const char *data) noexcept
+    BIST::OUCHMessage parse(const char *data) noexcept
     {
         BIST::OUCHMessage OUCHmsg;
         size_t index = static_cast<size_t>(BIST::ouchMessageIndex(*(data+3)));

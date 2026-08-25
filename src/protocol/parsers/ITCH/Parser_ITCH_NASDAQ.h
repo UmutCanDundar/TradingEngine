@@ -69,19 +69,19 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     MessagePools<NASDAQ::ITCHMessageTypes> itch_pools_;
 
     using MessageHandlerFunc = void (*)(Parser_ITCH_NASDAQ& ,const char*, NASDAQ::ITCHMessage&) noexcept;
-    static const std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
-    static const std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
+    static std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
+    static std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
 
 public:
     Parser_ITCH_NASDAQ() noexcept;
 
     template <typename T>
-    inline void release(T *itchMsg)
+    void release(T *itchMsg) noexcept
     {
         itch_pools_.get_pool<T>().release(itchMsg);
     }
 
-    inline void releaseITCH(NASDAQ::ITCHMessage itchMsg)
+    void releaseITCH(NASDAQ::ITCHMessage itchMsg) noexcept
     {
         std::visit([this](auto *ptr)
                     {
@@ -90,7 +90,7 @@ public:
                     itchMsg);
     }
 
-    inline NASDAQ::ITCHMessage parse(const char *data) noexcept
+    NASDAQ::ITCHMessage parse(const char *data) noexcept
     {
         NASDAQ::ITCHMessage ITCHmsg;
         size_t index = NASDAQ::itchMessageIndex(*data);
@@ -99,7 +99,7 @@ public:
         return ITCHmsg;
     }
 
-    inline void ItchPacketHandler(RxPacket *pkt) noexcept 
+    void ItchPacketHandler(RxPacket *pkt) const noexcept 
     {
         size_t offset = 0;
         auto* data = pkt->data.data();

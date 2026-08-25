@@ -53,7 +53,6 @@ struct Buffer_FIX
 
 struct FIXSequence 
 {
-
     alignas(64) // builder thread
     std::atomic<uint32_t> my_next_seqnum{1};
 
@@ -64,6 +63,10 @@ struct FIXSequence
 
     static constexpr std::chrono::seconds RESEND_INTERVAL{1};
     static constexpr uint8_t MAX_RESEND_ATTEMPT = 3;
+
+    FIXSequence() = default;
+    FIXSequence(const FIXSequence&) = delete;
+    FIXSequence& operator=(const FIXSequence&) = delete;
 };
 
 class Sequence_FIX
@@ -78,24 +81,23 @@ private:
     FIXSequence sequences_;
 
 public:
-    Sequence_FIX() = default;
 
-    inline void set_next_seq(uint32_t num) noexcept { sequences_.my_next_seqnum.store(num, std::memory_order_release); }
-    inline void set_expected_seq(uint32_t num) noexcept { sequences_.expected_seqnum = num; }
-    inline void set_last_resend_ts(auto now_ts) noexcept { sequences_.last_resend_ts = now_ts; }
-    inline void reset_resend_counter() noexcept { sequences_.resend_counter = 0; }
+    void set_next_seq(uint32_t num) noexcept { sequences_.my_next_seqnum.store(num, std::memory_order_release); }
+    void set_expected_seq(uint32_t num) noexcept { sequences_.expected_seqnum = num; }
+    void set_last_resend_ts(auto now_ts) noexcept { sequences_.last_resend_ts = now_ts; }
+    void reset_resend_counter() noexcept { sequences_.resend_counter = 0; }
 
-    inline void increase_next_seq() noexcept { sequences_.my_next_seqnum.fetch_add(1, std::memory_order_release); }
-    inline void increase_expected_seq() noexcept { sequences_.expected_seqnum++; }
-    inline void increase_resend_counter() noexcept { sequences_.resend_counter++; }
+    void increase_next_seq() noexcept { sequences_.my_next_seqnum.fetch_add(1, std::memory_order_release); }
+    void increase_expected_seq() noexcept { sequences_.expected_seqnum++; }
+    void increase_resend_counter() noexcept { sequences_.resend_counter++; }
 
-    inline uint32_t get_next_seq() noexcept { return sequences_.my_next_seqnum.load(std::memory_order_acquire); }
-    inline uint32_t get_expected() noexcept { return sequences_.expected_seqnum; }
-    inline uint8_t get_resend_counter() noexcept { return sequences_.resend_counter; }
-    inline const char* get_interval() const noexcept { return heartbeat_interval; }
-    inline size_t get_interval_len() const noexcept { return heartbeat_interval_len; }
-    inline Buffer_FIX* get_buffer(const size_t seqnum) noexcept { return &messages[seqnum];  }
-    inline const std::array<Buffer_FIX, DAILY_FIX_MSG_COUNT>& get_history() const noexcept { return messages; }
-    inline auto get_last_resend_ts() noexcept { return sequences_.last_resend_ts; }  
+    uint32_t get_next_seq() const noexcept { return sequences_.my_next_seqnum.load(std::memory_order_acquire); }
+    uint32_t get_expected() const noexcept { return sequences_.expected_seqnum; }
+    uint8_t get_resend_counter() const noexcept { return sequences_.resend_counter; }
+    const char* get_interval() const noexcept { return heartbeat_interval; }
+    size_t get_interval_len() const noexcept { return heartbeat_interval_len; }
+    Buffer_FIX* get_buffer(size_t seqnum) noexcept { return &messages[seqnum];  }
+    const std::array<Buffer_FIX, DAILY_FIX_MSG_COUNT>& get_history() const noexcept { return messages; }
+    auto get_last_resend_ts() const noexcept { return sequences_.last_resend_ts; }  
 };
 

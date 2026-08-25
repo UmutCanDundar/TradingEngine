@@ -43,7 +43,7 @@ enum class SyncState : uint8_t
     NewSeen = 1,
 };
 
-enum class Side : uint8_t
+enum class Side : size_t
 {
    Buy = 0,
    Sell = 1,
@@ -88,9 +88,9 @@ inline constexpr size_t ORDER_TOKEN_SIZE = 32;
 inline constexpr size_t FIX_ORDER_ID_SIZE = 32;
 inline constexpr size_t ORDER_IDs_SIZE = 32;
 
-inline constexpr uint8_t STRATEGY_DONE = 0x01;
-inline constexpr uint8_t RISK_DONE = 0x02;
-inline constexpr uint8_t BUILDER_DONE = 0x03;
+inline constexpr uint8_t STRATEGY_DONE = 1 << 0;
+inline constexpr uint8_t RISK_DONE = 1 << 1;
+inline constexpr uint8_t BUILDER_DONE = 1 << 2;
 
 struct alignas(64) Order // 192B
 {
@@ -123,7 +123,7 @@ struct alignas(64) Order // 192B
    uint32_t pre_user_ref_num = 0; // For OUCH-NASDAQ
    uint8_t cancelled_count = 0;
    SyncState syncState = SyncState::WaitingNew;    // For FIX (In case a New Order message is received after an acknowledgment message.)
-   std::array<Status, 2> StatusesPreNew;        // For FIX
+   std::array<Status, 2> StatusesPreNew{};        // For FIX
    uint8_t exec_type = 0;                       // For FIX
   
    // 🟡 PROTOCOL - SYMBOL - ACCOUNT DATA for builder
@@ -142,9 +142,8 @@ struct alignas(64) Order // 192B
 
    Order() noexcept = default;
    Order(const Order&) = delete;
-   Order(Order&&) = delete;
    Order& operator=(const Order&) = delete;
-   Order& operator=(Order&&) = delete;
+   
 };
 
 inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;

@@ -128,7 +128,7 @@ public:
     }
 
     template <FIXTypes T, typename... Args>
-    inline char* buildBody(char* buf, uint8_t session_index, Args&&... args) noexcept {
+    char* buildBody(char* buf, uint8_t session_index, Args&&... args) const noexcept {
         return buildBody_impl(std::integral_constant<FIXTypes, T>{},
                               buf, session_index, std::forward<Args>(args)...);
     }
@@ -136,79 +136,79 @@ public:
 private:
 
     // ------------------- HEADER ---------------------
-     char* buildHeader(char* buf, size_t body_len, const size_t msg_index, const VenueUserInfo_FIX& auth_fix, Sequence_FIX& seq_fix) noexcept;
-     char* buildHeader(const Buffer_FIX *org_buf, char *temp, const VenueUserInfo_FIX &auth_fix) noexcept;
+    char* buildHeader(char* buf, size_t body_len, const size_t msg_index, const VenueUserInfo_FIX& auth_fix, Sequence_FIX& seq_fix) const noexcept;
+    char* buildHeader(const Buffer_FIX *org_buf, char *temp, const VenueUserInfo_FIX &auth_fix) const noexcept;
 
 
      // ------------------- BODY -------------------------
      // ADMINISTRATIVE MESSAGES
-    char* buildLogon(char* buf, uint8_t session_index, const bool reset = false) noexcept; 
-    inline char* buildLogout(char* buf) noexcept { return buf; }
-    inline char* buildHeartbeat(char* buf) noexcept { return buf; }
-    char* buildTestRequest(char* buf) noexcept;
-    char* buildSequenceReset(char* buf, const uint32_t new_seq) noexcept;
-    char* buildResendRequest(char* buf, const uint32_t begin_seq, const uint32_t end_seq) noexcept;
+    char* buildLogon(char* buf, uint8_t session_index, bool reset = false) const noexcept; 
+    char* buildLogout(char* buf) const noexcept { return buf; }
+    char* buildHeartbeat(char* buf) const noexcept { return buf; }
+    char* buildTestRequest(char* buf) const noexcept;
+    char* buildSequenceReset(char* buf, uint32_t new_seq) const noexcept;
+    char* buildResendRequest(char* buf, uint32_t begin_seq, uint32_t end_seq) const noexcept;
 
 
     // --- APPLICATION MESSAGES ---
-    char* buildNewOrderSingle(const Order &order, char* buf, uint8_t session_index) noexcept;
-    char* buildCancelRequest(const Order& order, char* buf) noexcept; 
-    char* buildCancelReplaceRequest(const Order &order, char* buf, uint8_t session_index) noexcept;
+    char* buildNewOrderSingle(const Order &order, char* buf, uint8_t session_index) const noexcept;
+    char* buildCancelRequest(const Order& order, char* buf) const noexcept; 
+    char* buildCancelReplaceRequest(const Order &order, char* buf, uint8_t session_index) const noexcept;
 
 
     // --- TEMPLATE IMPLEMENTATIONS FOR THE BODY BUILDERS ---
-    inline char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Logon>, char* buf, uint8_t session_index, const bool reset) noexcept
+    char* buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Logon>, char* buf, uint8_t session_index, bool reset) const noexcept
     {
         return Builder_FIX::buildLogon(buf, session_index, reset);
     }
-    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::SequenceReset>, char *buf, uint8_t /*session_index*/, const uint32_t new_seq) noexcept
+    char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::SequenceReset>, char *buf, uint8_t /*session_index*/, uint32_t new_seq) const noexcept
     {
         return Builder_FIX::buildSequenceReset(buf, new_seq);
     }
-    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::ResendRequest>, char *buf, uint8_t /*session_index*/, const uint32_t begin_seq, const uint32_t end_seq) noexcept
+    char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::ResendRequest>, char *buf, uint8_t /*session_index*/, uint32_t begin_seq, uint32_t end_seq) const noexcept
     {
         return Builder_FIX::buildResendRequest(buf, begin_seq, end_seq);
     }
-    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Logout>, char *buf, uint8_t /*session_index*/) noexcept
+    char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Logout>, char *buf, uint8_t /*session_index*/) const noexcept
     {
         return Builder_FIX::buildLogout(buf);
     }
-    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Heartbeat>, char *buf, uint8_t /*session_index*/) noexcept
+    char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::Heartbeat>, char *buf, uint8_t /*session_index*/) const noexcept
     {
         return Builder_FIX::buildHeartbeat(buf);
     }
-    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::TestRequest>, char *buf, uint8_t /*session_index*/) noexcept
+    char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::TestRequest>, char *buf, uint8_t /*session_index*/) const noexcept
     {
         return Builder_FIX::buildTestRequest(buf);
     }
-    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::NewOrderSingle>, char *buf, uint8_t session_index, const Order &order) noexcept
+    char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::NewOrderSingle>, char *buf, uint8_t session_index, const Order &order) const noexcept
     {
         return Builder_FIX::buildNewOrderSingle(order, buf, session_index);
     }
-    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::OrderCancelRequest>, char *buf, uint8_t /*session_index*/, const Order &order) noexcept
+    char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::OrderCancelRequest>, char *buf, uint8_t /*session_index*/, const Order &order) const noexcept
     {
         return Builder_FIX::buildCancelRequest(order, buf);
     }
-    inline char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::OrderCancelReplaceRequest>, char *buf, uint8_t session_index, const Order &order) noexcept
+    char *buildBody_impl(std::integral_constant<FIXTypes, FIXTypes::OrderCancelReplaceRequest>, char *buf, uint8_t session_index, const Order &order) const noexcept
     {
         return Builder_FIX::buildCancelReplaceRequest(order, buf, session_index);
     }
 
 
     // -------------------  TRAILER ----------------------
-    char* finalizeChecksum(char *buf, size_t len) noexcept; 
+    char* finalizeChecksum(char *buf, size_t len) const noexcept; 
  
 
     // -------------------  UTIL FUNC --------------------
-    std::pair<const char*, size_t> transact_time() noexcept;
+    std::pair<const char*, size_t> transact_time() const noexcept;
 public: /// For testing purposes only, not intended for external use.
-    std::pair<const char*, size_t> epoch_to_transact_time(uint64_t ns) noexcept;
+    std::pair<const char*, size_t> epoch_to_transact_time(uint64_t ns) const noexcept;
 private:
     static char findType(const char *data) noexcept;
     static std::pair<const char *, size_t> findValue(const char *data, size_t len, std::string_view wantTag) noexcept;
     static char* placeIntValue(uint32_t num, char* buf) noexcept;
     
-    static inline int strnum_to_int(const std::string_view strnum) noexcept
+    static int strnum_to_int(const std::string_view strnum) noexcept
     {
         int result = 0;
         for (const unsigned char c : strnum)
@@ -217,7 +217,7 @@ private:
         return result;
     }
 
-    static inline uint8_t digit(const auto num) noexcept
+    static uint8_t digit(auto num) noexcept
     {
         return (num >= 100000) ? 6 : (num >= 10000) ? 5
                                  : (num >= 1000)    ? 4
@@ -226,7 +226,7 @@ private:
                                                     : 1;
     }
 
-    static inline char* addTag(const char *tag, const size_t taglen, const char *val, const size_t vallen, char *buf) noexcept
+    static char* addTag(const char *tag, size_t taglen, const char *val, size_t vallen, char *buf) noexcept
     {
         std::memcpy(buf, tag, taglen);
         buf += taglen;
@@ -236,7 +236,7 @@ private:
 
         return buf;
     }
-    static inline char* addTag(const char *tag, const size_t taglen, uint32_t val, char *buf) noexcept
+    static char* addTag(const char *tag, size_t taglen, uint32_t val, char *buf) noexcept
     {
         std::memcpy(buf, tag, taglen);
         buf += taglen;
@@ -246,7 +246,7 @@ private:
         return buf;
     }
     template<uint8_t Scale>
-    static inline char* addTagPrice(const char *tag, const size_t taglen, uint32_t val, char *buf) noexcept
+    static char* addTagPrice(const char *tag, size_t taglen, uint32_t val, char *buf) noexcept
     {
         char temp[16];
 
@@ -273,7 +273,7 @@ private:
     // Precompute all possible second values for a given day and store in a static table to avoid expensive time formatting on each call.
     char g_second_table[86400][17];
 
-    inline void init_time_table()
+    void init_time_table() noexcept
     {
         auto now = std::chrono::system_clock::now();
         auto t = std::chrono::system_clock::to_time_t(now);

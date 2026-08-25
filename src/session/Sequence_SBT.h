@@ -42,16 +42,16 @@ private:
     SBTSequence sequence_;
   
 public:
-    inline void set_seq(const char* seqnum) noexcept { sequence_.last_seen_seqnum = strnum_to_int(seqnum); }
-    inline void set_sess_id(const char *session) noexcept { std::memcpy(sequence_.session, session, 10); }
+    void set_seq(const char* seqnum) noexcept { sequence_.last_seen_seqnum = strnum_to_int(seqnum); }
+    void set_sess_id(const char* session) noexcept { std::memcpy(sequence_.session, session, 10); }
 
-    inline void increase_seq() noexcept { sequence_.last_seen_seqnum++; }
+    void increase_seq() noexcept { sequence_.last_seen_seqnum++; }
 
-    inline char* get_sess_id() noexcept { return sequence_.session; }
-    inline char* get_seq() noexcept { return int_to_strnum(sequence_.last_seen_seqnum); }
+    const char* get_sess_id() const noexcept { return sequence_.session; }
+    char* get_seq() const noexcept { return int_to_strnum(sequence_.last_seen_seqnum); }
 
 private : 
-    static inline uint64_t strnum_to_int(const char *strnum) noexcept
+    static uint64_t strnum_to_int(const char* strnum) noexcept
     {
         uint64_t result = 0;
         for (size_t i = 0; i < 20; ++i)
@@ -63,7 +63,7 @@ private :
         return result;
     }
 
-    static inline char* int_to_strnum(uint64_t value) noexcept
+    static char* int_to_strnum(uint64_t value) noexcept
     {
         static char buffer[21]; 
         char *p = buffer;

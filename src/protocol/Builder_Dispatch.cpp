@@ -8,10 +8,13 @@
 
 #include <atomic>
 #include <cstddef>
+#include <functional>
+
+using common_function::to_underlying;
 
 Builder_Dispatch::Builder_Dispatch(spscTxPacketQueue_t &builder_to_sender, spscOrderQueue_t &risk_to_builder, spscFIXRxSessionQueue_t &parser_to_fixbuilder_rx, spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx,
                                    SessionManager &sess_mngr, SoupBinTcp &sbt, LoginController &login, TxPacketPoolManager &txPkt_pool, Builder_FIX &fixBuilder, OrderManager &ord_mngr, Parser_FIX &fixParser) noexcept
-                                   : builder_table_(makeBuilderLookUpTable()), builder_to_sender_(builder_to_sender), risk_to_builder_(risk_to_builder), parser_to_fixbuilder_rx_(parser_to_fixbuilder_rx), 
+                                   : builder_to_sender_(builder_to_sender), risk_to_builder_(risk_to_builder), parser_to_fixbuilder_rx_(parser_to_fixbuilder_rx), 
                                    parser_to_fixbuilder_tx_(parser_to_fixbuilder_tx), sess_mngr_(sess_mngr), sbt_(sbt), login_(login), txPkt_pool_(txPkt_pool), fixBuilder_(fixBuilder), ord_mngr_(ord_mngr),
                                    fixParser_(fixParser)
 {}
@@ -20,21 +23,23 @@ std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUN
 {
    std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> Builder_table{};  // 3/6 being used
 
-   Builder_table[static_cast<size_t>(Protocol::FIX)][static_cast<size_t>(Venue::BIST)] = &Builder_Dispatch::buildFIX;
-   Builder_table[static_cast<size_t>(Protocol::OUCH)][static_cast<size_t>(Venue::BIST)] = &Builder_Dispatch::buildOUCH_BIST;
-   Builder_table[static_cast<size_t>(Protocol::OUCH)][static_cast<size_t>(Venue::NASDAQ)] = &Builder_Dispatch::buildOUCH_NASDAQ;
+   Builder_table[to_underlying(Protocol::FIX)][to_underlying(Venue::BIST)] = &Builder_Dispatch::buildFIX;
+   Builder_table[to_underlying(Protocol::OUCH)][to_underlying(Venue::BIST)] = &Builder_Dispatch::buildOUCH_BIST;
+   Builder_table[to_underlying(Protocol::OUCH)][to_underlying(Venue::NASDAQ)] = &Builder_Dispatch::buildOUCH_NASDAQ;
 
    return Builder_table;
 }
 
-bool Builder_Dispatch::dispatch() noexcept
+std::array<std::array<Builder_Dispatch::BuilderFunc, VENUE_COUNT>, PROTOCOL_COUNT> Builder_Dispatch::builder_table_ = makeBuilderLookUpTable();
+
+bool Builder_Dispatch::dispatch()
 {
    Order* order{nullptr};
 
    if(!risk_to_builder_.pop(order))
       return false;
 
-   (this->*builder_table_[static_cast<size_t>(order->protocol)][static_cast<size_t>(order->venue)])(order);
+   std::invoke(builder_table_[to_underlying(order->protocol)][to_underlying(order->venue)], this, order);
 
    if(order->order_id == 0) 
       ord_mngr_.add_awaitingAck_order(*order);
@@ -115,7 +120,7 @@ void Builder_Dispatch::buildFIX_ses_in(FIXSessionMessage &fixSesMsg, uint8_t ses
    fixParser_.releaseFIX(&fixSesMsg);
 }
 
-void Builder_Dispatch::buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t session_index) noexcept
+void Builder_Dispatch::buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t session_index) 
 {
    Buffer_FIX *buffer;
 
@@ -129,7 +134,7 @@ void Builder_Dispatch::buildFIX_ses_out(FIXSessionMessage &fixSesMsg, uint8_t se
    {
       auto begin = fixSesMsg.begin_seqnum;
       auto end = fixSesMsg.end_seqnum;
-      for (auto i = begin; i > end; i++)
+      for (auto i = begin; i <= end; i++)
       {
          auto *buffer = fixBuilder_.build_resend(sess_mngr_.getSessionState(session_index)->fix.get_buffer(i), session_index);
          TxPacket *txPkt = txPkt_pool_.get_txPkt();

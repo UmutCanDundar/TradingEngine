@@ -56,11 +56,11 @@ public:
     SoupBinTcp(SessionManager &sess_mngr) noexcept;
 
     SBTAction pkt_handler(const char *pkt, size_t sess_index) noexcept;
-    char *buildFirstLoginRequest(char *buf, uint8_t sess_index) noexcept;
-    char *buildReLoginRequest(char *buf, uint8_t sess_index) noexcept;
-    char *buildLogoutRequest(char *buf) noexcept;
+    char *buildFirstLoginRequest(char *buf, uint8_t sess_index) const noexcept;
+    char *buildReLoginRequest(char *buf, uint8_t sess_index) const noexcept;
+    char *buildLogoutRequest(char *buf) const noexcept;
 
-    inline char *buildHeartbeat(char *buf) noexcept
+    char *buildHeartbeat(char *buf) const noexcept
     {
         Endian::write_u16_be(buf, 1);
         *(buf + 2) = 'R';
@@ -68,7 +68,7 @@ public:
         return buf;
     }
 
-    inline char* WriteSBTHeaderForDataPacket(char *buf, uint16_t OUCHpkt_len) noexcept
+    char* WriteSBTHeaderForDataPacket(char *buf, uint16_t OUCHpkt_len) const noexcept
     {
         Endian::write_u16_be(buf, OUCHpkt_len - 2);
         *(buf + 2) = 'U';
@@ -78,7 +78,7 @@ public:
 
 private:
     __attribute__((always_inline)) 
-    inline SBTAction handleSequencedData(size_t sess_index) noexcept
+    SBTAction handleSequencedData(size_t sess_index) noexcept
     {
         auto &seq_sbt = sess_mngr_.getSessionState(sess_index)->sbt;
         seq_sbt.increase_seq();
@@ -86,19 +86,19 @@ private:
     }
     
     __attribute__((always_inline)) 
-    inline SBTAction handleHeartbeat() noexcept
+    SBTAction handleHeartbeat() const noexcept
     { 
         return SBTAction::Ignore; 
     }
 
     __attribute__((always_inline)) 
-    inline SBTAction handleEndOfSession() noexcept
+    SBTAction handleEndOfSession() const noexcept
     { 
         return SBTAction::Reconnect; 
     }
 
     __attribute__((always_inline)) 
-    inline SBTAction handleLoginAccepted(const char *LoginAcceptedPacket, size_t sess_index) noexcept
+    SBTAction handleLoginAccepted(const char *LoginAcceptedPacket, size_t sess_index) noexcept
     {
         auto* state = sess_mngr_.getSessionState(sess_index);
         state->is_logged_in.store(true, std::memory_order_release);
@@ -109,7 +109,7 @@ private:
     }
     
     __attribute__((always_inline))
-    inline SBTAction handleLoginRejected(const char *LoginRejectedPacket) noexcept
+    SBTAction handleLoginRejected(const char *LoginRejectedPacket) const noexcept
     {
         if (LoginRejectedPacket[3] == 'S') // Session not available
             return SBTAction::Reconnect;
@@ -118,13 +118,13 @@ private:
     }
     
     __attribute__((always_inline)) 
-    inline SBTAction handleUnSequencedData() noexcept
+    SBTAction handleUnSequencedData() const noexcept
     { 
         return SBTAction::NotToParser; 
     }
     
     __attribute__((always_inline)) 
-    inline SBTAction handleDebug() noexcept
+    SBTAction handleDebug() const noexcept
     { 
         return SBTAction::Ignore; 
     }

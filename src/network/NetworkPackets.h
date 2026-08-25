@@ -96,7 +96,7 @@ private:
     
 public:
 
-    TxPacket *get_txPkt() noexcept
+    TxPacket* get_txPkt() noexcept
     {
         return &pool[next_txPkt++ & (PACKET_POOL_CAPACITY - 1)];
     }

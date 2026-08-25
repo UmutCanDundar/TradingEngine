@@ -3,12 +3,12 @@
 
 #include <immintrin.h>
 
-ParserFlow::ParserFlow(Parser_Dispatch &parser_dispatch) noexcept
+ParserFlow::ParserFlow(Parser_Dispatch &parser_dispatch) 
     : parser_dispatch_(parser_dispatch)
 {
 }
 
-void ParserFlow::start() noexcept
+void ParserFlow::start() 
 {
     running_.store(true, std::memory_order_release);
 

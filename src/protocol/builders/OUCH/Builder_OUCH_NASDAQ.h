@@ -22,16 +22,12 @@
 //
 // DEVELOPER NOTES (PRE-PROFILING):
 // - The builder path is largely memory-bound due to sequential buffer writes, multiple memcpy/memset
-//   operations, and fixed-layout binary message construction; therefore, forcing inline or constexpr
+//   operations, and fixed-layout binary message construction; therefore, forcing or constexpr
 //   dispatch upfront is not expected to yield meaningful latency improvements.
 //   Dispatch is currently implemented via a function table for correctness and clarity. Since the number
 //   of message types is small, this can be revisited after profiling: hot paths may be converted to
 //   switch-case dispatch to enable inlining and reduce instruction count, provided instruction cache
-//   pressure remains acceptable.(*)TESTED-see benchmark reports
-//
-// - Message builders are marked inline for clarity and future flexibility;
-//   however, due to function-pointer-based dispatch, they are not expected
-//   to inline in the current design.
+//   pressure remains acceptable.(*)TESTED
 //
 // - After observing real traffic patterns, message-type–specific prefilled templates may be introduced
 //   to further reduce runtime instruction count. In such a design, invariant fields would be written
@@ -81,7 +77,7 @@ public:
    
 private:
   
-    inline void buildEnterOrder(Order &order, char *buf) noexcept
+    void buildEnterOrder(Order &order, char *buf) noexcept
     {
         *buf = 'O';
         Endian::write_u32_be(buf + 1, user_ref_num);
@@ -101,7 +97,7 @@ private:
     
     }
 
-    inline void buildReplaceOrder(Order &order, char *buf) noexcept
+    void buildReplaceOrder(Order &order, char *buf) noexcept
     {
         *buf = 'U';
         Endian::write_u32_be(buf + 1, order.pre_user_ref_num);
@@ -119,7 +115,7 @@ private:
     
     }
 
-    inline void buildCancelOrder(Order &order, char *buf) noexcept
+    void buildCancelOrder(Order &order, char *buf) noexcept
     {
         *buf = 'X';
         Endian::write_u32_be(buf + 1, user_ref_num);
@@ -128,7 +124,7 @@ private:
 
     }
 
-    inline void buildModifyOrder(Order &order, char *buf) noexcept
+    void buildModifyOrder(Order &order, char *buf) noexcept
     {
         *buf = 'M';
         Endian::write_u32_be(buf + 1, user_ref_num);
@@ -138,7 +134,7 @@ private:
 
     }
 
-    inline void buildAccountQueryRequest([[maybe_unused]] Order &order, char *buf) noexcept
+    void buildAccountQueryRequest([[maybe_unused]] Order &order, char *buf) noexcept
     {
         *buf = 'Q';
         Endian::write_u16_be(buf + 1, 0);
@@ -280,7 +276,7 @@ private:
 //     Buffer_ONQ *build(Order& order) noexcept;  
    
 // private:
-//     inline void buildEnterOrder(Order& order, char* buf) noexcept
+//     void buildEnterOrder(Order& order, char* buf) noexcept
 //     {
 //         Endian::write_u32_be(buf + 1, user_ref_num);
 //         *(buf + 5) = order.side == Side::Buy ? 'B' : 'S';
@@ -294,7 +290,7 @@ private:
     
 //     }
 
-//     inline void buildReplaceOrder(Order& order, char* buf) noexcept
+//     void buildReplaceOrder(Order& order, char* buf) noexcept
 //     {
 //         Endian::write_u32_be(buf + 1, order.pre_user_ref_num);
 //         Endian::write_u32_be(buf + 5, user_ref_num);
@@ -308,13 +304,13 @@ private:
     
 //     }
 
-//     inline void buildCancelOrder(Order& order, char* buf) noexcept
+//     void buildCancelOrder(Order& order, char* buf) noexcept
 //     {
 //         Endian::write_u32_be(buf + 1, user_ref_num);
 //         Endian::write_u32_be(buf + 5, order.quantity);
 //     }
 
-//     inline void buildModifyOrder(Order& order, char* buf) noexcept
+//     void buildModifyOrder(Order& order, char* buf) noexcept
 //     {
 //         Endian::write_u32_be(buf + 1, user_ref_num);
 //         *(buf + 5) = order.side == Side::Buy ? 'B' : 'S';

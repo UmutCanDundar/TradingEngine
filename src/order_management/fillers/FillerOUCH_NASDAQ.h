@@ -38,12 +38,12 @@ private:
 public:
     FillerOUCH_NASDAQ(OrderManager &om) noexcept;
 
-    void fill_ouch_accepted(Order &order, const NASDAQ::RX::OUCHOrderAcceptedMessage &msg) noexcept;
-    void fill_ouch_replaced(Order &order, const NASDAQ::RX::OUCHOrderReplacedMessage &msg) noexcept; // For now, only used for qty modification
-    void fill_ouch_cancelled(Order &order, const NASDAQ::RX::OUCHOrderCancelledMessage &msg) noexcept;
-    void fill_ouch_executed(Order &order, const NASDAQ::RX::OUCHOrderExecutedMessage &msg) noexcept;
+    void fill_ouch_accepted(Order &order, const NASDAQ::RX::OUCHOrderAcceptedMessage &msg) const noexcept;
+    void fill_ouch_replaced(Order &order, const NASDAQ::RX::OUCHOrderReplacedMessage &msg) const noexcept; // For now, only used for qty modification
+    void fill_ouch_cancelled(Order &order, const NASDAQ::RX::OUCHOrderCancelledMessage &msg) const noexcept;
+    void fill_ouch_executed(Order &order, const NASDAQ::RX::OUCHOrderExecutedMessage &msg) const noexcept;
     void fill_ouch_rejected(Order &order, const NASDAQ::RX::OUCHOrderRejectedMessage &msg) noexcept;
-    void fill_ouch_modified(Order &order, const NASDAQ::RX::OUCHOrderModifiedMessage &msg) noexcept;
+    void fill_ouch_modified(Order &order, const NASDAQ::RX::OUCHOrderModifiedMessage &msg) const noexcept;
    
 };
 

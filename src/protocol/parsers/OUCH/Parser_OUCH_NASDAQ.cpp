@@ -8,7 +8,7 @@ Parser_OUCH_NASDAQ::Parser_OUCH_NASDAQ() noexcept
    ouch_pools_.initialize_all();
 }
 
-const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX_MESSAGES> Parser_OUCH_NASDAQ::makeMessageHandlersLookup() noexcept
+std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX_MESSAGES> Parser_OUCH_NASDAQ::makeMessageHandlersLookup() noexcept
 {
    static std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
 
@@ -195,4 +195,4 @@ const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX
    return handlers;
 }
 
-const std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX_MESSAGES> Parser_OUCH_NASDAQ::MessageHandlers = makeMessageHandlersLookup();
+std::array<Parser_OUCH_NASDAQ::MessageHandlerFunc, Parser_OUCH_NASDAQ::MAX_MESSAGES> Parser_OUCH_NASDAQ::MessageHandlers = makeMessageHandlersLookup();

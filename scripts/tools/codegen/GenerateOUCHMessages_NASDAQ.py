@@ -278,7 +278,7 @@ def generate_enum(messages):
      return" ".join(line)
 
 def generate_func_ouctypes(messages):
-    line = [f"\n\ninline constexpr OUCHTypes ouchMessageIndex(char type) {{\n"]
+    line = [f"\n\ninline OUCHTypes ouchMessageIndex(char type) noexcept {{\n"]
     line.append("   switch(type) {")
     for i, msg in enumerate(messages[5:]):
         messagetype = messagetype_index(msg)

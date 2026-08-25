@@ -71,12 +71,12 @@ private:
     static void resetRetry_error() noexcept;
   
     template <typename... Args>
-    static void logError(std::string_view msg, Args &&...args) noexcept
+    static void logError(std::string_view msg, Args &&...args) 
     {
         LOG_ERROR(msg, std::forward<Args>(args)...);
     }
 
-    static constexpr std::string_view toString(ErrorName err) noexcept 
+    static std::string_view toString(ErrorName err) noexcept 
     {
         using enum ErrorName;
         switch (err) 
@@ -88,6 +88,6 @@ private:
     }
 
 public:
-    static bool handleError(int err, uint8_t max_retry = 3) noexcept;
-    static bool handleError(ErrorName err, uint8_t max_retry = 3) noexcept;
+    static bool handleError(int err, uint8_t max_retry = 3);
+    static bool handleError(ErrorName err, uint8_t max_retry = 3);
 };

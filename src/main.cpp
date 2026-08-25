@@ -32,23 +32,34 @@
 
 std::atomic<bool> g_running{true};
 
-void signal_handler(int)
+void signal_handler(int) noexcept
 {
     g_running.store(false, std::memory_order_relaxed);
 }
 
 int main()
 {
+    std::signal(SIGINT, signal_handler);
+    Logger::Init();
+
     configure_affinity(14);
     lock_memory();
 
-    std::signal(SIGINT, signal_handler);
+    std::unique_ptr<TradingEngine> engine;
+
+    try
+    {
+        engine = std::make_unique<TradingEngine>();
+        engine->start();
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR("An exception was catched during TradingEngine initialization: {}", e.what());
+        Logger::Shutdown();
+        return 1;
+    }
+   
     
-    Logger::Init();
-    auto engine = std::make_unique<TradingEngine>();
-
-    engine->start();
-
     while (g_running.load(std::memory_order_relaxed))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

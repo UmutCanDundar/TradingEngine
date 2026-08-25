@@ -6,7 +6,7 @@
 // - Detects duplicate exec_id values using a Bloom filter + fixed-size hash table.
 //
 // THREAD SAFETY:
-// - Fully immutable after initialization.
+// - Fully immutable after initialization except the parts related to exec_id validation.
 // - Safe for concurrent read-only access without synchronization.
 //
 // PERFORMANCE & DESIGN NOTES:
@@ -29,65 +29,61 @@
 #include <vector>      
 #include <string_view> 
 
-
-
 struct SymbolIndex;
+
+struct HashEntry
+{
+    std::array<char,32> symbol{};
+    uint32_t index;
+    bool valid = false;
+};
 
 class HashTables
 {
 private:
 public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
-    struct HashEntry
-    {
-        char symbol[32] = {};
-        uint32_t index;
-        bool valid = false;
-    };
-
-    std::vector<std::vector<HashEntry>> hashtables_;
-    std::vector<size_t> symbols_count_per_venue_;
 
     static constexpr size_t EXEC_ID_TABLE_SIZE = 1 << 18; // 262144 slots (~2.1 MB)
     static constexpr size_t MAX_PROBE = 8; 
-    std::array<uint64_t, EXEC_ID_TABLE_SIZE> exec_id_hashes_;
-
     static constexpr size_t BLOOM_SIZE = 1 << 16; // 65536 poses (8 KB)
+
+    std::vector<std::vector<HashEntry>> hashtables_;
+    std::vector<size_t> symbols_count_per_venue_;
+    std::array<uint64_t, EXEC_ID_TABLE_SIZE> exec_id_hashes_;
     std::array<uint64_t, BLOOM_SIZE / 64> bloom_filter_;
 
 public:
-    HashTables() noexcept;
+    HashTables();
+    size_t get_symbol_count(uint8_t venue_index) const noexcept;
 
     template <size_t N>
-    void initialize_all(const std::array<std::span<const SymbolIndex>, N> &all_symbol_tables) noexcept
+    void initialize_all(const std::array<std::span<const SymbolIndex>, N> &all_symbol_tables) 
     {
-        for (const auto &symbol_table : all_symbol_tables)
+        for (auto symbol_table : all_symbol_tables)
             initialize(symbol_table);
     }
 
-    inline uint32_t getIndex(size_t venue_index, const std::array<char, 32> &symbol) const noexcept
+    uint32_t getIndex(const size_t venue_index, const std::array<char, 32> &symbol) const noexcept
     {
-        size_t size = hashtables_[venue_index].size();
+        auto& hashtable = hashtables_[venue_index];
+        const size_t size = hashtable.size();
         uint32_t hash_val = hash_symbol(symbol.data(), size);
         
-        while (hashtables_[venue_index][hash_val].valid)
+        while (hashtable[hash_val].valid)
         {
-            if (*reinterpret_cast<const uint64_t *>(hashtables_[venue_index][hash_val].symbol) ==
-                *reinterpret_cast<const uint64_t *>(symbol.data()))
+            if (std::memcmp(hashtable[hash_val].symbol.data(), symbol.data(), 8) == 0) // Assuming the first 8 chars is enough to compare symbols.
             {
-                return hashtables_[venue_index][hash_val].index;
+                return hashtable[hash_val].index;
             }
             hash_val = (hash_val + 1) & (size - 1);
         }
         return UINT32_MAX;
     }
 
-    size_t get_symbol_count(const uint8_t venue_index) const noexcept;
-    
-    inline bool is_duplicate_exec_id(std::string_view exec_id) noexcept
+    bool is_duplicate_exec_id(std::string_view exec_id) noexcept
     {
         const uint64_t hash = hash_exec_id(exec_id);
 
-        // Phase 1: Bloom filter
         if (!bloom_contains(hash))
         {
             bloom_insert(hash);
@@ -95,12 +91,11 @@ public:
             return false;
         }
 
-        // Phase 2: Hash lookup 
         const size_t index = hash & (EXEC_ID_TABLE_SIZE-1);
 
         for (size_t i = 0; i < MAX_PROBE; ++i)
         {
-            const size_t probed_index = (index + i) & (EXEC_ID_TABLE_SIZE - 1); //check interval(8) 
+            const size_t probed_index = (index + i) & (EXEC_ID_TABLE_SIZE - 1); 
             const uint64_t stored_hash = exec_id_hashes_[probed_index];
 
             if (stored_hash == 0) 
@@ -113,7 +108,6 @@ public:
                 return true;
         }
 
-        // Overwrite at original index 
         exec_id_hashes_[index] = hash;
         return false;
     }
@@ -121,9 +115,72 @@ public:
 private:
 public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     //-------------------Symbol Hashing----------------------
-    void initialize(const std::span<const SymbolIndex> &symbol_table) noexcept;
+    void initialize(std::span<const SymbolIndex> symbol_table);
 
-    static inline uint32_t hash_symbol(const char *s, size_t size) noexcept
+    bool bloom_contains(const uint64_t hash) const noexcept
+    {
+        const uint64_t pos1 = hash & (BLOOM_SIZE - 1);
+        const uint64_t pos2 = (hash >> 16) & (BLOOM_SIZE - 1);
+
+        const uint64_t word1 = bloom_filter_[pos1 / 64];
+        const uint64_t word2 = bloom_filter_[pos2 / 64];
+
+        const uint64_t bit1 = 1ULL << (pos1 % 64);
+        const uint64_t bit2 = 1ULL << (pos2 % 64);
+
+        return (word1 & bit1) && (word2 & bit2);
+    }
+    void bloom_insert(const uint64_t hash) noexcept
+    {
+        const uint64_t pos1 = hash & (BLOOM_SIZE - 1);
+        const uint64_t pos2 = (hash >> 16) & (BLOOM_SIZE - 1);
+
+        bloom_filter_[pos1 / 64] |= (1ULL << (pos1 & 63));
+        bloom_filter_[pos2 / 64] |= (1ULL << (pos2 & 63));
+    }
+
+    void insert_exec_id_hash(const uint64_t hash) noexcept
+    {
+        const size_t index = hash & (EXEC_ID_TABLE_SIZE-1);
+
+        for (size_t i = 0; i < MAX_PROBE; ++i)
+        {
+            const size_t probed_index = (index + i) & (EXEC_ID_TABLE_SIZE-1); 
+            if (exec_id_hashes_[probed_index] == 0)
+            {
+                exec_id_hashes_[probed_index] = hash;
+                return;
+            }
+        }
+
+        exec_id_hashes_[index] = hash;
+    }
+
+    static uint64_t wymix(uint64_t a, uint64_t b) noexcept
+    {
+    a ^= wyrot(b, 17);
+    b ^= wyrot(a, 33);
+    a *= 0xff51afd7ed558ccdULL;
+    b *= 0xc2b2ae3d27d4eb4fULL;
+    a ^= a >> 29;
+    b ^= b >> 31;
+    return a ^ b;
+    }
+
+    static uint64_t wyhash_small(const char *p, size_t len, uint64_t seed) noexcept
+    {
+    uint64_t a = seed, b = seed ^ 0x9e3779b185ebca87ULL;
+    uint64_t tmp = 0;
+    std::memcpy(&tmp, p, len);
+    return wymix(a ^ tmp, b ^ (uint64_t)len);
+    }
+
+    static uint64_t wyrot(uint64_t x, uint32_t k) noexcept
+    {
+        return (x << k) | (x >> (64 - k));
+    }
+
+    static uint32_t hash_symbol(const char *s, size_t size) noexcept
     {
         uint32_t h = 2166136261u;
         while (*s)
@@ -135,7 +192,7 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     }
 
     //-------------------Exec-Id Hashing----------------------
-    static inline uint64_t hash_exec_id(std::string_view s) noexcept
+    static uint64_t hash_exec_id(std::string_view s) noexcept
     {
         const size_t n = s.size();
         const char *p = s.data();
@@ -152,7 +209,7 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
         std::memcpy(&h1, p, 8);
         if (n < 16)
         {
-            std::memcpy(&h2, p + (n - 8), 8); // tail 8B
+            std::memcpy(&h2, p + (n - 8), 8); 
             return (wymix(h1 ^ (uint64_t)n, h2) | 1ULL);
         }
 
@@ -167,52 +224,5 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
 
         // n = 16
         return (wymix(h1, h2 ^ (uint64_t)n) | 1ULL);
-    }
-
-    inline bool bloom_contains(uint64_t hash) const noexcept
-    {
-        const uint64_t pos1 = hash & (BLOOM_SIZE - 1);
-        const uint64_t pos2 = (hash >> 16) & (BLOOM_SIZE - 1);
-
-        const uint64_t word1 = bloom_filter_[pos1 / 64];
-        const uint64_t word2 = bloom_filter_[pos2 / 64];
-
-        const uint64_t bit1 = 1ULL << (pos1 % 64);
-        const uint64_t bit2 = 1ULL << (pos2 % 64);
-
-        return (word1 & bit1) && (word2 & bit2);
-    }
-    inline void bloom_insert(uint64_t hash) noexcept
-    {
-        const uint64_t pos1 = hash & (BLOOM_SIZE - 1);
-        const uint64_t pos2 = (hash >> 16) & (BLOOM_SIZE - 1);
-
-        bloom_filter_[pos1 / 64] |= (1ULL << (pos1 & 63));
-        bloom_filter_[pos2 / 64] |= (1ULL << (pos2 & 63));
-    }
-
-    static inline uint64_t wyrot(uint64_t x, uint32_t k) noexcept
-    {
-        return (x << k) | (x >> (64 - k));
-    }
-    static uint64_t wymix(uint64_t a, uint64_t b) noexcept;
-    static uint64_t wyhash_small(const char *p, size_t len, uint64_t seed) noexcept;
-    
-
-    inline void insert_exec_id_hash(uint64_t hash) noexcept
-    {
-        const size_t index = hash & (EXEC_ID_TABLE_SIZE-1);
-
-        for (size_t i = 0; i < MAX_PROBE; ++i)
-        {
-            const size_t probed_index = (index + i) & (EXEC_ID_TABLE_SIZE-1); // open adressing
-            if (exec_id_hashes_[probed_index] == 0)
-            {
-                exec_id_hashes_[probed_index] = hash;
-                return;
-            }
-        }
-
-        exec_id_hashes_[index] = hash;
     }
 };

@@ -138,7 +138,7 @@ struct OUCHOrderExecutedMessage {
 
 enum class OUCHTypes : uint8_t {   A = 0,  J = 1,  U = 2,  C = 3,  E = 4,  unknownOUCHtype = 99 };
 
-inline constexpr OUCHTypes ouchMessageIndex(char type) {
+inline OUCHTypes ouchMessageIndex(char type) noexcept {
 
    switch(type) {
       case 'A': return OUCHTypes::A;

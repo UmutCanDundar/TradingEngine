@@ -3,12 +3,12 @@
 
 #include <immintrin.h>
 
-OrderFlow::OrderFlow(OrderManager& ord_mngr, ClickhouseWriter& ch_writer) noexcept
+OrderFlow::OrderFlow(OrderManager& ord_mngr, ClickhouseWriter& ch_writer)
     : ord_mngr_(ord_mngr), ch_writer_(ch_writer)
 {
 }
 
-void OrderFlow::start() noexcept
+void OrderFlow::start() 
 {
     running_.store(true, std::memory_order_release);
 

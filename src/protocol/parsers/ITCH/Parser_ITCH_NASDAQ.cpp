@@ -8,7 +8,7 @@ Parser_ITCH_NASDAQ::Parser_ITCH_NASDAQ() noexcept
    itch_pools_.initialize_all();
 }
 
-const std::array<Parser_ITCH_NASDAQ::MessageHandlerFunc, Parser_ITCH_NASDAQ::MAX_MESSAGES> Parser_ITCH_NASDAQ::makeMessageHandlersLookup() noexcept
+std::array<Parser_ITCH_NASDAQ::MessageHandlerFunc, Parser_ITCH_NASDAQ::MAX_MESSAGES> Parser_ITCH_NASDAQ::makeMessageHandlersLookup() noexcept
 {
    static std::array<MessageHandlerFunc, MAX_MESSAGES> handlers{};
 
@@ -208,4 +208,4 @@ const std::array<Parser_ITCH_NASDAQ::MessageHandlerFunc, Parser_ITCH_NASDAQ::MAX
    return handlers;
 }
 
-const std::array<Parser_ITCH_NASDAQ::MessageHandlerFunc, Parser_ITCH_NASDAQ::MAX_MESSAGES> Parser_ITCH_NASDAQ::MessageHandlers = makeMessageHandlersLookup();
+std::array<Parser_ITCH_NASDAQ::MessageHandlerFunc, Parser_ITCH_NASDAQ::MAX_MESSAGES> Parser_ITCH_NASDAQ::MessageHandlers = makeMessageHandlersLookup();

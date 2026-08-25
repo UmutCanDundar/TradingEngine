@@ -181,7 +181,7 @@ void Parser_FIX::resend_logic(uint32_t msg_seqnum, Sequence_FIX &seq_fix) noexce
    }
 }
 
-void Parser_FIX::resend_logic_logon(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix) noexcept
+void Parser_FIX::resend_logic_logon(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix) 
 {
    if (fixSesMsg->reset_seqnum_flag == 'Y')
    {

@@ -12,9 +12,8 @@ LoginController::LoginController(SoupBinTcp &sbt, Builder_FIX &builder_fix, Sess
 
 void LoginController::LoginAttempt(TxPacket &login_pkt, const uint8_t index, SessionState &state) noexcept
 {
-    auto sess_prot = state.sess_prot;
-
-    if (sess_prot == SessionProtocol::SBT)
+    
+    if (auto sess_prot = state.sess_prot; sess_prot == SessionProtocol::SBT)
     {
         if (!sess_mngr_.isSessionLoggedInBefore(index))
             sbt_.buildFirstLoginRequest(login_pkt.data.data(), index);
@@ -32,7 +31,7 @@ void LoginController::LoginAttempt(TxPacket &login_pkt, const uint8_t index, Ses
         else
             buffer = builder_fix_.build<FIXTypes::Logon>(index, false);
 
-        std::memcpy(buffer->data, login_pkt.data.data(), buffer->len);
+        std::memcpy(login_pkt.data.data(), buffer->data, buffer->len);
         login_pkt.len = buffer->len;
     }
     
@@ -43,7 +42,7 @@ void LoginController::LoginAttempt(TxPacket &login_pkt, const uint8_t index, Ses
     state.login_retry_count++;
 }
 
-LoginDecision LoginController::LoginDecider(SessionState *state) noexcept
+LoginDecision LoginController::LoginDecider(SessionState *state) const noexcept
 {
     if (!state->is_connected.load(std::memory_order_relaxed))
         return LoginDecision::Disconnect;

@@ -33,7 +33,7 @@ public:
     std::atomic<bool> running{true};
     std::vector<RxPacket*> spare_pkts;
     
-    PendingQueue<RxPacket *, 256> pend_read;
+    CustomQueue<RxPacket *, 256> pend_read;
     uint8_t sess_index;
 
 public:

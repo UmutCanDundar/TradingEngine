@@ -7,12 +7,12 @@
 #include <arpa/inet.h>
 #include <nlohmann/json.hpp>
 
-SessionManager::SessionManager() noexcept : session_contexts_(initialize_SessionContext()), session_auths_(initialize_SessionAuth()) 
+SessionManager::SessionManager() : session_contexts_(initialize_SessionContext()), session_auths_(initialize_SessionAuth()) 
 {
     initialize_SessionState();
 }
 
-std::array<SessionContext, MAX_SESSIONS> SessionManager::initialize_SessionContext() noexcept
+std::array<SessionContext, MAX_SESSIONS> SessionManager::initialize_SessionContext() 
 {
     std::array<SessionContext, MAX_SESSIONS> session_contexts{};
 
@@ -43,12 +43,12 @@ std::array<SessionContext, MAX_SESSIONS> SessionManager::initialize_SessionConte
             cxt.tcp_index = context["tcp_index"].get<size_t>();
     
         session_contexts[cxt.socket_index] = std::move(cxt);
-        session_lookup_[static_cast<size_t>(cxt.venue)][static_cast<size_t>(cxt.protocol)][cxt.account_index] = cxt.socket_index;
+        session_lookup_[to_underlying(cxt.venue)][to_underlying(cxt.protocol)][cxt.account_index] = cxt.socket_index;
     }
     return session_contexts;
 }
 
-void SessionManager::initialize_SessionState() noexcept 
+void SessionManager::initialize_SessionState() 
 {
 
     std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Sessions.json");
@@ -74,7 +74,7 @@ void SessionManager::initialize_SessionState() noexcept
     }
 }
 
-std::array<SessionAuth, MAX_TCP_SESSIONS> SessionManager::initialize_SessionAuth() noexcept
+std::array<SessionAuth, MAX_TCP_SESSIONS> SessionManager::initialize_SessionAuth() const 
 {
     std::array<SessionAuth, MAX_TCP_SESSIONS> session_auths{};
 
@@ -126,7 +126,7 @@ std::array<SessionAuth, MAX_TCP_SESSIONS> SessionManager::initialize_SessionAuth
     return session_auths;
 }
 
-Protocol SessionManager::convertToProtocol(const std::string_view prot) noexcept
+Protocol SessionManager::convertToProtocol(std::string_view prot) noexcept
 {
     if (prot == "FIX")
         return Protocol::FIX;
@@ -138,7 +138,7 @@ Protocol SessionManager::convertToProtocol(const std::string_view prot) noexcept
     return Protocol::Unknown;
 }
 
-SessionType SessionManager::convertToSessType(const std::string_view type) noexcept
+SessionType SessionManager::convertToSessType(std::string_view type) noexcept
 {
     if (type == "Order")
         return SessionType::Order;
@@ -146,7 +146,7 @@ SessionType SessionManager::convertToSessType(const std::string_view type) noexc
     return SessionType::None;
 }
 
-Venue SessionManager::convertToVenue(const std::string_view ven) noexcept
+Venue SessionManager::convertToVenue(std::string_view ven) noexcept
 {
     if (ven == "BIST")
         return Venue::BIST;
@@ -156,7 +156,7 @@ Venue SessionManager::convertToVenue(const std::string_view ven) noexcept
     return Venue::Unknown;
 }
 
-uint32_t SessionManager::convertToNetworkbyte(const std::string_view ip) noexcept
+uint32_t SessionManager::convertToNetworkbyte(std::string_view ip) noexcept
 {
     in_addr addr{};
     ::inet_pton(AF_INET, ip.data(), &addr);

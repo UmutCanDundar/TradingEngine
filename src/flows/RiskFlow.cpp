@@ -3,12 +3,12 @@
 
 #include <immintrin.h>
 
-RiskFlow::RiskFlow(RiskEngine &risk) noexcept
+RiskFlow::RiskFlow(RiskEngine &risk) 
     : risk_(risk)
 {
 }
 
-void RiskFlow::start() noexcept
+void RiskFlow::start()
 {
     running_.store(true, std::memory_order_release);
 

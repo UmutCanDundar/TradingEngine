@@ -32,11 +32,14 @@
 #include "Protocol-Venue.h"
 #include "Sequence_FIX.h"
 #include "Sequence_SBT.h"
+#include "common.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <array>
 #include <atomic>
+
+using common_function::to_underlying;
 
 enum class SessionType : uint8_t
 {
@@ -73,12 +76,6 @@ struct VenueUserInfo_FIX
           account(std::move(accountid)) 
     {
     }
-
-    VenueUserInfo_FIX(const VenueUserInfo_FIX &) = default;
-    VenueUserInfo_FIX &operator=(const VenueUserInfo_FIX &) = default;
-    VenueUserInfo_FIX(VenueUserInfo_FIX &&) = default;
-    VenueUserInfo_FIX &operator=(VenueUserInfo_FIX &&) = default;
-    ~VenueUserInfo_FIX() = default;
 };
 
 struct ExchangeClientInfo // For OUCH BIST
@@ -86,28 +83,24 @@ struct ExchangeClientInfo // For OUCH BIST
     std::string client_account; // Client/Account for DM
     std::string exchange_info;  // Account number (first 16 used) for EQM
 
-    ~ExchangeClientInfo() = default;
 };
 
 struct UserInfo_SBT 
 {
-    char username[6];
-    char password[10];
+    std::array<char, 6> username;
+    std::array<char, 10> password;
     ExchangeClientInfo eci;
 
     UserInfo_SBT(const std::string& user,const std::string& pass,const std::string& cl_acc, const std::string& exc_info) noexcept
     {
-        std::memset(username, ' ', 6);
-        std::memcpy(username, user.data(), std::min(user.size(), size_t(6)));
-        std::memset(password, ' ', 10);
-        std::memcpy(password, pass.data(), std::min(pass.size(), size_t(10)));
+        std::memset(username.data(), ' ', 6);
+        std::memcpy(username.data(), user.data(), std::min(user.size(), size_t(6)));
+        std::memset(password.data(), ' ', 10);
+        std::memcpy(password.data(), pass.data(), std::min(pass.size(), size_t(10)));
         eci.client_account = cl_acc;
         eci.exchange_info = exc_info;
     }
 
-    UserInfo_SBT(const UserInfo_SBT &) = default;
-    UserInfo_SBT &operator=(const UserInfo_SBT &) = default;
-    ~UserInfo_SBT() = default;
 };
 
 struct SessionAuth
@@ -262,10 +255,7 @@ struct SessionState
     SessionState(const SessionState&) = delete;
     SessionState& operator=(const SessionState&) = delete;
 
-    SessionState(SessionState&&) = delete;
-    SessionState& operator=(SessionState&&) = delete;
-
-    void init(SessionProtocol prot) noexcept 
+    void init(SessionProtocol prot) noexcept
     {
         sess_prot = prot;
         
@@ -332,72 +322,72 @@ private:
 
 public:
 
-    SessionManager() noexcept;
+    SessionManager();
 
-    inline size_t getSessionIndex(Venue venue, Protocol protocol, uint8_t account_index = 0) const noexcept
+    size_t getSessionIndex(Venue venue, Protocol protocol, uint8_t account_index = 0) const noexcept
     { 
-        return session_lookup_[static_cast<size_t>(venue)][static_cast<size_t>(protocol)][account_index];
+        return session_lookup_[to_underlying(venue)][to_underlying(protocol)][account_index];
     }
-    inline const SessionContext* getSessionContext(uint8_t sess_index) const noexcept
+    const SessionContext* getSessionContext(uint8_t sess_index) const noexcept
     {
         return &session_contexts_[sess_index];
     }
-    inline SessionState* getSessionState(uint8_t sess_index) noexcept
+    SessionState* getSessionState(uint8_t sess_index) noexcept
     {
         return &session_states_[sess_index];
     }
-    inline const SessionAuth* getSessionAuth(uint8_t auth_index) const noexcept
+    const SessionAuth* getSessionAuth(uint8_t auth_index) const noexcept
     {
         return &session_auths_[auth_index];
     }
 
-    inline void setSessionLoggedIn(const uint8_t sess_index, bool is_logged_in) noexcept
+    void setSessionLoggedIn(uint8_t sess_index, bool is_logged_in) noexcept
     {
         SessionState* state = &session_states_[sess_index];
         state->is_logged_in.store(is_logged_in, std::memory_order_release);
         state->logged_before.store(true, std::memory_order_release);
     }
-    inline void setSessionConnected(const uint8_t sess_index, bool is_connected) noexcept
+    void setSessionConnected(uint8_t sess_index, bool is_connected) noexcept
     {
         SessionState* state = &session_states_[sess_index];
         state->is_connected.store(is_connected, std::memory_order_release);
     }
-    inline void setSessionMulticast(const uint8_t sess_index, bool is_joined) noexcept
+    void setSessionMulticast(uint8_t sess_index, bool is_joined) noexcept
     {
         SessionState* state = &session_states_[sess_index];
         state->is_joined_multicast.store(is_joined, std::memory_order_release);
     }
     
-    inline bool isSessionLoggedIn(const uint8_t sess_index) const noexcept
+    bool isSessionLoggedIn(uint8_t sess_index) const noexcept
     {
         const SessionState* state = &session_states_[sess_index];
         return state->is_logged_in.load(std::memory_order_acquire);
     }
-    inline bool isSessionLoggedInBefore(const uint8_t sess_index) const noexcept
+    bool isSessionLoggedInBefore(uint8_t sess_index) const noexcept
     {
         const SessionState *state = &session_states_[sess_index];
         return state->logged_before.load(std::memory_order_acquire);
     }
-    inline bool isSessionConnected(const uint8_t sess_index) const noexcept
+    bool isSessionConnected(uint8_t sess_index) const noexcept
     {
         const SessionState* state = &session_states_[sess_index];
         return state->is_connected.load(std::memory_order_acquire);
     }
 
-    inline void ResetState(const uint8_t sess_index) noexcept
+    void ResetState(uint8_t sess_index) noexcept
     {
         auto &state = session_states_[sess_index];
         state.ResetState();
     }
 
 private:
-    std::array<SessionContext, MAX_SESSIONS> initialize_SessionContext() noexcept;
-    void initialize_SessionState() noexcept;
-    std::array<SessionAuth, MAX_TCP_SESSIONS> initialize_SessionAuth() noexcept;
+    std::array<SessionContext, MAX_SESSIONS> initialize_SessionContext();
+    void initialize_SessionState();
+    std::array<SessionAuth, MAX_TCP_SESSIONS> initialize_SessionAuth() const;
 
-    static Protocol convertToProtocol(const std::string_view prot) noexcept;
-    static SessionType convertToSessType(const std::string_view type) noexcept;
-    static Venue convertToVenue(const std::string_view ven) noexcept;
-    static uint32_t convertToNetworkbyte(const std::string_view ip) noexcept;
+    static Protocol convertToProtocol(std::string_view prot) noexcept;
+    static SessionType convertToSessType(std::string_view type) noexcept;
+    static Venue convertToVenue(std::string_view ven) noexcept;
+    static uint32_t convertToNetworkbyte(std::string_view ip) noexcept;
 };
 

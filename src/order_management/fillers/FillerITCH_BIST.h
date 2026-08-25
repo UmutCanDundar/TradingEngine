@@ -41,10 +41,10 @@ private:
 public:
     FillerITCH_BIST(OrderManager &om) noexcept;
 
-    void fill_itch_add(Order &order, const BIST::ITCHAddOrderMessage &msg, Venue venue) noexcept;
-    void fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedMessage &msg) noexcept;
-    void fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedWithPriceMessage &msg) noexcept;
-    void fill_itch_delete(Order &order, const BIST::ITCHOrderDeleteMessage &msg) noexcept;
+    void fill_itch_add(Order &order, const BIST::ITCHAddOrderMessage &msg, Venue venue) const noexcept;
+    void fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedMessage &msg) const noexcept;
+    void fill_itch_exec_report(Order &order, const BIST::ITCHOrderExecutedWithPriceMessage &msg) const noexcept;
+    void fill_itch_delete(Order &order, const BIST::ITCHOrderDeleteMessage &msg) const noexcept;
     void fill_itch_trade(Order &order, const BIST::ITCHTradeMessage &msg, Venue venue) noexcept;
 
 };

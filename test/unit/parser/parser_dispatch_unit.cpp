@@ -44,7 +44,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     auto& seq_fix = sess_state->fix;
     
     RxPacket* rxPkt;
-    PendingQueue<RxPacket *, 256> pend_read;
+    CustomQueue<RxPacket *, 256> pend_read;
 
 // ====================================================
 //       v TRAFFIC FOR PARSING DISPATCH v 

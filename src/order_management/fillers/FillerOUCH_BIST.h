@@ -37,10 +37,10 @@ private:
 public:
     FillerOUCH_BIST(OrderManager &om) noexcept;
 
-    void fill_ouch_accepted(Order &order, const BIST::RX::OUCHOrderAcceptedMessage &msg) noexcept;
-    void fill_ouch_replaced(Order &order, const BIST::RX::OUCHOrderReplacedMessage &msg) noexcept;
-    void fill_ouch_cancelled(Order &order, const BIST::RX::OUCHOrderCancelledMessage &msg) noexcept;
-    void fill_ouch_executed(Order &order, const BIST::RX::OUCHOrderExecutedMessage &msg) noexcept;
+    void fill_ouch_accepted(Order &order, const BIST::RX::OUCHOrderAcceptedMessage &msg) const noexcept;
+    void fill_ouch_replaced(Order &order, const BIST::RX::OUCHOrderReplacedMessage &msg) const noexcept;
+    void fill_ouch_cancelled(Order &order, const BIST::RX::OUCHOrderCancelledMessage &msg) const noexcept;
+    void fill_ouch_executed(Order &order, const BIST::RX::OUCHOrderExecutedMessage &msg) const noexcept;
     void fill_ouch_rejected(Order &order, const BIST::RX::OUCHOrderRejectedMessage &msg) noexcept;
    
 };

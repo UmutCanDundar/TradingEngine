@@ -105,6 +105,9 @@
 // =====================
 // Forward Declaration
 // =====================
+
+using common_function::to_underlying;
+
 class MarketBook;
 class HashTables;
 
@@ -185,10 +188,10 @@ struct SymbolMeta // writes are rare; cache-line separation intentionally omitte
 
         std::memcpy(symbol.data(), sym, len);
     }
+    
     SymbolMeta(const SymbolMeta&) = delete;
     SymbolMeta& operator=(const SymbolMeta&) = delete;
-    SymbolMeta(SymbolMeta&& other) noexcept = delete;
-    SymbolMeta& operator=(SymbolMeta&& other) noexcept = delete;
+    
 };
 
 struct OrderKey
@@ -222,12 +225,12 @@ struct OrderHistory
 
     OrderHistory() : write_index(0) {}
 
-    inline void push(Order* order) noexcept 
+    void push(Order* order) noexcept 
     {
         orders[write_index++ & (ORDERHISTORY_SIZE-1)] = order;
     }
 
-    inline void pop(Order *order) noexcept
+    void pop(Order *order) noexcept
     {
         for (auto &ptr : orders) {
             if (ptr == order) 
@@ -238,7 +241,7 @@ struct OrderHistory
         }
     }
 
-    inline Order *get_recent(size_t offset = 0) const noexcept
+    Order *get_recent(size_t offset = 0) const noexcept
     {
         size_t index = write_index;
         size_t found = 0;
@@ -261,7 +264,7 @@ struct OrderHistory
 // ==============================
 // Global constants & queue types
 // ==============================
-inline constexpr size_t ORDER_POOL_CAPACITY = 65536; // 12.6MB Stack!!!
+inline constexpr size_t ORDER_POOL_CAPACITY = 65536; // 12.6MB
 inline constexpr size_t ORDER_MAP_CAPACITY = 32768;
 inline constexpr size_t OUR_ORDER_MAP_THRESHOLD = 16384;
 inline constexpr size_t PENDING_QUEUE_CAPACITY = 65536;
@@ -319,7 +322,7 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     MarketBook &marketbook_;
     HashTables &hashtables_;
 
-    FillerFIX filler_fix_{*this};
+    FillerFIX filler_fix_{};
     FillerITCH_BIST filler_itch_bist_{*this};
     FillerITCH_NASDAQ filler_itch_nq_{*this};
     FillerOUCH_BIST filler_ouch_bist_{*this};
@@ -332,19 +335,19 @@ public:
               spscOrderQueue_t &store_to_risk,
               spscDbQueue_t &store_to_db,
               MarketBook &marketbook,
-              HashTables &hashtables) noexcept;
+              HashTables &hashtables);
 
     bool store() noexcept;
     void add_order(Order &order) noexcept;
     void add_awaitingAck_order(Order &order) noexcept;
 
     template <typename T>
-    inline void store(const MessageWithVenue<T> &msg) noexcept
+    void store(const MessageWithVenue<T> &msg) noexcept
     {
         this->update_order(msg);
     }
 
-    inline Order *poll_update() noexcept
+    Order *poll_update() noexcept
     {
         Order *order;
         if (store_to_strategy_.pop(order))
@@ -354,14 +357,14 @@ public:
         return nullptr;
     }
   
-    inline auto const &get_venue_flags(Venue venue) const noexcept 
+    auto const &get_venue_flags(Venue venue) const noexcept 
     { 
-        return venue_flags_[static_cast<size_t>(venue)]; 
+        return venue_flags_[to_underlying(venue)]; 
     }
     
-    inline SymbolMeta *get_symbolmeta(Venue venue, uint32_t instrument_id) const noexcept 
+    SymbolMeta *get_symbolmeta(Venue venue, uint32_t instrument_id) const noexcept 
     { 
-        auto& instrument_map = instrument_cache_[static_cast<size_t>(venue)];
+        auto& instrument_map = instrument_cache_[to_underlying(venue)];
         auto it = instrument_map.find(instrument_id);
         if (LIKELY(it != instrument_map.end()))
             return it->second.get();
@@ -378,14 +381,14 @@ private:
     Order* get_order_from_awaitingAck_orders(uint64_t client_order_id) noexcept;
 
     void update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept; // ONLY BIST
-    inline void update_order(const MessageWithVenue<FIXSessionMessage *> &) noexcept { return;}
+    void update_order(const MessageWithVenue<FIXSessionMessage *> &) noexcept { return;}
     void update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept;
     void update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg) noexcept;
     void update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg) noexcept;
     
-    void handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg) noexcept;
-    void handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage &msg) noexcept;
+    void handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg);
+    void handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage &msg);
     void handle_tick_size_definition(const BIST::ITCHTickSizeTableEntryMessage &msg) noexcept;
     void handle_tick_size_definition(auto &tick_size_table, int64_t price_from, int64_t price_to, uint64_t tick_size) noexcept;
     
@@ -395,7 +398,7 @@ private:
     void update_symbol_halt_status(uint64_t instrument_id, Venue venue, bool halted) noexcept;
     void update_symbol_flush_status(uint64_t instrument_id, Venue venue, bool flushed) noexcept;
 
-    inline void release_order(OrderHistory &orderhistory, Order &order) noexcept
+    void release_order(OrderHistory &orderhistory, Order &order) noexcept
     {
         store_to_strategy_free_slot_.push(&order);
         our_orders_.erase(OrderKey{order.order_id, order.instrument_id, static_cast<uint8_t>(order.venue), static_cast<uint8_t>(order.side)});
@@ -403,16 +406,16 @@ private:
         orderhistory.pop(&order);
     }
 
-    inline void release_order(Order &order) noexcept
+    void release_order(Order &order) noexcept
     {
         store_to_strategy_free_slot_.push(&order);
         market_orders_.erase(OrderKey{order.order_id, order.instrument_id, static_cast<uint8_t>(order.venue), static_cast<uint8_t>(order.side)});
     }
 
-    inline bool is_matched_pending_order(const BIST::ITCHAddOrderMessage &msg) noexcept
+    bool is_matched_pending_order(const BIST::ITCHAddOrderMessage &msg) const noexcept
     {
         
-        for (auto &atomic_order_ptr : pending_orders_[static_cast<size_t>(Venue::BIST)])
+        for (auto &atomic_order_ptr : pending_orders_[to_underlying(Venue::BIST)])
         {
             Order *pending_order = atomic_order_ptr.load(std::memory_order_acquire);
             if (!pending_order)
@@ -433,9 +436,9 @@ private:
     }
 
     template <NASDAQ_ITCHAddMessages T>
-    bool is_matched_pending_order(const T& msg) noexcept
+    bool is_matched_pending_order(const T& msg) const noexcept
     {
-        for (auto &atomic_order_ptr : pending_orders_[static_cast<size_t>(Venue::NASDAQ)])
+        for (auto &atomic_order_ptr : pending_orders_[to_underlying(Venue::NASDAQ)])
         {
             Order *pending_order = atomic_order_ptr.load(std::memory_order_acquire);
             if (!pending_order)
@@ -455,7 +458,7 @@ private:
         return false;
     }
 
-    static inline void copy_symbol(std::array<char, SYMBOL_SIZE> &dest, const std::string_view src) noexcept
+    static void copy_symbol(std::array<char, SYMBOL_SIZE> &dest, const std::string_view src) noexcept
     {
         std::memset(dest.data(), 0, SYMBOL_SIZE);
         size_t len = 0;
@@ -471,7 +474,7 @@ private:
         std::memcpy(dest.data(), src.data(), len);
     }
 
-    static inline void copy_order_id(std::array<char, ORDER_IDs_SIZE> &dest, const char* src, size_t len) noexcept
+    static void copy_order_id(std::array<char, ORDER_IDs_SIZE> &dest, const char* src, size_t len) noexcept
     {
         std::memset(dest.data(), 0, ORDER_IDs_SIZE); 
         std::memcpy(dest.data(), src, len);

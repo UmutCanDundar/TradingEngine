@@ -9,7 +9,7 @@
 
 FillerOUCH_BIST::FillerOUCH_BIST(OrderManager &om) noexcept : ord_mngr_(om) {}
 
-void FillerOUCH_BIST::fill_ouch_accepted(Order &order, const BIST::RX::OUCHOrderAcceptedMessage &msg) noexcept
+void FillerOUCH_BIST::fill_ouch_accepted(Order &order, const BIST::RX::OUCHOrderAcceptedMessage &msg) const noexcept
 {
 
     order.price = static_cast<int64_t>(msg.price);
@@ -21,7 +21,7 @@ void FillerOUCH_BIST::fill_ouch_accepted(Order &order, const BIST::RX::OUCHOrder
     order.last_update_time = order.timestamp;
 }
 
-void FillerOUCH_BIST::fill_ouch_replaced(Order &order, const BIST::RX::OUCHOrderReplacedMessage &msg) noexcept
+void FillerOUCH_BIST::fill_ouch_replaced(Order &order, const BIST::RX::OUCHOrderReplacedMessage &msg) const noexcept
 {
     if (msg.order_state == 2)
         return;
@@ -38,7 +38,7 @@ void FillerOUCH_BIST::fill_ouch_replaced(Order &order, const BIST::RX::OUCHOrder
     order.time_in_force = static_cast<TimeInForce>(msg.time_in_force);
 }
 
-void FillerOUCH_BIST::fill_ouch_cancelled(Order &order, const BIST::RX::OUCHOrderCancelledMessage &msg) noexcept
+void FillerOUCH_BIST::fill_ouch_cancelled(Order &order, const BIST::RX::OUCHOrderCancelledMessage &msg) const noexcept
 {
 
     order.last_update_time = msg.timestamp;
@@ -47,7 +47,7 @@ void FillerOUCH_BIST::fill_ouch_cancelled(Order &order, const BIST::RX::OUCHOrde
     order.status = Status::Deleted;
     order.cancelled_count++;
 }
-void FillerOUCH_BIST::fill_ouch_executed(Order &order, const BIST::RX::OUCHOrderExecutedMessage &msg) noexcept
+void FillerOUCH_BIST::fill_ouch_executed(Order &order, const BIST::RX::OUCHOrderExecutedMessage &msg) const noexcept
 {
 
     order.price = static_cast<int64_t>(msg.trade_price);

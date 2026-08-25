@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <cstddef>
 
+using common_function::to_underlying;
+
 FillerITCH_NASDAQ::FillerITCH_NASDAQ(OrderManager &om) noexcept : ord_mngr_(om) {}
 
 void FillerITCH_NASDAQ::fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMessage &msg, Venue venue) noexcept
@@ -23,7 +25,7 @@ void FillerITCH_NASDAQ::fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMe
     if (symbolmeta)
     {
         order.symbol = symbolmeta->symbol;
-        order.symbol_index = ord_mngr_.hashtables_.getIndex(static_cast<size_t>(venue), order.symbol);
+        order.symbol_index = ord_mngr_.hashtables_.getIndex(to_underlying(venue), order.symbol);
     }
     else
     {
@@ -48,13 +50,13 @@ void FillerITCH_NASDAQ::fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMP
     order.quantity = msg.shares;
     order.instrument_id = msg.stock_locate;
     order.remaining_quantity = msg.shares;
-    ord_mngr_.copy_symbol(order.symbol, msg.stock);
+    OrderManager::copy_symbol(order.symbol, msg.stock);
 
     auto *symbolmeta = ord_mngr_.get_symbolmeta(venue, order.instrument_id);
     if (symbolmeta)
     {
         order.symbol = symbolmeta->symbol;
-        order.symbol_index = ord_mngr_.hashtables_.getIndex(static_cast<size_t>(venue), order.symbol);
+        order.symbol_index = ord_mngr_.hashtables_.getIndex(to_underlying(venue), order.symbol);
     }
     else
     {
@@ -73,7 +75,7 @@ void FillerITCH_NASDAQ::fill_itch_add(Order &order, const NASDAQ::ITCHAddOrderMP
     order.order_type = (order.price < 0) ? OrderType::Limit : OrderType::Market;
 }
 
-void FillerITCH_NASDAQ::fill_itch_cancel(Order &order, const NASDAQ::ITCHCancelMessage &msg) noexcept
+void FillerITCH_NASDAQ::fill_itch_cancel(Order &order, const NASDAQ::ITCHCancelMessage &msg) const noexcept
 {
 
     order.last_update_time = msg.timestamp;
@@ -84,7 +86,7 @@ void FillerITCH_NASDAQ::fill_itch_cancel(Order &order, const NASDAQ::ITCHCancelM
     order.message_type = msg.message_type;
 }
 
-void FillerITCH_NASDAQ::fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedMessage &msg) noexcept
+void FillerITCH_NASDAQ::fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedMessage &msg) const noexcept
 {
 
     order.last_update_time = msg.timestamp;
@@ -99,13 +101,13 @@ void FillerITCH_NASDAQ::fill_itch_exec_report(Order &order, const NASDAQ::ITCHEx
     order.message_type = msg.message_type;
 }
 
-void FillerITCH_NASDAQ::fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedWithPriceMessage &msg) noexcept
+void FillerITCH_NASDAQ::fill_itch_exec_report(Order &order, const NASDAQ::ITCHExecutedWithPriceMessage &msg) const noexcept
 {
     fill_itch_exec_report(order, *reinterpret_cast<const NASDAQ::ITCHExecutedMessage *>(&msg));
     order.price = static_cast<int64_t>(msg.execution_price);
 }
 
-void FillerITCH_NASDAQ::fill_itch_delete(Order &order, const NASDAQ::ITCHDeleteMessage &msg) noexcept
+void FillerITCH_NASDAQ::fill_itch_delete(Order &order, const NASDAQ::ITCHDeleteMessage &msg) const noexcept
 {
 
     order.status = Status::Deleted;
@@ -127,7 +129,7 @@ void FillerITCH_NASDAQ::fill_itch_replace(Order &order, const NASDAQ::ITCHReplac
     if (symbolmeta)
     {
         order.symbol = symbolmeta->symbol;
-        order.symbol_index = ord_mngr_.hashtables_.getIndex(static_cast<size_t>(venue), order.symbol);
+        order.symbol_index = ord_mngr_.hashtables_.getIndex(to_underlying(venue), order.symbol);
     }
     else
     {
@@ -159,7 +161,7 @@ void FillerITCH_NASDAQ::fill_itch_trade(Order &order, const NASDAQ::ITCHTradeMes
     if (symbolmeta)
     {
         order.symbol = symbolmeta->symbol;
-        order.symbol_index = ord_mngr_.hashtables_.getIndex(static_cast<size_t>(venue), order.symbol);
+        order.symbol_index = ord_mngr_.hashtables_.getIndex(to_underlying(venue), order.symbol);
     }
     else
     {

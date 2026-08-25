@@ -77,9 +77,9 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     static constexpr uint16_t DB_QUEUE_THRESHOLD = 512;
     static inline uint16_t PktCount = 1;
 
-    using ParserFunc = void (Parser_Dispatch::*)(RxPacket*) noexcept;
-    std::array<std::array<ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> makeParserLookUpTable() noexcept; 
-    std::array<std::array<ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> parser_table_;
+    using ParserFunc = void (Parser_Dispatch::*)(RxPacket*);
+    static std::array<std::array<ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> makeParserLookUpTable() noexcept; 
+    static std::array<std::array<ParserFunc, VENUE_COUNT>, PROTOCOL_COUNT> parser_table_;
 
     spscRxPacketQueue_t &receiver_to_parser_;
     spscMessageQueue_t &parser_to_store_;
@@ -99,13 +99,13 @@ public:
     Parser_Dispatch(spscRxPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXRxSessionQueue_t &parser_to_fixbuilder_rx, spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx, 
                     SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX &fixparser) noexcept;
 
-    bool dispatch() noexcept;
+    bool dispatch();
    
 private: 
 public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     void flush_DbQueue() noexcept;
     void proceedPendingFIX(auto* variant_msg, auto& seq_fix, SessionState& state) noexcept;
-    void parseFIX(RxPacket* pkt) noexcept;
+    void parseFIX(RxPacket* pkt);
     void parseITCH_BIST(RxPacket *pkt) noexcept;
     void parseITCH_NASDAQ(RxPacket *pkt) noexcept;
     void parseOUCH_BIST(RxPacket *pkt) noexcept;

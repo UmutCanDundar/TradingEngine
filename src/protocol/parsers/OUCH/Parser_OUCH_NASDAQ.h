@@ -66,8 +66,8 @@ private:
     MessagePools<NASDAQ::OUCHMessageTypes> ouch_pools_;
 
     using MessageHandlerFunc = void (*)(Parser_OUCH_NASDAQ&, const char *, NASDAQ::OUCHMessage &) noexcept;
-    static const std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
-    static const std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
+    static std::array<MessageHandlerFunc, MAX_MESSAGES> makeMessageHandlersLookup() noexcept;
+    static std::array<MessageHandlerFunc, MAX_MESSAGES> MessageHandlers;
 
 public:
     Parser_OUCH_NASDAQ() noexcept;

@@ -47,7 +47,7 @@ private:
 public:
     static void Init(const std::filesystem::path& filename = std::filesystem::path(PROJECT_ROOT)/"logs"/"system_log.txt");
  
-    static inline void Shutdown() { spdlog::shutdown(); }
+    static void Shutdown() { spdlog::shutdown(); }
 
     template <typename... Args>
     static void Info( const spdlog::source_loc &loc, spdlog::string_view_t msg, Args &&...args) 

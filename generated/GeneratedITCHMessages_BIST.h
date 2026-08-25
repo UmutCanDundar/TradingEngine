@@ -163,9 +163,9 @@ struct ITCHEquilibriumPriceUpdateMessage {
 
 enum class ITCHTypes : size_t {   T = 0,  R = 1,  M = 2,  L = 3,  V = 4,  S = 5,  O = 6,  A = 7,  E = 8,  C = 9,  D = 10,  Y = 11,  P = 12,  Z = 13,  unknownITCHtype = 99 };
 
-inline std::array<size_t, 14> ITCHSizeOfs = {  5, 130, 18, 25, 10, 6, 29, 45, 52, 58, 18, 9, 50, 53, };
+inline constexpr std::array<size_t, 14> ITCHSizeOfs = {  5, 130, 18, 25, 10, 6, 29, 45, 52, 58, 18, 9, 50, 53, };
 
-inline constexpr size_t itchMessageIndex(char type) {
+inline size_t itchMessageIndex(char type) noexcept {
 
    switch(type) {
       case 'T': return static_cast<size_t>(ITCHTypes::T);

@@ -42,7 +42,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     uint8_t sess_index = sess_mngr->getSessionIndex(Venue::BIST, Protocol::OUCH);
     
     RxPacket* rxPkt;
-    PendingQueue<RxPacket *, 256> pend_read;
+    CustomQueue<RxPacket *, 256> pend_read;
 
 // ====================================================
 //       v DIFFERENT SCENARIOS FOR OUCH PARSING v 

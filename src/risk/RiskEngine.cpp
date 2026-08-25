@@ -7,17 +7,47 @@
 #include <fstream>
 #include <cstring>
 #include <filesystem>
+#include <thread>
+#include <chrono>
 
 #include <nlohmann/json.hpp>
 
-RiskEngine::RiskEngine(spscOrderQueue_t &store_to_risk, spscOrderQueue_t &strategy_to_risk, spscRejectOrderQueue_t &risk_to_strategy, spscOrderQueue_t &risk_to_builder, HashTables &hashtables, MarketBook &marketbook, Limits &limits, OrderManager &ord_mngr) noexcept
+namespace {
+
+    constexpr uint32_t TSC_SHIFT = 32;
+    uint64_t tsc_ns_fp_factor = 0; 
+
+    uint64_t calibrate_tsc_fixed_point() noexcept
+    {
+        auto t0 = std::chrono::steady_clock::now();
+        uint64_t c0 = __rdtsc();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        auto t1 = std::chrono::steady_clock::now();
+        uint64_t c1 = __rdtsc();
+
+        uint64_t ns_elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+        uint64_t cycles_elapsed = c1 - c0;
+
+        return (ns_elapsed << TSC_SHIFT) / cycles_elapsed;
+    }
+
+    uint64_t tsc_to_ns(uint64_t tsc_cycles) noexcept
+    {
+        return static_cast<uint64_t>((static_cast<unsigned __int128>(tsc_cycles) * tsc_ns_fp_factor) >> TSC_SHIFT);
+    }
+
+}
+
+RiskEngine::RiskEngine(spscOrderQueue_t &store_to_risk, spscOrderQueue_t &strategy_to_risk, spscRejectOrderQueue_t &risk_to_strategy, spscOrderQueue_t &risk_to_builder, HashTables &hashtables, MarketBook &marketbook, Limits &limits, OrderManager &ord_mngr) 
     : store_to_risk_(store_to_risk), strategy_to_risk_(strategy_to_risk), risk_to_strategy_(risk_to_strategy), risk_to_builder_(risk_to_builder), hashtables_(hashtables), marketbook_(marketbook), limits_(limits), ord_mngr_(ord_mngr)
 {
         initialize_accountrisks();
         initialize_symbolrisks();
+
+        tsc_ns_fp_factor = calibrate_tsc_fixed_point();
 }
 
-void RiskEngine::initialize_accountrisks() noexcept
+void RiskEngine::initialize_accountrisks() 
 {
     std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Limits.json");
     if (!file.is_open())
@@ -43,7 +73,7 @@ void RiskEngine::initialize_accountrisks() noexcept
     }
 }
 
-void RiskEngine::initialize_symbolrisks() noexcept
+void RiskEngine::initialize_symbolrisks() 
 {
     std::ifstream file(std::filesystem::path(PROJECT_ROOT)/"config"/"Limits.json");
     if (!file.is_open())
@@ -81,12 +111,12 @@ void RiskEngine::initialize_symbolrisks() noexcept
         venue++;
     }
 }
-bool RiskEngine::update_risk() noexcept
+bool RiskEngine::update_risk() 
 {
     Order *order;
     while (store_to_risk_.pop(order))
     {
-        const uint8_t venue_index = static_cast<uint8_t>(order->venue);
+        const uint8_t venue_index = to_underlying(order->venue);
         auto &accRisk = accountrisks_[venue_index];
         const auto &accLim = limits_.getAccountLimit(venue_index);
         const OrderMetrics metrics(*order);
@@ -116,9 +146,9 @@ bool RiskEngine::check_risk() noexcept
 
     while (strategy_to_risk_.pop(order))
     {
-        uint32_t RejectReason = 0;
+        RiskFlags_t RejectReason = 0;
 
-        auto venue_index = static_cast<std::underlying_type_t<Venue>>(order->venue);
+        auto venue_index = to_underlying(order->venue);
         auto &accRisk = accountrisks_[venue_index];
         auto &symRisk = symbolrisks_[venue_index][order->symbol_index];
         const auto &accLim = limits_.getAccountLimit(venue_index);
@@ -174,12 +204,12 @@ bool RiskEngine::check_risk() noexcept
 }
 
 // --------------------------------------HELPER UPDATE FUNCTIONS-----------------------------------------------
-void RiskEngine::update_order_risk(const Order &order, const uint8_t venue_index) noexcept   
+void RiskEngine::update_order_risk(const Order &order, uint8_t venue_index)   
 {
     if (UNLIKELY(order.cancelled_count > 1))
         return;
 
-    OrderRiskKey key{order.symbol_index, order.price, static_cast<uint8_t>(order.side), venue_index};
+    OrderRiskKey key{order.symbol_index, order.price, to_underlying(order.side), venue_index};
     auto &oRmap = orderrisks_[venue_index];
     auto it = oRmap.find(key);
        
@@ -200,7 +230,7 @@ void RiskEngine::update_order_risk(const Order &order, const uint8_t venue_index
     {   
         OrderRisk *oR;
         do {
-            oR = &orderrisk_pool_[orderrisk_next_slot & (ORDER_POOL_CAPACITY - 1)]; 
+            oR = &orderrisk_pool_[orderrisk_next_slot & (ORDERRISK_POOL_CAPACITY - 1)]; 
             orderrisk_next_slot++; 
         } while(UNLIKELY(oR->active.load(std::memory_order_relaxed)));  
             
@@ -216,7 +246,7 @@ void RiskEngine::update_order_risk(const Order &order, const uint8_t venue_index
     }
 }
 
-bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const AccountLimit &accLim, Order &order, const OrderMetrics metrics) noexcept
+bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const AccountLimit &accLim, Order &order, const OrderMetrics metrics) 
 {
     if (order.protocol == Protocol::FIX) {
         if(UNLIKELY(order.syncState == SyncState::WaitingNew))
@@ -225,7 +255,7 @@ bool RiskEngine::update_risk_for_protocol_fix(AccountRisk &accRisk, const Accoun
         }
         else 
         {
-            const uint8_t venue_index = static_cast<uint8_t>(order.venue);
+            const uint8_t venue_index = to_underlying(order.venue);
             for(size_t i = 0; i <= order.StatusesPreNew.size(); i++)
             {
                 if(order.status != Status::Unknown){
@@ -268,7 +298,7 @@ void RiskEngine::update_unrealized_pnl(SymbolRisk &symRisk, int64_t best_bid, in
     }
 }
 
-void RiskEngine::update_symbol_risk(AccountRisk &accRisk, const Order &order, const OrderMetrics metrics, const uint8_t venue_index) noexcept
+void RiskEngine::update_symbol_risk(AccountRisk &accRisk, const Order &order, const OrderMetrics metrics, uint8_t venue_index) noexcept
 {
     const int8_t side_mult = metrics.side_mult;
     const int64_t nominal = metrics.nominal;
@@ -506,14 +536,14 @@ bool RiskEngine::check_venue_halt_and_circuit(Order &order, const SymbolMeta &sy
 
     if (UNLIKELY(flags == venueflags.HALTED))
     {
-        OrderWithRejectReason rej{&order, static_cast<uint32_t>(RiskRejectReason::VenueTradingHalted)};
+        OrderWithRejectReason rej{&order, to_underlying(RiskRejectReason::VenueTradingHalted)};
         risk_to_strategy_.push(rej);
         return true;
     }
 
     if (UNLIKELY(flags == venueflags.C_BREAKER))
     {
-        OrderWithRejectReason rej{&order, static_cast<uint32_t>(RiskRejectReason::CircuitBreakerTriggered)};
+        OrderWithRejectReason rej{&order, to_underlying(RiskRejectReason::CircuitBreakerTriggered)};
         risk_to_strategy_.push(rej);
         return true;
     }
@@ -521,7 +551,7 @@ bool RiskEngine::check_venue_halt_and_circuit(Order &order, const SymbolMeta &sy
     bool symbol_halted = symbolmeta.halted.load(std::memory_order_acquire);
     if (UNLIKELY(symbol_halted))
     {
-        OrderWithRejectReason rej{&order, static_cast<uint32_t>(RiskRejectReason::SymbolTradingHalted)};
+        OrderWithRejectReason rej{&order, to_underlying(RiskRejectReason::SymbolTradingHalted)};
         risk_to_strategy_.push(rej);
         return true;
     }
@@ -531,10 +561,9 @@ bool RiskEngine::check_venue_halt_and_circuit(Order &order, const SymbolMeta &sy
 
 bool RiskEngine::check_order_rate_limit(AccountRisk &accRisk, SymbolRisk &symRisk, Order &order) noexcept
 {
-    static constexpr double ns_per_cycle = 1 / 3e9; // 1 cycle ≈ 0.333 ns
-    uint64_t now_ns = static_cast<uint64_t>(__rdtsc() * ns_per_cycle);
+    uint64_t now_ns = tsc_to_ns(__rdtsc());
 
-    uint32_t RejectReason = 0;
+    RiskFlags_t RejectReason = 0;
     auto &orderratelimit = accRisk.orderratelimit;
     bool max_orders_for_account_reached = false;
     bool max_orders_for_symbol_reached = false;
@@ -551,7 +580,7 @@ bool RiskEngine::check_order_rate_limit(AccountRisk &accRisk, SymbolRisk &symRis
     }
     else
     {
-        RejectReason = static_cast<uint32_t>(RiskRejectReason::MaxOrderRateLimitExceededAccount);
+        RejectReason = to_underlying(RiskRejectReason::MaxOrderRateLimitExceededAccount);
         max_orders_for_account_reached = true;
     }
 
@@ -569,7 +598,7 @@ bool RiskEngine::check_order_rate_limit(AccountRisk &accRisk, SymbolRisk &symRis
     }
     else
     {
-        RejectReason |= static_cast<uint32_t>(RiskRejectReason::MaxOrderRateLimitExceededSymbol);
+        RejectReason |= to_underlying(RiskRejectReason::MaxOrderRateLimitExceededSymbol);
         max_orders_for_symbol_reached = true;
     }
 
@@ -585,8 +614,7 @@ bool RiskEngine::check_order_rate_limit(AccountRisk &accRisk, SymbolRisk &symRis
 bool RiskEngine::check_cancel_rate_limit(AccountRisk &accRisk, SymbolRisk &symRisk, Order &order) noexcept
 {
     
-    static constexpr double ns_per_cycle = 1 / 3e9; // 1 cycle ≈ 0.333 ns
-    uint64_t now_ns = static_cast<uint64_t>(__rdtsc() * ns_per_cycle);
+    uint64_t now_ns = tsc_to_ns(__rdtsc());
 
     uint32_t RejectReason = 0;
     auto &cancelratelimit = accRisk.cancelratelimit;
@@ -603,7 +631,7 @@ bool RiskEngine::check_cancel_rate_limit(AccountRisk &accRisk, SymbolRisk &symRi
 
     if (cancelratelimit.cancel_count_window > cancelratelimit.max_cancels_per_sec)
     {
-        RejectReason = static_cast<uint32_t>(RiskRejectReason::MaxCancelRateLimitExceededAccount);
+        RejectReason = to_underlying(RiskRejectReason::MaxCancelRateLimitExceededAccount);
         max_cancels_for_account_reached = true;
     }
 
@@ -619,7 +647,7 @@ bool RiskEngine::check_cancel_rate_limit(AccountRisk &accRisk, SymbolRisk &symRi
 
     if (sym_cancelratelimit.cancel_count_window > sym_cancelratelimit.max_cancels_per_sec)
     {
-        RejectReason |= static_cast<uint32_t>(RiskRejectReason::MaxCancelRateLimitExceededSymbol);
+        RejectReason |= to_underlying(RiskRejectReason::MaxCancelRateLimitExceededSymbol);
         max_cancels_for_symbol_reached = true;
     }
 
@@ -633,7 +661,7 @@ bool RiskEngine::check_cancel_rate_limit(AccountRisk &accRisk, SymbolRisk &symRi
 
 }
 
-uint32_t RiskEngine::check_price_tick_valid(int64_t price, const SymbolMeta &symbolmeta) noexcept
+RiskFlags_t RiskEngine::check_price_tick_valid(int64_t price, const SymbolMeta &symbolmeta) const noexcept
 {
 
     for (auto &tick_size_entry : symbolmeta.tick_size_table)
@@ -645,10 +673,10 @@ uint32_t RiskEngine::check_price_tick_valid(int64_t price, const SymbolMeta &sym
             int64_t tick_size = entry->tick_size;
 
             if (UNLIKELY(tick_size <= 0))
-                return static_cast<uint32_t>(RiskRejectReason::RiskEngineInternalError);
+                return to_underlying(RiskRejectReason::RiskEngineInternalError);
 
             if (UNLIKELY((price % tick_size) != 0))
-                return static_cast<uint32_t>(RiskRejectReason::PriceTickInvalid);
+                return to_underlying(RiskRejectReason::PriceTickInvalid);
         }
         else
         {
@@ -658,3 +686,5 @@ uint32_t RiskEngine::check_price_tick_valid(int64_t price, const SymbolMeta &sym
 
     return 0;
 }
+
+

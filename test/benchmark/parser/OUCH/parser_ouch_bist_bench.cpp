@@ -52,7 +52,7 @@ public:
     std::atomic<bool> trigger_network{false};
     std::atomic<bool> running{true};
     
-    PendingQueue<RxPacket *, 256> pend_read;
+    CustomQueue<RxPacket *, 256> pend_read;
     uint8_t sess_index;
 
     std::atomic<uint64_t> released_msg_count{0};

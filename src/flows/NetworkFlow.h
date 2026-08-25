@@ -45,14 +45,12 @@ private:
     std::thread network_thread_;
 
 public:
-    NetworkFlow(NetworkIO &netIO) noexcept;
+    NetworkFlow(NetworkIO &netIO);
 
     NetworkFlow(const NetworkFlow &) = delete;
     NetworkFlow &operator=(const NetworkFlow &) = delete;
-    NetworkFlow(NetworkFlow &&) = delete;
-    NetworkFlow &operator=(NetworkFlow &&) = delete;
 
-    void start() noexcept;
+    void start();
     void stop() noexcept;
 
 private:

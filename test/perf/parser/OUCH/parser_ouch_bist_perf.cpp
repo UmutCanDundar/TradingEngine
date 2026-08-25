@@ -42,7 +42,7 @@ int main()
     std::thread consumer;
     std::thread network_thread;
 
-    PendingQueue<RxPacket*, 256> pend_read;
+    CustomQueue<RxPacket*, 256> pend_read;
     uint8_t sess_index;
     ssize_t rest_ouch_msg = 0;
 

@@ -194,7 +194,7 @@ struct OUCHAccountQueryResponse {
 
 enum class OUCHTypes : uint8_t {   S = 0,  A = 1,  U = 2,  C = 3,  E = 4,  J = 5,  B = 6,  M = 7,  P = 8,  I = 9,  Q = 10,  unknownOUCHtype = 99 };
 
-inline constexpr OUCHTypes ouchMessageIndex(char type) {
+inline OUCHTypes ouchMessageIndex(char type) noexcept {
 
    switch(type) {
       case 'S': return OUCHTypes::S;

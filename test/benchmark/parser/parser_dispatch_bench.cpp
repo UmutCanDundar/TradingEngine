@@ -47,7 +47,7 @@ public:
     std::vector<RxPacket*> pkts;
     size_t sess_index_fix;
     size_t sess_index_ouch;
-    PendingQueue<RxPacket *, 256> pend_read;
+    CustomQueue<RxPacket *, 256> pend_read;
     
 public:
     

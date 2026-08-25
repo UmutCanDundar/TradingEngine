@@ -25,12 +25,16 @@ struct alignas(64) Slot
 {
     static_assert(
         sizeof(K) + sizeof(V) + sizeof(std::atomic<SlotState>) <= 64,
-        "Slot exceeds 64 byte CL — false sharing risk.\nUse smaller K/V or upgrade to 128-byte alignment."
+        "Slot exceeds 64 byte CL — false sharing risk.\nUse smaller K/V."
     );
     
     K key_{};
     V value_{};
     std::atomic<SlotState> state_{SlotState::Empty};
+
+    Slot() noexcept = default;
+    Slot(const Slot&) = delete;
+    Slot& operator=(const Slot&) = delete;
 
     void insert_slot(const K& k, const V& v) noexcept 
     {
@@ -44,7 +48,7 @@ struct alignas(64) Slot
         state_.store(SlotState::Empty, std::memory_order_release);
     }
 
-    [[nodiscard]] bool is_valid() const noexcept 
+    bool is_valid() const noexcept 
     {
         return state_.load(std::memory_order_acquire) == SlotState::Valid;
     }

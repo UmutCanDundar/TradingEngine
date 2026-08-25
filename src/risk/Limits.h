@@ -83,21 +83,21 @@ class Limits
         std::array<AccountLimit, VENUE_COUNT> account_limits_;
 
     public:
-        Limits(HashTables &hashtables) noexcept;
+        Limits(HashTables &hashtables);
 
-        inline const SymbolLimit &getSymbolLimit(const int venue_index, const uint32_t symbol_index) const noexcept
+        const SymbolLimit &getSymbolLimit(int venue_index, uint32_t symbol_index) const noexcept
         {
             return symbol_limits_[venue_index][symbol_index];
         }
 
-        inline const AccountLimit &getAccountLimit(const int venue_index) const noexcept
+        const AccountLimit &getAccountLimit(int venue_index) const noexcept
         {
             return account_limits_[venue_index];
         }
 
     private:
-        std::array<std::vector<SymbolLimit>, VENUE_COUNT> initialize_symbollimits() noexcept;
-        std::array<AccountLimit, VENUE_COUNT> initialize_accountlimits() noexcept;
+        std::array<std::vector<SymbolLimit>, VENUE_COUNT> initialize_symbollimits() const;
+        std::array<AccountLimit, VENUE_COUNT> initialize_accountlimits() const;
 
 };
 

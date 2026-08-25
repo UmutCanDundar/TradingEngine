@@ -29,20 +29,20 @@ SBTAction SoupBinTcp::pkt_handler(const char *pkt, size_t sess_index) noexcept
     }
 }
 
-char* SoupBinTcp::buildFirstLoginRequest(char *buf, uint8_t sess_index) noexcept
+char* SoupBinTcp::buildFirstLoginRequest(char *buf, uint8_t sess_index) const noexcept
 {
     auto &sess_auth = sess_mngr_.getSessionAuth(sess_index)->sbt;
 
     std::memset(buf, ' ', 47);
     Endian::write_u16_be(buf, 47);
     *(buf + 2) = 'L';
-    std::memcpy(buf + 3, sess_auth.username, 6);
-    std::memcpy(buf + 9, sess_auth.password, 10);
+    std::memcpy(buf + 3, sess_auth.username.data(), 6);
+    std::memcpy(buf + 9, sess_auth.password.data(), 10);
 
     return buf;
 }
 
-char* SoupBinTcp::buildReLoginRequest(char *buf, uint8_t sess_index) noexcept
+char* SoupBinTcp::buildReLoginRequest(char *buf, uint8_t sess_index) const noexcept
 {
     auto &sess_auth = sess_mngr_.getSessionAuth(sess_index)->sbt;
     auto &seq_sbt = sess_mngr_.getSessionState(sess_index)->sbt;
@@ -50,8 +50,8 @@ char* SoupBinTcp::buildReLoginRequest(char *buf, uint8_t sess_index) noexcept
     std::memset(buf, ' ', 47);
     Endian::write_u16_be(buf, 47);
     *(buf + 2) = 'L';
-    std::memcpy(buf + 3, sess_auth.username, 6);
-    std::memcpy(buf + 9, sess_auth.password, 10);
+    std::memcpy(buf + 3, sess_auth.username.data(), 6);
+    std::memcpy(buf + 9, sess_auth.password.data(), 10);
 
     size_t sess_len = std::strlen(seq_sbt.get_sess_id());
     std::memcpy(buf + 19 + (10 - sess_len), seq_sbt.get_sess_id(), sess_len);
@@ -62,7 +62,7 @@ char* SoupBinTcp::buildReLoginRequest(char *buf, uint8_t sess_index) noexcept
     return buf;
 }
 
-char* SoupBinTcp::buildLogoutRequest(char *buf) noexcept
+char* SoupBinTcp::buildLogoutRequest(char *buf) const noexcept
 {
     Endian::write_u16_be(buf, 1);
     *(buf + 2) = 'O';

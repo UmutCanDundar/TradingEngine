@@ -1,5 +1,5 @@
 // =============================================================================
-// NetworkPendingQueue
+// CustomQueue
 //
 // PURPOSE:
 // - Lightweight, fixed-capacity ring buffer for pending elements.
@@ -19,16 +19,18 @@
 
 #include <array>
 #include <cstddef>
+#include <type_traits>
+#include <bit>
 
-template <typename T, size_t N>
-class PendingQueue
+template <typename T, size_t N> requires (std::is_pointer_v<T> && std::has_single_bit(N)) 
+class CustomQueue
 {
     T buf[N];
     size_t head = 0;
     size_t tail = 0;
 
 public:
-    inline bool push(T b) noexcept
+    bool push(T b) noexcept
     {
         size_t next = (tail + 1) & (N - 1);
         if (next == head)
@@ -38,7 +40,7 @@ public:
         return true;
     }
 
-    inline bool pop(T &b) noexcept
+    bool pop(T &b) noexcept
     {
         if (head == tail)
             return false;
@@ -47,22 +49,22 @@ public:
         return true;
     }
 
-    inline void clear() noexcept
+    void clear() noexcept
     {
         head = tail = 0;
     }
 
-    inline bool empty() noexcept
+    bool empty() const noexcept
     {
         return head == tail;
     }
 
-    inline size_t size() noexcept
+    size_t size() const noexcept
     {
         return (tail - head + N) & (N - 1);
     }
 
-    inline T back() noexcept
+    T back() const noexcept
     {
         if (head == tail)
             return nullptr; 
@@ -71,7 +73,7 @@ public:
         return buf[back];
     }
 
-    inline T front() noexcept
+    T front() const noexcept
     {
         if (head == tail)
             return nullptr; 
@@ -79,7 +81,7 @@ public:
         return buf[head];
     }
 
-    inline void swap_last_two() noexcept
+    void swap_last_two() noexcept
     {
         if ((tail == head) || ((tail + N - 1) & (N - 1)) == head)
             return;

@@ -1,35 +1,34 @@
 #include "ClickhouseWriter.h"
 #include "Order.h"
+#include "common.h"
 
 #include <cstring>
 #include <variant>
 
-
-
+using common_function::to_underlying;
 using namespace clickhouse;
 
-ClickhouseWriter::ClickhouseWriter(spscDbQueue_t &store_to_db, spscDbQueue_t &db_to_parser, const std::string &host, int port) noexcept : store_to_db_(store_to_db), db_to_parser_(db_to_parser)
+ClickhouseWriter::ClickhouseWriter(spscDbQueue_t &store_to_db, spscDbQueue_t &db_to_parser, const std::string &host, int port) : store_to_db_(store_to_db), db_to_parser_(db_to_parser)
 {
    clickhouse::ClientOptions options;
    options.SetHost(host);
    options.SetPort(port);
-   // client_ = std::make_unique<clickhouse::Client>(options);
+   // client_ = std::make_unique<clickhouse::Client>(options); this line is commented out because this class has not been fully implemented yet. 
 
 }
 
-bool ClickhouseWriter::store() noexcept
+bool ClickhouseWriter::store() 
 {
    DbData_t data;
    if (!store_to_db_.pop(data))
       return false;
 
-   
-   std::visit([this, &data](const auto &item)
+   std::visit([this, &data](const auto& item)
    { 
-      // this->insert(item); 
-      using T = std::decay_t<decltype(item)>;
+      // this->insert(item); this line is commented out because this class has not been fully implemented yet.
 
-      if constexpr (!std::is_same_v<T, Order*>)
+      using ItemType = std::decay_t<decltype(item)>;
+      if constexpr (!std::is_same_v<ItemType, Order*>)
          db_to_parser_.push(data);
    }, data);
 
@@ -37,7 +36,7 @@ bool ClickhouseWriter::store() noexcept
 }
 
 // === INSERT FIX ===
-void ClickhouseWriter::insert(const MessageWithVenue<FIXMessage *> &fixMsg) 
+void ClickhouseWriter::insert(const MessageWithVenue<FIXMessage *>& fixMsg) 
 {
    Block block;
    const auto *msg = fixMsg.msg;
@@ -112,11 +111,11 @@ void ClickhouseWriter::insert(const MessageWithVenue<FIXMessage *> &fixMsg)
 
    client_->Insert("FIX_Table", block);
 }
-void ClickhouseWriter::insert(const MessageWithVenue<FIXSessionMessage *> &) 
+void ClickhouseWriter::insert(const MessageWithVenue<FIXSessionMessage *>& ) 
 {}
 
 // === INSERT ITCH ===
-void ClickhouseWriter::insert(const MessageWithVenue<BIST::ITCHMessage> &itchMsg) 
+void ClickhouseWriter::insert(const MessageWithVenue<BIST::ITCHMessage>& itchMsg) 
 {
    std::visit([this, venue = itchMsg.venue](const auto *msg)
               {
@@ -259,7 +258,7 @@ void ClickhouseWriter::insert(const MessageWithVenue<BIST::ITCHMessage> &itchMsg
 
          client_->Insert("ITCH_Table", block); }, itchMsg.msg);
 }
-void ClickhouseWriter::insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) 
+void ClickhouseWriter::insert(const MessageWithVenue<NASDAQ::ITCHMessage>& itchMsg) 
 {
    std::visit([this, venue = itchMsg.venue](const auto *msg)
               {
@@ -433,7 +432,7 @@ void ClickhouseWriter::insert(const MessageWithVenue<NASDAQ::ITCHMessage> &itchM
 }
 
 // === INSERT OUCH ===
-void ClickhouseWriter::insert(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg) 
+void ClickhouseWriter::insert(const MessageWithVenue<BIST::OUCHMessage>& ouchMsg) 
 {
    std::visit([/*this, venue = ouchMsg.venue*/](const auto *msg)
               {
@@ -455,7 +454,7 @@ void ClickhouseWriter::insert(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg
    {
    } }, ouchMsg.msg);
 }
-void ClickhouseWriter::insert(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg) 
+void ClickhouseWriter::insert(const MessageWithVenue<NASDAQ::OUCHMessage>& ouchMsg) 
 {
    std::visit([/*this, venue = ouchMsg.venue*/](const auto *msg)
               {
@@ -556,7 +555,7 @@ void ClickhouseWriter::insert(const Order *order)
    block.AppendColumn("instrument_id", col_instrument_id);
 
    auto col_side = std::make_shared<ColumnUInt8>();
-   col_side->Append(static_cast<uint8_t>(order->side));
+   col_side->Append(to_underlying(order->side));
    block.AppendColumn("side", col_side);
 
    auto col_status = std::make_shared<ColumnString>();
@@ -568,11 +567,11 @@ void ClickhouseWriter::insert(const Order *order)
    block.AppendColumn("message_type", col_message_type);
 
    auto col_time_in_force = std::make_shared<ColumnUInt8>();
-   col_time_in_force->Append(static_cast<uint8_t>(order->time_in_force));
+   col_time_in_force->Append(to_underlying(order->time_in_force));
    block.AppendColumn("time_in_force", col_time_in_force);
 
    auto col_order_type = std::make_shared<ColumnUInt8>();
-   col_order_type->Append(static_cast<uint8_t>(order->order_type));
+   col_order_type->Append(to_underlying(order->order_type));
    block.AppendColumn("order_type", col_order_type);
 
    client_->Insert("OrdersTable", block);

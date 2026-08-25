@@ -25,8 +25,9 @@
 
 #include <tuple>
 #include <array>
+#include <queue>
 
-#include <boost/lockfree/spsc_queue.hpp>
+#include <CustomQueue.h>
 
 template <typename T>
 struct PoolAndFreeList
@@ -34,7 +35,7 @@ struct PoolAndFreeList
     static constexpr size_t POOL_CAPACITY = 512;
 
     std::array<T, POOL_CAPACITY> pool_;
-    boost::lockfree::spsc_queue<T *> free_list_{POOL_CAPACITY};
+    CustomQueue<T *, POOL_CAPACITY> free_list_;
 
     void initialize()
     {
@@ -47,7 +48,7 @@ struct PoolAndFreeList
         free_list_.pop(obj);
     }
 
-    void release(T*& obj) noexcept
+    void release(T* obj) noexcept
     {
         free_list_.push(obj);
     }

@@ -1,13 +1,3 @@
-#pragma once
-
-#include "slot.h"
-
-#include <cstddef>
-#include <cstdint>
-#include <optional>
-#include <functional>
-#include <type_traits>
-
 // ================================================================================
 // ConcurrentFixedFlatMap<K, V, N, Hash>
 //
@@ -25,11 +15,16 @@
 //   - Single concurrent insert (writer), single concurrent lookup/erase (reader)
 // ================================================================================
 
-template<size_t N>
-struct is_power_of_two : std::bool_constant<(N > 0) && !(N & (N - 1))> {};
+#pragma once
 
-template<size_t N>
-inline constexpr bool is_power_of_two_v = is_power_of_two<N>::value;
+#include "slot.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <functional>
+#include <type_traits>
+#include <bit>
 
 template<
     HashableKey K,
@@ -114,21 +109,15 @@ private:
 
 public:
 
-    static_assert(is_power_of_two_v<N>, "ConcurrentFixedFlatMap: N must be power-of-two (e.g. 256, 1024, 65536).");
+    static_assert(std::has_single_bit(N), "ConcurrentFixedFlatMap: N must be power-of-two.");
 
     static constexpr size_type capacity    = N;
     static constexpr size_type index_mask  = N - 1; 
     static constexpr size_type max_load    = N - 1;  
 
-    ConcurrentFixedFlatMap() = default;
-
-    ConcurrentFixedFlatMap(const ConcurrentFixedFlatMap&)            = delete;
+    ConcurrentFixedFlatMap() noexcept = default;
+    ConcurrentFixedFlatMap(const ConcurrentFixedFlatMap&) = delete;
     ConcurrentFixedFlatMap& operator=(const ConcurrentFixedFlatMap&) = delete;
-    
-    ConcurrentFixedFlatMap(ConcurrentFixedFlatMap&&)            = delete;
-    ConcurrentFixedFlatMap& operator=(ConcurrentFixedFlatMap&&) = delete;
-    
-    ~ConcurrentFixedFlatMap() = default;
 
     std::pair<iterator, bool> insert(const K& key, const V& value) noexcept 
     {
@@ -154,7 +143,7 @@ public:
         return { end(), false };
     }
 
-    [[nodiscard]] iterator find(const K& key) noexcept 
+    iterator find(const K& key) noexcept 
     {
         const size_type ideal = hash_fn_(key) & index_mask;
         size_type probe_idx   = ideal;
@@ -162,7 +151,7 @@ public:
         for (size_type i = 0; i < N; ++i) 
         {
             const slot_type& slot = slots_[probe_idx];
-
+            
             if (slot.is_valid()) 
             {
                 if (slot.key_ == key)
@@ -206,11 +195,11 @@ public:
     }
 
     //getters
-    [[nodiscard]] size_type size() const noexcept { return size_.load(std::memory_order_acquire); }
-    [[nodiscard]] bool empty() const noexcept { return size() == 0; }
-    [[nodiscard]] bool full() const noexcept { return size() >= max_load; }
-    [[nodiscard]] iterator begin() noexcept { return iterator(slots_, slots_ + N); }
-    [[nodiscard]] iterator end() noexcept { return iterator(slots_ + N, slots_ + N); }
+    size_type size() const noexcept { return size_.load(std::memory_order_acquire); }
+    bool empty() const noexcept { return size() == 0; }
+    bool full() const noexcept { return size() >= max_load; }
+    iterator begin() noexcept { return iterator(slots_, slots_ + N); }
+    iterator end() noexcept { return iterator(slots_ + N, slots_ + N); }
 };
 
 
