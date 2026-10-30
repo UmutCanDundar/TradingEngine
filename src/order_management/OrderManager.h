@@ -132,20 +132,21 @@ concept NASDAQ_ITCHAddMessages =
     std::is_same_v<T, NASDAQ::ITCHAddOrderMessage> ||
     std::is_same_v<T, NASDAQ::ITCHAddOrderMPIDMessage>;
 
-template <typename T>
-struct PendingMessage
-{
-    T msgWithVenue;
-    Order *order;
-
-    PendingMessage() = default;
-    PendingMessage(T mWithVenue, Order *order) noexcept
-        : msgWithVenue(std::move(mWithVenue)), order(order) {}
-};
 
 // ===========================
 // Metadata & small structures
 // ===========================
+
+struct PendingMessage
+{
+    MessageWithVenue<MessageTypes_t>* msgWithVenue;
+    Order *order;
+
+    PendingMessage() = default;
+    PendingMessage(MessageWithVenue<MessageTypes_t>* mWithVenue, Order *order) noexcept
+        : msgWithVenue(mWithVenue), order(order) {}
+};
+
 struct VenueFlags 
 {
     static constexpr uint8_t HALTED = 0x01;
@@ -269,7 +270,7 @@ inline constexpr size_t ORDER_MAP_CAPACITY = 32768;
 inline constexpr size_t OUR_ORDER_MAP_THRESHOLD = 16384;
 inline constexpr size_t PENDING_QUEUE_CAPACITY = 65536;
 
-using spscStorePendingQueue_t = boost::lockfree::spsc_queue<PendingMessage<MessageWithVenue<MessageTypes_t>>, boost::lockfree::capacity<PENDING_QUEUE_CAPACITY>>;
+using spscStorePendingQueue_t = boost::lockfree::spsc_queue<PendingMessage*, boost::lockfree::capacity<PENDING_QUEUE_CAPACITY>>;
 
 class OrderManager
 {
@@ -285,6 +286,7 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     static constexpr size_t TICKSIZE_POOL_CAPACITY = 65536; 
     static constexpr size_t TICKSIZE_CAPACITY_FOR_BIST = 32768;
     static constexpr size_t PENDING_ORDER_SIZE = 64;
+    static constexpr size_t PENDING_MESSAGE_POOL_CAPACITY = 65536;
 
     bool our_map_full = false;
     bool market_map_full = false;
@@ -297,12 +299,16 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     size_t market_next_slot = 0;
     size_t our_next_slot = MARKETORDER_LAST_INDEX;
 
-    std::array<absl::flat_hash_map<uint32_t, std::unique_ptr<SymbolMeta>>, VENUE_COUNT> instrument_cache_; 
-    std::array<std::vector<OrderHistory>, VENUE_COUNT> our_orders_all_venue_; 
-    std::array<VenueFlags, VENUE_COUNT> venue_flags_; 
+    std::array<PendingMessage, PENDING_MESSAGE_POOL_CAPACITY> pending_message_pool_; 
+    size_t pm_next_slot = 0;
+
     std::array<std::array<std::atomic<Order *>, PENDING_ORDER_SIZE>, VENUE_COUNT> pending_orders_; // Pending OUCH-FIX orders for matching against early ITCH messages (linear scan)
     size_t pending_next_slot = 0;
 
+    std::array<absl::flat_hash_map<uint32_t, std::unique_ptr<SymbolMeta>>, VENUE_COUNT> instrument_cache_; 
+    std::array<std::vector<OrderHistory>, VENUE_COUNT> our_orders_all_venue_; 
+    std::array<VenueFlags, VENUE_COUNT> venue_flags_; 
+    
     absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> market_orders_;  
     absl::flat_hash_map<OrderKey, Order*, OrderKeyHash> our_orders_;
     absl::flat_hash_map<uint64_t, Order*> our_orders_wtokenkey_;
@@ -321,7 +327,9 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
 
     MarketBook &marketbook_;
     HashTables &hashtables_;
-
+    MWV_PoolManager_t &mwv_poolmanager_;
+    DbData_PoolManager &dbd_poolmanager_;
+    
     FillerFIX filler_fix_{};
     FillerITCH_BIST filler_itch_bist_{*this};
     FillerITCH_NASDAQ filler_itch_nq_{*this};
@@ -335,16 +343,18 @@ public:
               spscOrderQueue_t &store_to_risk,
               spscDbQueue_t &store_to_db,
               MarketBook &marketbook,
-              HashTables &hashtables);
+              HashTables &hashtables,
+              MWV_PoolManager_t &mwv_poolmanager,
+              DbData_PoolManager &dbd_poolmanager);
 
     bool store() noexcept;
     void add_order(Order &order) noexcept;
     void add_awaitingAck_order(Order &order) noexcept;
 
     template <typename T>
-    void store(const MessageWithVenue<T> &msg) noexcept
+    void store(MessageWithVenue<T> &msg) noexcept
     {
-        this->update_order(msg);
+        update_order(msg);
     }
 
     Order *poll_update() noexcept
@@ -380,12 +390,12 @@ private:
     Order* get_order_from_our_map_wtokenkey(uint64_t client_order_id) noexcept;
     Order* get_order_from_awaitingAck_orders(uint64_t client_order_id) noexcept;
 
-    void update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept; // ONLY BIST
-    void update_order(const MessageWithVenue<FIXSessionMessage *> &) noexcept { return;}
-    void update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg) noexcept;
-    void update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept;
-    void update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg) noexcept;
-    void update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg) noexcept;
+    void update_order(MessageWithVenue<FIXMessage *> &fixMsg) noexcept; // ONLY BIST
+    void update_order(MessageWithVenue<FIXSessionMessage *> &) noexcept { return;}
+    void update_order(MessageWithVenue<BIST::ITCHMessage> &itchMsg) noexcept;
+    void update_order(MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept;
+    void update_order(MessageWithVenue<BIST::OUCHMessage> &ouchMsg) noexcept;
+    void update_order(MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg) noexcept;
     
     void handle_instrument_definition(const BIST::ITCHOrderBookDirectoryMessage &msg);
     void handle_instrument_definition(const NASDAQ::ITCHStockDirectoryMessage &msg);
@@ -478,6 +488,15 @@ private:
     {
         std::memset(dest.data(), 0, ORDER_IDs_SIZE); 
         std::memcpy(dest.data(), src, len);
+    }
+
+    PendingMessage* get_pending_packet(MessageWithVenue<MessageTypes_t>* msg = nullptr, Order* order = nullptr) noexcept 
+    { 
+        auto* pm = &pending_message_pool_[pm_next_slot++ & (PENDING_MESSAGE_POOL_CAPACITY - 1)];
+        pm->msgWithVenue = msg;
+        pm->order = order; 
+
+        return pm;
     }
 };
 

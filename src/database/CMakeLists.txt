@@ -11,6 +11,7 @@ target_link_libraries(database
     PUBLIC 
         core
         clickhouse-cpp-lib
+        custom_spsc_queue
     PRIVATE
         project_options
 )

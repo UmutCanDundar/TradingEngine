@@ -128,23 +128,38 @@ bool Parser_FIX::handle_sesMsg(FIXSessionMessage *fixSesMsg, Sequence_FIX& seq_f
       }
 }
 
+// ====================================== SIMD FIND TYPE FUNC ==============================================
+// char Parser_FIX::find_type(const char* data) noexcept
+// {
+//    const __m256i eq_mask = _mm256_set1_epi8('=');
+//    __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(data));
+//    __m256i eq_cmp = _mm256_cmpeq_epi8(chunk, eq_mask);
+//    uint32_t eq_bits = _mm256_movemask_epi8(eq_cmp);
+//    int eq_offset = 0;
+
+//    for (uint8_t i = 0; i < 2; i++)
+//    {
+//       eq_offset = __builtin_ctz(eq_bits);
+//       eq_bits &= ~(1u << eq_offset);
+//    }
+
+//    int third_eq_offset = __builtin_ctz(eq_bits);
+
+//    return *(data + third_eq_offset + 1);
+// }
+
+// ====================================== SCALAR FIND TYPE FUNC ==============================================
 char Parser_FIX::find_type(const char* data) noexcept
 {
-   const __m256i eq_mask = _mm256_set1_epi8('=');
-   __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(data));
-   __m256i eq_cmp = _mm256_cmpeq_epi8(chunk, eq_mask);
-   uint32_t eq_bits = _mm256_movemask_epi8(eq_cmp);
-   int eq_offset = 0;
-
-   for (uint8_t i = 0; i < 2; i++)
+   int third_eq_pos = 0;
+   
+   for(uint8_t eq = 0; eq < 3; eq++, third_eq_pos++)
    {
-      eq_offset = __builtin_ctz(eq_bits);
-      eq_bits &= ~(1u << eq_offset);
+      while (data[third_eq_pos] != '=')
+            ++third_eq_pos;
    }
 
-   int third_eq_offset = __builtin_ctz(eq_bits);
-
-   return *(data + third_eq_offset + 1);
+   return *(data + third_eq_pos);
 }
 
 void Parser_FIX::resend_logic(uint32_t msg_seqnum, Sequence_FIX &seq_fix) noexcept

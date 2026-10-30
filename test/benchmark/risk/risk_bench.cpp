@@ -28,7 +28,9 @@ public:
     std::unique_ptr<HashTables> hashtables;
     std::unique_ptr<Limits> limits;
     std::unique_ptr<MarketBook> marketbook;
-    std::unique_ptr<OrderManager> order_manager;
+    std::unique_ptr<MWV_PoolManager_t> mwv_pool;
+     std::unique_ptr<OrderManager> order_manager;
+    std::unique_ptr<DbData_PoolManager> dbd_pool;
     std::unique_ptr<RiskEngine> risk;
 
     spscMessageQueue_t parser_to_store;
@@ -56,8 +58,9 @@ public:
         
         hashtables    = std::make_unique<HashTables>();
         limits        = std::make_unique<Limits>(*hashtables);
-        marketbook    = std::make_unique<MarketBook>(*hashtables);
-    
+        marketbook    = std::make_unique<MarketBook>();                                                                                      
+        mwv_pool      = std::make_unique<MWV_PoolManager_t>();
+        dbd_pool      = std::make_unique<DbData_PoolManager>();
         order_manager = std::make_unique<OrderManager>(
                                             parser_to_store,
                                             store_to_strategy,
@@ -65,7 +68,9 @@ public:
                                             store_to_risk,
                                             store_to_db,
                                             *marketbook,
-                                            *hashtables        
+                                            *hashtables,
+                                            *mwv_pool,
+                                            *dbd_pool        
         );
 
         risk          = std::make_unique<RiskEngine>(
@@ -81,10 +86,12 @@ public:
         );
 
         //SYMBOLMETA INITIALIZING  (BIST GARAN(order_book_id = 3) and NASDAQ AAPL(stock_locate = 1))
-        parser_to_store.push(MessageWithVenue<MessageTypes_t>{NASDAQ::ITCHMessage{&test_data_ordMngr::nasdaq_dir}, Venue::NASDAQ});
+        static MessageWithVenue<MessageTypes_t> msg1{BIST::ITCHMessage{&test_data_ordMngr::bist_dir}, Venue::BIST};
+        parser_to_store.push(&msg1);
         order_manager->store();
         
-        parser_to_store.push(MessageWithVenue<MessageTypes_t>{BIST::ITCHMessage{&test_data_ordMngr::bist_dir}, Venue::BIST});
+        static MessageWithVenue<MessageTypes_t> msg2{NASDAQ::ITCHMessage{&test_data_ordMngr::nasdaq_dir}, Venue::NASDAQ};
+        parser_to_store.push(&msg2);
         order_manager->store();
 
         //TICK SIZE INITIALIZATION VENUE::BIST--0 SYMBOL::GARAN--0 TICKSIZE--10
@@ -115,7 +122,7 @@ public:
         {
             pin_to_cpu(2);        
 
-            OrderWithRejectReason orderWRR; 
+            OrderWithRejectReason* orderWRR; 
             
             while(!stop2.load(std::memory_order_acquire))
             {

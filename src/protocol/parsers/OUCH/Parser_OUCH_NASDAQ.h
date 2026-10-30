@@ -48,6 +48,9 @@
 //    and instruction cache pressure. After profiling, frequently-hit (hot) handlers may be separated and
 //    inlined via switch-case or template dispatch, while cold handlers remain in the function table.
 // =====================================================================================================
+
+// =================================== FPTR DISPATCH =========================================
+
 #pragma once
 
 #include "OUCHTypes_NASDAQ.h"
@@ -96,3 +99,65 @@ public:
         return OUCHmsg;
     }
 };
+
+
+// =================================== SWITCH-CASE DISPATCH =========================================
+
+// #pragma once
+
+// #include "OUCHTypes_NASDAQ.h"
+// #include "MessagePool.h"
+
+// #include <cstddef>
+// #include <array>
+// #include <variant>
+// #include <type_traits>
+
+// class Parser_OUCH_NASDAQ
+// {
+// private:
+//    static constexpr size_t MAX_MESSAGES = 14;
+
+//    MessagePools<NASDAQ::OUCHMessageTypes> ouch_pools_;
+
+//    void dispatch(size_t index, const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+
+//    void parseSystemEvent(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseOrderAccepted(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseOrderReplaced(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseOrderCancelled(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseOrderExecuted(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseOrderRejected(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseBrokenTrade(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseOrderModified(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseCancelPending(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseCancelReject(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+//    void parseAccountQueryResponse(const char *data, NASDAQ::OUCHMessage &msg) noexcept;
+
+// public:
+//    Parser_OUCH_NASDAQ() noexcept;
+
+//    template <typename T>
+//    inline void release(T *ouchMsg)
+//    {
+//       ouch_pools_.get_pool<T>().release(ouchMsg);
+//    }
+
+//    inline void releaseOUCH(NASDAQ::OUCHMessage &ouchMsg)
+//    {
+//       std::visit([this](auto *ptr)
+//                  {
+//          using T = std::remove_pointer_t<decltype(ptr)>;
+//          release<T>(ptr); },
+//                  ouchMsg);
+//    }
+
+//    inline NASDAQ::OUCHMessage parse(const char *data) noexcept
+//    {
+//       NASDAQ::OUCHMessage OUCHmsg;
+//       size_t index = static_cast<size_t>(NASDAQ::ouchMessageIndex(*(data + 3)));
+//       if (index != 99)
+//          dispatch(index, data + 3, OUCHmsg);
+//       return OUCHmsg;
+//    }
+// };

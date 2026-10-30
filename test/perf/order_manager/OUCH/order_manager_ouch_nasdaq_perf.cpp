@@ -16,7 +16,9 @@ int main()
 
     std::unique_ptr<HashTables>   hashtables;
     std::unique_ptr<MarketBook>   marketbook;
-    std::unique_ptr<OrderManager> order_manager;
+    std::unique_ptr<MWV_PoolManager_t>  mwv_pool;
+     std::unique_ptr<OrderManager> order_manager;
+    std::unique_ptr<DbData_PoolManager> dbd_pool;
 
     spscMessageQueue_t parser_to_store;
     spscOrderQueue_t   store_to_strategy;
@@ -35,7 +37,8 @@ int main()
     std::array<MessageWithVenue<MessageTypes_t>, 4> ord_manager_traffic;
 
     hashtables    = std::make_unique<HashTables>();
-    marketbook    = std::make_unique<MarketBook>(*hashtables);
+    marketbook    = std::make_unique<MarketBook>();                                                                                  
+    mwv_pool      = std::make_unique<MWV_PoolManager_t>();
     order_manager = std::make_unique<OrderManager>(
                         parser_to_store,
                         store_to_strategy,
@@ -43,7 +46,9 @@ int main()
                         store_to_risk,
                         store_to_db,
                         *marketbook,
-                        *hashtables
+                        *hashtables,
+                        *mwv_pool,
+                        *dbd_pool
     );
 
     ord_manager_traffic = []()
@@ -56,7 +61,7 @@ int main()
         return arr;
     }();
 
-    parser_to_store.push(ord_manager_traffic[0]);
+    parser_to_store.push(&ord_manager_traffic[0]);
     order_manager->store();
 
     consumer = std::thread([&]
@@ -78,7 +83,7 @@ int main()
     consumer3 = std::thread([&]
     {
         pin_to_cpu(4);
-        DbData_t DbData;
+        DbData* DbData;
         while (!stop3.load(std::memory_order_acquire))
             if (!store_to_db.pop(DbData)) _mm_pause();
     });
@@ -105,7 +110,7 @@ int main()
     auto run = [&]()
     {
         for (size_t j = 1; j < 4; j++)
-            parser_to_store.push(ord_manager_traffic[j]);
+            parser_to_store.push(&ord_manager_traffic[j]);
 
         refresh_awaiting_map();
         asm volatile("" ::: "memory");

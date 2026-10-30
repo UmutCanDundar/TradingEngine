@@ -15,7 +15,7 @@ if [ -z "$CXX_COMPILER" ] || [ "${VER:-0}" -lt 13 ]; then
     echo "GCC 13+ required." && exit 1
 fi
 
-CORES=$(( $(nproc) > 4 ? $(nproc) - 2 : $(nproc) ))
+CORES=$(( $(nproc) > 4 ? $(nproc) - 4 : $(nproc) ))
 
 usage()
 {

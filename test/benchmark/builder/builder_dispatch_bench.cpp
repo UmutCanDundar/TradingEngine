@@ -26,6 +26,7 @@ class BM_Builder : public benchmark::Fixture
 {
 public:
     std::unique_ptr<TxPacketPoolManager> txPkt_pool;
+    std::unique_ptr<MWV_PoolManager_t>  mwv_pool;
     std::unique_ptr<HashTables> hashtables;
     std::unique_ptr<MarketBook> marketbook;
     std::unique_ptr<SessionManager> sess_mngr;
@@ -34,6 +35,7 @@ public:
     std::unique_ptr<LoginController> login;
     std::unique_ptr<Parser_FIX> parser_fix;
     std::unique_ptr<OrderManager> order_manager;
+    std::unique_ptr<DbData_PoolManager> dbd_pool;
     std::unique_ptr<Builder_Dispatch> builder_dispatch;
 
     spscFIXTxSessionQueue_t parser_to_fixbuilder_tx;
@@ -61,8 +63,9 @@ public:
         stop.store(false, std::memory_order_release);
         
         txPkt_pool    = std::make_unique<TxPacketPoolManager>();
+        mwv_pool      = std::make_unique<MWV_PoolManager_t>();
         hashtables    = std::make_unique<HashTables>();
-        marketbook    = std::make_unique<MarketBook>(*hashtables);
+        marketbook    = std::make_unique<MarketBook>();
         sess_mngr     = std::make_unique<SessionManager>();
         sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
         builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
@@ -75,7 +78,9 @@ public:
                                             store_to_risk,
                                             store_to_db,
                                             *marketbook,
-                                            *hashtables        
+                                            *hashtables,
+                                            *mwv_pool,
+                                            *dbd_pool        
         );
 
         builder_dispatch = std::make_unique<Builder_Dispatch>(

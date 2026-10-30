@@ -55,6 +55,7 @@
 #include <x86intrin.h>
 
 #include <boost/lockfree/spsc_queue.hpp>
+#include "CustomSpscQueue.h"
 #include <absl/container/flat_hash_map.h>
 
 class OrderManager;
@@ -275,8 +276,9 @@ struct OrderWithRejectReason
     RiskFlags_t RejectReason = 0;
 };
 
-constexpr size_t REJECTORDER_QUEUE_SIZE = 1024;
-using spscRejectOrderQueue_t = boost::lockfree::spsc_queue<OrderWithRejectReason, boost::lockfree::capacity<REJECTORDER_QUEUE_SIZE>>;
+constexpr size_t REJECTORDER_QUEUE_CAPACITY = 1024;
+// using spscRejectOrderQueue_t = boost::lockfree::spsc_queue<OrderWithRejectReason*, boost::lockfree::capacity<REJECTORDER_QUEUE_CAPACITY>>;
+using spscRejectOrderQueue_t = CustomSpscQueue<OrderWithRejectReason*, REJECTORDER_QUEUE_CAPACITY>;
 
 class RiskEngine
 {
@@ -287,10 +289,14 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
 private:
 public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
     static constexpr size_t ORDERRISK_POOL_CAPACITY = 65536;
-    static constexpr size_t MAX_SYMBOL_COUNT = 512; 
+    static constexpr size_t MAX_SYMBOL_COUNT = 512;
+    static constexpr size_t REJECTORDER_POOL_CAPACITY = 1024; 
 
     std::array<OrderRisk, ORDERRISK_POOL_CAPACITY> orderrisk_pool_;
     size_t orderrisk_next_slot = 0;
+
+    std::array<OrderWithRejectReason, REJECTORDER_POOL_CAPACITY> reject_order_pool_; 
+    size_t rejord_next_slot = 0;
 
     spscOrderQueue_t &store_to_risk_;
     spscOrderQueue_t &strategy_to_risk_;
@@ -314,6 +320,16 @@ public:
    
 private:
     // Helper functions associated with the public functions
+    
+    OrderWithRejectReason* get_reject_order_packet(Order* order, RiskFlags_t riskflag) noexcept 
+    {
+        auto* ro = &reject_order_pool_[rejord_next_slot++ & (REJECTORDER_POOL_CAPACITY - 1)];
+        ro->RejectReason = riskflag;
+        ro->order = order; 
+
+        return ro;
+    }
+
     // --------------------------------------INITIALIZE FUNCTIONS-----------------------------------------------
     void initialize_accountrisks();
     void initialize_symbolrisks();

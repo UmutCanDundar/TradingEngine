@@ -23,6 +23,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     spscFIXRxSessionQueue_t parser_to_fixbuilder_rx;
     spscDbQueue_t db_to_parser; 
     auto sess_mngr     = std::make_unique<SessionManager>();
+    auto mwv_pool      = std::make_unique<MWV_PoolManager_t>();
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
@@ -37,7 +38,8 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
                                         *sess_mngr,
                                         db_to_parser,
                                         *network_io,
-                                        *parser_fix
+                                        *parser_fix,
+                                        *mwv_pool
     );
     uint8_t sess_index = sess_mngr->getSessionIndex(Venue::BIST, Protocol::OUCH);
     auto* sess_state = sess_mngr->getSessionState(sess_index);
@@ -87,12 +89,12 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
 //      ^ TRAFFIC FOR PARSING DISPATCH ^
 // ====================================================
     
-    MessageWithVenue<MessageTypes_t> msgWvenue;
+    MessageWithVenue<MessageTypes_t>* msgWvenue;
    
     // OUCH OrderAccepted Message
     parser_to_store.pop(msgWvenue); 
 
-    auto variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue.msg);
+    auto variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue->msg);
     auto* msg1 = std::get<BIST::RX::OUCHOrderAcceptedMessage*>(variant_msg_ouch);
     
     ASSERT_NE(msg1, nullptr);
@@ -122,7 +124,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     // ITCH OrderBookDirectory Message
     parser_to_store.pop(msgWvenue); 
 
-    auto variant_msg_itch_bist = std::get<BIST::ITCHMessage>(msgWvenue.msg);
+    auto variant_msg_itch_bist = std::get<BIST::ITCHMessage>(msgWvenue->msg);
     auto* msg2 = std::get<BIST::ITCHOrderBookDirectoryMessage*>(variant_msg_itch_bist);
 
     ASSERT_NE(msg2, nullptr);
@@ -156,7 +158,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
      // FIX New Order (D)
     parser_to_store.pop(msgWvenue); 
 
-    auto* msg3 = std::get<FIXMessage*>(msgWvenue.msg);
+    auto* msg3 = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg3, nullptr);
     EXPECT_EQ(msg3->msg_type, 'D');
@@ -184,7 +186,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     // FIX Cancel (F)
     parser_to_store.pop(msgWvenue);
 
-    auto* msg4 = std::get<FIXMessage*>(msgWvenue.msg);
+    auto* msg4 = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg4, nullptr);
     EXPECT_EQ(msg4->msg_type, 'F');
@@ -211,7 +213,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     // OUCH Cancelled Message
     parser_to_store.pop(msgWvenue); 
 
-    variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue.msg);
+    variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue->msg);
     auto* msg5 = std::get<BIST::RX::OUCHOrderCancelledMessage*>(variant_msg_ouch);
 
     ASSERT_NE(msg5, nullptr);
@@ -227,7 +229,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
   // OUCH Executed Message
     parser_to_store.pop(msgWvenue); 
 
-    variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue.msg);
+    variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue->msg);
     auto* msg6 = std::get<BIST::RX::OUCHOrderExecutedMessage*>(variant_msg_ouch);
 
     ASSERT_NE(msg6, nullptr);
@@ -244,7 +246,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     // FIX Execution Report (8)
     parser_to_store.pop(msgWvenue);
 
-    auto* msg7 = std::get<FIXMessage*>(msgWvenue.msg);
+    auto* msg7 = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg7, nullptr);
     EXPECT_EQ(msg7->msg_type, '8');
@@ -272,7 +274,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     // OUCH Executed Message
     parser_to_store.pop(msgWvenue); 
 
-    variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue.msg);
+    variant_msg_ouch = std::get<BIST::OUCHMessage>(msgWvenue->msg);
     auto* msg8 = std::get<BIST::RX::OUCHOrderExecutedMessage*>(variant_msg_ouch);
 
     ASSERT_NE(msg8, nullptr);
@@ -289,7 +291,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     // ITCH StockDirectory Message
     parser_to_store.pop(msgWvenue); 
 
-    auto variant_msg_itch_nasdaq = std::get<NASDAQ::ITCHMessage>(msgWvenue.msg);
+    auto variant_msg_itch_nasdaq = std::get<NASDAQ::ITCHMessage>(msgWvenue->msg);
     auto* msg9 = std::get<NASDAQ::ITCHStockDirectoryMessage*>(variant_msg_itch_nasdaq);
     
     ASSERT_NE(msg9, nullptr);
@@ -319,7 +321,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     // FIX Execution Report (8)
     parser_to_store.pop(msgWvenue); 
 
-    auto* msg10 = std::get<FIXMessage*>(msgWvenue.msg);
+    auto* msg10 = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg10, nullptr);
     EXPECT_EQ(msg10->msg_type, '8');
@@ -347,7 +349,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     // FIX  New Order (D)
     parser_to_store.pop(msgWvenue);
 
-    auto* msg11 = std::get<FIXMessage*>(msgWvenue.msg);
+    auto* msg11 = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg11, nullptr);
     EXPECT_EQ(msg11->msg_type, 'D');
@@ -375,7 +377,7 @@ TEST(ParserDispatchTest, MixedProtocolTraffic)
     // FIX Cancel (F)
     parser_to_store.pop(msgWvenue);
 
-    auto* msg12 = std::get<FIXMessage*>(msgWvenue.msg);
+    auto* msg12 = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg12, nullptr);
     EXPECT_EQ(msg12->msg_type, 'F');

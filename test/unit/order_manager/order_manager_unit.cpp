@@ -16,8 +16,9 @@ TEST(OrderManagerTest, MixedMessageTraffic)
     spscOrderQueue_t store_to_risk;
     spscDbQueue_t store_to_db;
     auto hashtables    = std::make_unique<HashTables>();
-    auto marketbook    = std::make_unique<MarketBook>(*hashtables);
-  
+    auto marketbook    = std::make_unique<MarketBook>();                                                                                      
+    auto mwv_pool      = std::make_unique<MWV_PoolManager_t>();
+    auto dbd_pool      = std::make_unique<DbData_PoolManager>();
     auto order_manager = std::make_unique<OrderManager>(
                                         parser_to_store,
                                         store_to_strategy,
@@ -25,7 +26,9 @@ TEST(OrderManagerTest, MixedMessageTraffic)
                                         store_to_risk,
                                         store_to_db,
                                         *marketbook,
-                                        *hashtables        
+                                        *hashtables,
+                                        *mwv_pool,
+                                        *dbd_pool        
     );
 
 // BIST FIX order
@@ -159,10 +162,10 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
  
  
 // SYMBOLMETA INITIALIZING
-    parser_to_store.push(ord_manager_traffic[0]);
+    parser_to_store.push(&ord_manager_traffic[0]);
     order_manager->store();
     
-    parser_to_store.push(ord_manager_traffic[1]);
+    parser_to_store.push(&ord_manager_traffic[1]);
     order_manager->store();
     
 //      ^ TRAFFIC FOR ORDER MANAGER ^
@@ -173,7 +176,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[2] → FIX New Order (GARAN, buy 500@15000)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[2]);
+    parser_to_store.push(&ord_manager_traffic[2]);
     order_manager->store();
 
     store_to_risk.pop(order);
@@ -205,7 +208,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[3] → BIST OUCH OrderAccepted (GARAN)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[3]);
+    parser_to_store.push(&ord_manager_traffic[3]);
     order_manager->store();
     
     store_to_risk.pop(order);
@@ -237,7 +240,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[4] → BIST ITCH AddOrder (GARAN)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[4]);
+    parser_to_store.push(&ord_manager_traffic[4]);
     order_manager->store();
     
     store_to_risk.pop(order);
@@ -273,7 +276,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[5] → NASDAQ OUCH OrderAccepted (AAPL)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[5]);
+    parser_to_store.push(&ord_manager_traffic[5]);
     order_manager->store();
     
     store_to_risk.pop(order);
@@ -303,7 +306,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[6] → NASDAQ ITCH AddOrder (AAPL)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[6]);
+    parser_to_store.push(&ord_manager_traffic[6]);
     order_manager->store();
     
     store_to_risk.pop(order);
@@ -337,7 +340,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[7] → FIX Partial Fill (GARAN)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[7]);
+    parser_to_store.push(&ord_manager_traffic[7]);
     order_manager->store();
     
     store_to_risk.pop(order);
@@ -369,7 +372,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[8] → BIST ITCH Executed (GARAN)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[8]);
+    parser_to_store.push(&ord_manager_traffic[8]);
     order_manager->store();
     
     store_to_risk.pop(order);
@@ -409,7 +412,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[9] → BIST OUCH Executed (GARAN)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[9]);
+    parser_to_store.push(&ord_manager_traffic[9]);
     order_manager->store();
 
     store_to_risk.pop(order);
@@ -441,7 +444,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[10] → NASDAQ ITCH Executed (AAPL)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[10]);
+    parser_to_store.push(&ord_manager_traffic[10]);
     order_manager->store();
 
     store_to_risk.pop(order);
@@ -475,7 +478,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[11] → NASDAQ OUCH Executed (AAPL)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[11]);
+    parser_to_store.push(&ord_manager_traffic[11]);
     order_manager->store();
 
     store_to_risk.pop(order);
@@ -506,7 +509,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[12] → BIST ITCH Delete (GARAN)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[12]);
+    parser_to_store.push(&ord_manager_traffic[12]);
     order_manager->store();
 
     store_to_risk.pop(order);
@@ -545,7 +548,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[13] → BIST OUCH Cancelled (GARAN)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[13]);
+    parser_to_store.push(&ord_manager_traffic[13]);
     order_manager->store();
 
     store_to_risk.pop(order);
@@ -577,7 +580,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[14] → NASDAQ ITCH Delete (AAPL)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[14]);
+    parser_to_store.push(&ord_manager_traffic[14]);
     order_manager->store();
 
     store_to_risk.pop(order);
@@ -611,7 +614,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[15] → NASDAQ OUCH Cancelled (AAPL)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[15]);
+    parser_to_store.push(&ord_manager_traffic[15]);
     order_manager->store();
 
     store_to_risk.pop(order);
@@ -641,7 +644,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[16] → FIX Cancel Confirm (GARAN)
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[16]);
+    parser_to_store.push(&ord_manager_traffic[16]);
     order_manager->store();
 
     store_to_risk.pop(order);
@@ -673,7 +676,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[17] → MarketBook Test after a ITCH Messages
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[17]);
+    parser_to_store.push(&ord_manager_traffic[17]);
     order_manager->store();
     store_to_risk.pop(order);
     symbook = marketbook->get_symBook(*order);
@@ -686,7 +689,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // ─────────────────────────────────────────────────────────────────────────────
 // arr[18] → MarketBook Test after a ITCH Messages
 // ─────────────────────────────────────────────────────────────────────────────
-    parser_to_store.push(ord_manager_traffic[18]);
+    parser_to_store.push(&ord_manager_traffic[18]);
     order_manager->store();
     store_to_risk.pop(order);
     symbook = marketbook->get_symBook(*order);
@@ -700,7 +703,7 @@ std::array<MessageWithVenue<MessageTypes_t>, 20> ord_manager_traffic = []()
 // arr[19] → MarketBook Test after a ITCH Messages
 // ─────────────────────────────────────────────────────────────────────────────
 
-    parser_to_store.push(ord_manager_traffic[19]);
+    parser_to_store.push(&ord_manager_traffic[19]);
     order_manager->store();
     store_to_risk.pop(order);
     symbook = marketbook->get_symBook(*order);

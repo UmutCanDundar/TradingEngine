@@ -18,6 +18,7 @@ int main()
     pin_to_cpu(6, 0);
 
     std::unique_ptr<TxPacketPoolManager> txPkt_pool;
+    std::unique_ptr<MWV_PoolManager_t>  mwv_pool;
     std::unique_ptr<SessionManager>      sess_mngr;
     std::unique_ptr<SoupBinTcp>          sbt;
     std::unique_ptr<Builder_FIX>         builder_fix;
@@ -39,6 +40,7 @@ int main()
     std::atomic<bool> running{true};
 
     txPkt_pool  = std::make_unique<TxPacketPoolManager>();
+    mwv_pool    = std::make_unique<MWV_PoolManager_t>();
     sess_mngr   = std::make_unique<SessionManager>();
     sbt         = std::make_unique<SoupBinTcp>(*sess_mngr);
     builder_fix = std::make_unique<Builder_FIX>(*sess_mngr);
@@ -61,7 +63,8 @@ int main()
                         *sess_mngr,
                         db_to_parser,
                         *network_io,
-                        *parser_fix
+                        *parser_fix,
+                        *mwv_pool
     );
 
     std::vector<RxPacket*> pkts = {
@@ -72,13 +75,13 @@ int main()
     consumer = std::thread([&]
     {
         pin_to_cpu(0);
-        MessageWithVenue<MessageTypes_t> local_msg;
+        MessageWithVenue<MessageTypes_t>* local_msg;
         while (!stop.load(std::memory_order_acquire))
         {
             if (!parser_to_store.empty())
             {
                 parser_to_store.pop(local_msg);
-                parser_dispatch->itchparser_nasdaq_.releaseITCH(std::get<NASDAQ::ITCHMessage>(local_msg.msg));
+                parser_dispatch->itchparser_nasdaq_.releaseITCH(std::get<NASDAQ::ITCHMessage>(local_msg->msg));
             }
             else
                 _mm_pause();

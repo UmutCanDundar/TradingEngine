@@ -49,6 +49,8 @@
 //    inlined via switch-case or template dispatch, while cold handlers remain in the function table.
 // =====================================================================================================
 
+// =================================== FPTR DISPATCH =========================================
+
 #pragma once
 
 #include "ITCHTypes_NASDAQ.h"
@@ -112,3 +114,81 @@ public:
         }
     }
 };
+
+
+
+// =================================== SWITCH-CASE DISPATCH =========================================
+
+// #pragma once
+
+// #include "ITCHTypes_NASDAQ.h"
+// #include "MessagePool.h"
+// #include "NetworkPackets.h"
+
+// #include <cstddef>
+// #include <array>
+// #include <variant>
+// #include <type_traits>
+
+// class Parser_ITCH_NASDAQ
+// {
+// private:
+// public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
+//    static constexpr size_t MAX_MESSAGES = 11;
+
+//    MessagePools<NASDAQ::ITCHMessageTypes> itch_pools_;
+
+//    void dispatch(size_t index, const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+
+//    void parseAddOrder(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseAddOrderMPID(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseCancel(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseExecuted(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseExecutedWithPrice(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseDelete(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseReplace(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseTrade(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseSystemEvent(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseStockDirectory(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+//    void parseTradingState(const char *data, NASDAQ::ITCHMessage &msg) noexcept;
+
+// public:
+//    Parser_ITCH_NASDAQ() noexcept;
+
+//    template <typename T>
+//    void release(T *itchMsg) noexcept
+//    {
+//       itch_pools_.get_pool<T>().release(itchMsg);
+//    }
+
+//    void releaseITCH(NASDAQ::ITCHMessage itchMsg) noexcept
+//    {
+//       std::visit([this](auto *ptr)
+//                  {
+//          using T = std::remove_pointer_t<decltype(ptr)>;
+//          release<T>(ptr); },
+//                  itchMsg);
+//    }
+
+//    NASDAQ::ITCHMessage parse(const char *data) noexcept
+//    {
+//       NASDAQ::ITCHMessage ITCHmsg;
+//       size_t index = NASDAQ::itchMessageIndex(*data);
+//       if (index != 99)
+//          dispatch(index, data, ITCHmsg);
+//       return ITCHmsg;
+//    }
+
+//    void ItchPacketHandler(RxPacket *pkt) const noexcept
+//    {
+//       size_t offset = 0;
+//       auto *data = pkt->data.data();
+
+//       while (offset < pkt->len)
+//       {
+//          size_t msg_size = NASDAQ::ITCHSizeOfs[NASDAQ::itchMessageIndex(*(data + offset))];
+//          pkt->offsets[pkt->msg_count++] = offset;
+//          offset += msg_size;
+//       }
+//    }
+// };

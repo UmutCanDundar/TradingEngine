@@ -181,7 +181,7 @@ bool RiskEngine::check_risk() noexcept
             RejectReason |= check_max_symbol_exposure_value(order->price, order->quantity, order->side, symRisk.pending_notional_scaled.load(std::memory_order_acquire), symLim.max_exposure_scaled);
             RejectReason |= check_market_data_and_deviation(symRisk.best_bid.load(std::memory_order_acquire), symRisk.best_ask.load(std::memory_order_acquire), order->price, symLim.max_price_deviation);
             RejectReason |= check_fat_finger(order->quantity, symLim.fat_finger_qty_threshold, order->price, symRisk.best_bid.load(std::memory_order_acquire), symRisk.best_ask.load(std::memory_order_acquire), symLim.fat_finger_ratio);
-            if (RejectReason){risk_to_strategy_.push(OrderWithRejectReason{order, RejectReason}); continue;}
+            if (RejectReason){risk_to_strategy_.push(get_reject_order_packet(order, RejectReason)); continue;}
         }
 
 
@@ -192,7 +192,7 @@ bool RiskEngine::check_risk() noexcept
         RejectReason |= check_self_trade_order(*order, venue_index);
         RejectReason |= check_max_position_limit(symRisk.net_position.load(std::memory_order_acquire), order->quantity, order->side, symLim.max_position_scaled);
         RejectReason |= check_account_risk(*order, accRisk, accLim, symRisk, order->price, order->quantity);
-        if (RejectReason){risk_to_strategy_.push(OrderWithRejectReason{order, RejectReason}); continue;}
+        if (RejectReason){risk_to_strategy_.push(get_reject_order_packet(order, RejectReason)); continue;}
 
         
         order->canModify.store(order->canModify | RISK_DONE, std::memory_order_relaxed);
@@ -536,23 +536,23 @@ bool RiskEngine::check_venue_halt_and_circuit(Order &order, const SymbolMeta &sy
 
     if (UNLIKELY(flags == venueflags.HALTED))
     {
-        OrderWithRejectReason rej{&order, to_underlying(RiskRejectReason::VenueTradingHalted)};
-        risk_to_strategy_.push(rej);
+        RiskFlags_t RejectReason = to_underlying(RiskRejectReason::VenueTradingHalted);
+        risk_to_strategy_.push(get_reject_order_packet(&order, RejectReason));
         return true;
     }
 
     if (UNLIKELY(flags == venueflags.C_BREAKER))
     {
-        OrderWithRejectReason rej{&order, to_underlying(RiskRejectReason::CircuitBreakerTriggered)};
-        risk_to_strategy_.push(rej);
+        RiskFlags_t RejectReason = to_underlying(RiskRejectReason::CircuitBreakerTriggered);
+        risk_to_strategy_.push(get_reject_order_packet(&order, RejectReason));
         return true;
     }
 
     bool symbol_halted = symbolmeta.halted.load(std::memory_order_acquire);
     if (UNLIKELY(symbol_halted))
     {
-        OrderWithRejectReason rej{&order, to_underlying(RiskRejectReason::SymbolTradingHalted)};
-        risk_to_strategy_.push(rej);
+        RiskFlags_t RejectReason = to_underlying(RiskRejectReason::SymbolTradingHalted);
+        risk_to_strategy_.push(get_reject_order_packet(&order, RejectReason));
         return true;
     }
 
@@ -604,8 +604,7 @@ bool RiskEngine::check_order_rate_limit(AccountRisk &accRisk, SymbolRisk &symRis
 
     if (RejectReason != 0)
     {
-        OrderWithRejectReason rej{&order, RejectReason};
-        risk_to_strategy_.push(rej);
+        risk_to_strategy_.push(get_reject_order_packet(&order, RejectReason));
     }
 
     return max_orders_for_account_reached || max_orders_for_symbol_reached;
@@ -653,8 +652,7 @@ bool RiskEngine::check_cancel_rate_limit(AccountRisk &accRisk, SymbolRisk &symRi
 
     if (RejectReason != 0)
     {
-        OrderWithRejectReason rej{&order, RejectReason};
-        risk_to_strategy_.push(rej);
+        risk_to_strategy_.push(get_reject_order_packet(&order, RejectReason));
     }
 
     return max_cancels_for_account_reached || max_cancels_for_symbol_reached;

@@ -21,7 +21,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <optional>
+#include <iterator>
+#include <utility>
 #include <functional>
 #include <type_traits>
 #include <bit>
@@ -46,58 +47,85 @@ public:
     // ===================================================================================
     // Iterator for ConcurrentFixedFlatMap to compatible with range-based for loops and STL.
     // ===================================================================================
-    struct iterator 
+    struct iterator
     {
         using iterator_category = std::bidirectional_iterator_tag;
         using value_type        = std::pair<K, V>;
         using difference_type   = std::ptrdiff_t;
-        using pointer           = value_type*;
-        using reference         = value_type&;
+        using reference         = value_type;
 
+    private:
         slot_type* ptr_;
+        slot_type* begin_;
         slot_type* end_;
-        mutable std::pair<K, V> current_;
 
-        iterator(slot_type* p, slot_type* e) noexcept : ptr_(p), end_(e) { }
+        void advance_to_valid() noexcept
+        {
+            while (ptr_ != end_ && !ptr_->is_valid())
+                ++ptr_;
+        }
 
-        iterator& operator++() noexcept 
+    public:
+        struct arrow_proxy
+        {
+            value_type val;
+            const value_type* operator->() const noexcept { return &val; }
+        };
+
+
+        iterator() noexcept : ptr_(nullptr), begin_(nullptr), end_(nullptr) {}
+        iterator(slot_type* p, slot_type* b, slot_type* e, bool skip = false) noexcept
+            : ptr_(p), begin_(b), end_(e)
+        {
+            if (skip) advance_to_valid();
+        }
+
+        iterator& operator++() noexcept
         {
             ++ptr_;
-            return *this;
-        }
-        iterator operator++(int) noexcept 
-        {
-            iterator tmp = *this;  
-            ++ptr_;                
-            return tmp;            
-        }
-
-        iterator& operator--() noexcept 
-        {
-            --ptr_;
+            advance_to_valid();
             return *this;
         }
 
-        iterator operator--(int) noexcept 
+        iterator operator++(int) noexcept
         {
             iterator tmp = *this;
-            --ptr_;
+            ++*this;
             return tmp;
         }
 
-        value_type operator*() const noexcept 
+        iterator& operator--() noexcept
+        {
+            while (ptr_ != begin_)
+            {
+                --ptr_;
+                if (ptr_->is_valid())
+                    break;
+            }
+            return *this;
+        }
+
+        iterator operator--(int) noexcept
+        {
+            iterator tmp = *this;
+            --*this;
+            return tmp;
+        }
+
+        reference operator*() const noexcept
         {
             return { ptr_->key_, ptr_->value_ };
         }
 
-        pointer operator->() const noexcept 
+        arrow_proxy operator->() const noexcept
         {
-            current_ = { ptr_->key_, ptr_->value_ };
-            return &current_;
+            return arrow_proxy{ { ptr_->key_, ptr_->value_ } };
         }
 
         bool operator==(const iterator& it) const noexcept { return ptr_ == it.ptr_; }
         bool operator!=(const iterator& it) const noexcept { return ptr_ != it.ptr_; }
+
+
     };
 
 
@@ -135,7 +163,7 @@ public:
             {
                 slot.insert_slot(key, value);
                 size_.fetch_add(1, std::memory_order_release);
-                return { iterator(&slot, slots_ + N), true };
+                return { iterator(&slot, slots_, slots_ + N), true };
             }
            
             probe_idx = (probe_idx + 1) & index_mask;
@@ -155,7 +183,7 @@ public:
             if (slot.is_valid()) 
             {
                 if (slot.key_ == key)
-                return iterator(slots_ + probe_idx, slots_ + N);
+                return iterator(slots_ + probe_idx, slots_, slots_ + N);
             }
 
             probe_idx = (probe_idx + 1) & index_mask;
@@ -198,8 +226,8 @@ public:
     size_type size() const noexcept { return size_.load(std::memory_order_acquire); }
     bool empty() const noexcept { return size() == 0; }
     bool full() const noexcept { return size() >= max_load; }
-    iterator begin() noexcept { return iterator(slots_, slots_ + N); }
-    iterator end() noexcept { return iterator(slots_ + N, slots_ + N); }
+    iterator begin() noexcept { return iterator(slots_, slots_, slots_ + N, true); }
+    iterator end() noexcept { return iterator(slots_ + N, slots_, slots_ + N); }
 };
 
 

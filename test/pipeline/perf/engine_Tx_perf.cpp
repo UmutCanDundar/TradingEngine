@@ -93,9 +93,11 @@ int main()
 
     auto engine = std::make_unique<TradingEngine>();
 
-    engine->parser_to_store_.push(MessageWithVenue<MessageTypes_t>{BIST::ITCHMessage{&test_data_ordMngr::bist_dir}, Venue::BIST});
+    static MessageWithVenue<MessageTypes_t> msg1{BIST::ITCHMessage{&test_data_ordMngr::bist_dir}, Venue::BIST};
+    engine->parser_to_store_.push(&msg1);
     engine->ord_mngr_.store();
-    engine->parser_to_store_.push(MessageWithVenue<MessageTypes_t>{NASDAQ::ITCHMessage{&test_data_ordMngr::nasdaq_dir}, Venue::NASDAQ});
+    static MessageWithVenue<MessageTypes_t> msg2{NASDAQ::ITCHMessage{&test_data_ordMngr::nasdaq_dir}, Venue::NASDAQ};
+    engine->parser_to_store_.push(&msg2);
     engine->ord_mngr_.store();
 
     auto* symmeta        = engine->ord_mngr_.get_symbolmeta(Venue::BIST, 3);

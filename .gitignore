@@ -11,7 +11,9 @@ build/
 third-party/
 Testing/
 logs/
-/test/_results/
+/test/_results*/
+/test/marketbook/
+/test/_RESULTS/
 
 # CMake Files
 CMakeFiles/

@@ -49,6 +49,8 @@
 //    inlined via switch-case or template dispatch, while cold handlers remain in the function table.
 // =====================================================================================================
 
+// =================================== FPTR DISPATCH =========================================
+
 #pragma once
 
 #include "ITCHTypes_BIST.h"
@@ -113,3 +115,83 @@ public:
         }
     }
 };
+
+
+// =================================== SWITCH-CASE DISPATCH =========================================
+// #pragma once
+
+// #include "ITCHTypes_BIST.h"
+// #include "MessagePool.h"
+// #include "NetworkPackets.h"
+
+// #include <cstddef>
+// #include <array>
+// #include <variant>
+// #include <type_traits>
+
+
+// class Parser_ITCH_BIST
+// {
+// private:
+// public: /// Debugging and monitoring fields. Will be removed after profiling and debugging.
+//    static constexpr size_t MAX_MESSAGES = 14;
+
+//    MessagePools<BIST::ITCHMessageTypes> itch_pools_;
+
+//    void dispatch(size_t index, const char *data, BIST::ITCHMessage &msg) noexcept;
+
+//    void parseSeconds(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseOrderBookDirectory(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseCombinationOrderBookLeg(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseTickSizeTableEntry(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseShortSellStatus(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseSystemEvent(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseOrderBookState(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseAddOrder(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseOrderExecuted(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseOrderExecutedWithPrice(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseOrderDelete(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseOrderBookFlush(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseTrade(const char *data, BIST::ITCHMessage &msg) noexcept;
+//    void parseEquilibriumPriceUpdate(const char *data, BIST::ITCHMessage &msg) noexcept;
+
+// public:
+//    Parser_ITCH_BIST() noexcept;
+
+//    template <typename T>
+//    void release(T *itchMsg) noexcept
+//    {
+//       itch_pools_.get_pool<T>().release(itchMsg);
+//    }
+
+//    void releaseITCH(BIST::ITCHMessage itchMsg) noexcept
+//    {
+//       std::visit([this](auto *ptr)
+//                  {
+//          using T = std::remove_pointer_t<decltype(ptr)>;
+//          release<T>(ptr); },
+//                  itchMsg);
+//    }
+
+//    BIST::ITCHMessage parse(const char *data) noexcept
+//    {
+//       BIST::ITCHMessage ITCHmsg;
+//       size_t index = BIST::itchMessageIndex(*data);
+//       if (index != 99)
+//          dispatch(index, data, ITCHmsg);
+//       return ITCHmsg;
+//    }
+
+//    void ItchPacketHandler(RxPacket *pkt) const noexcept
+//    {
+//       size_t offset = 0;
+//       auto *data = pkt->data.data();
+
+//       while (offset < pkt->len)
+//       {
+//          size_t msg_size = BIST::ITCHSizeOfs[BIST::itchMessageIndex(*(data + offset))];
+//          pkt->offsets[pkt->msg_count++] = offset;
+//          offset += msg_size;
+//       }
+//    }
+// };

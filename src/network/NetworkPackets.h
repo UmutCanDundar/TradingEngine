@@ -31,6 +31,7 @@
 #include <cstddef>
 
 #include <boost/lockfree/spsc_queue.hpp>
+#include "CustomSpscQueue.h"
 
 struct TxPacket // To be sent to exchange
 {
@@ -83,9 +84,10 @@ struct RxPacket // To be received from exchange
 };
 
 inline constexpr size_t PACKET_QUEUE_CAPACITY = 1024;
-using spscTxPacketQueue_t = boost::lockfree::spsc_queue<TxPacket *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
-using spscRxPacketQueue_t = boost::lockfree::spsc_queue<RxPacket *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
-
+// using spscTxPacketQueue_t = boost::lockfree::spsc_queue<TxPacket *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
+// using spscRxPacketQueue_t = boost::lockfree::spsc_queue<RxPacket *, boost::lockfree::capacity<PACKET_QUEUE_CAPACITY>>;
+using spscTxPacketQueue_t = CustomSpscQueue<TxPacket *, PACKET_QUEUE_CAPACITY>;
+using spscRxPacketQueue_t = CustomSpscQueue<RxPacket *, PACKET_QUEUE_CAPACITY>;
 
 inline constexpr size_t PACKET_POOL_CAPACITY = 1024;
 class TxPacketPoolManager

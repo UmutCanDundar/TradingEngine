@@ -23,6 +23,7 @@ int main()
     pin_to_cpu(6);
 
     std::unique_ptr<TxPacketPoolManager> txPkt_pool;
+    std::unique_ptr<MWV_PoolManager_t>   mwv_pool;
     std::unique_ptr<HashTables>          hashtables;
     std::unique_ptr<MarketBook>          marketbook;
     std::unique_ptr<SessionManager>      sess_mngr;
@@ -31,6 +32,7 @@ int main()
     std::unique_ptr<LoginController>     login;
     std::unique_ptr<Parser_FIX>          parser_fix;
     std::unique_ptr<OrderManager>        order_manager;
+    std::unique_ptr<DbData_PoolManager> dbd_pool;
     std::unique_ptr<Builder_Dispatch>    builder_dispatch;
 
     spscFIXTxSessionQueue_t  parser_to_fixbuilder_tx;
@@ -53,12 +55,14 @@ int main()
 
     txPkt_pool    = std::make_unique<TxPacketPoolManager>();
     hashtables    = std::make_unique<HashTables>();
-    marketbook    = std::make_unique<MarketBook>(*hashtables);
+    marketbook    = std::make_unique<MarketBook>();                                                                                    
+    mwv_pool      = std::make_unique<MWV_PoolManager_t>();
     sess_mngr     = std::make_unique<SessionManager>();
     sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
     parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_tx);
+    dbd_pool      = std::make_unique<DbData_PoolManager>();
     order_manager = std::make_unique<OrderManager>(
                         parser_to_store,
                         store_to_strategy,
@@ -66,7 +70,9 @@ int main()
                         store_to_risk,
                         store_to_db,
                         *marketbook,
-                        *hashtables
+                        *hashtables,
+                        *mwv_pool,
+                        *dbd_pool
     );
     builder_dispatch = std::make_unique<Builder_Dispatch>(
                         builder_to_sender,

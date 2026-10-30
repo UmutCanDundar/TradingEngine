@@ -16,6 +16,7 @@ TEST(FixParserDispatchTest, MultFixPkt)
     std::atomic<bool> running{true};
 
     auto txPkt_pool = std::make_unique<TxPacketPoolManager>();
+    auto mwv_pool      = std::make_unique<MWV_PoolManager_t>();
     spscFIXTxSessionQueue_t parser_to_fixbuilder_tx;
     spscRxPacketQueue_t receiver_to_parser;
     spscTxPacketQueue_t builder_to_sender;
@@ -37,7 +38,8 @@ TEST(FixParserDispatchTest, MultFixPkt)
                                         *sess_mngr,
                                         db_to_parser,
                                         *network_io,
-                                        *parser_fix
+                                        *parser_fix,
+                                        *mwv_pool
                                     );
 
     uint8_t sess_index = sess_mngr->getSessionIndex(Venue::BIST, Protocol::FIX);
@@ -81,11 +83,11 @@ TEST(FixParserDispatchTest, MultFixPkt)
 int scenario = 2;
 for(int test = 0; test < scenario; test++) 
 { 
-    MessageWithVenue<MessageTypes_t> msgWvenue;
+    MessageWithVenue<MessageTypes_t>* msgWvenue;
     
     // 1 New Order (D)
     parser_to_store.pop(msgWvenue); 
-    FIXMessage* msg = std::get<FIXMessage*>(msgWvenue.msg);
+    FIXMessage* msg = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->msg_type, 'D');
@@ -113,7 +115,7 @@ for(int test = 0; test < scenario; test++)
     
     // 2 Cancel (F)
     parser_to_store.pop(msgWvenue);
-    msg = std::get<FIXMessage*>(msgWvenue.msg);
+    msg = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->msg_type, 'F');
@@ -140,7 +142,7 @@ for(int test = 0; test < scenario; test++)
     
     // 3 Execution Report (8)
     parser_to_store.pop(msgWvenue);
-    msg = std::get<FIXMessage*>(msgWvenue.msg);
+    msg = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->msg_type, '8');
@@ -169,11 +171,11 @@ for(int test = 0; test < scenario; test++)
 
 // SCENARIO 3 TEST
 
-    MessageWithVenue<MessageTypes_t> msgWvenue;
+    MessageWithVenue<MessageTypes_t>* msgWvenue;
 
     // 1 Execution Report (8)
     parser_to_store.pop(msgWvenue); 
-    FIXMessage* msg = std::get<FIXMessage*>(msgWvenue.msg);
+    FIXMessage* msg = std::get<FIXMessage*>(msgWvenue->msg);
 
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->msg_type, '8');
@@ -200,9 +202,9 @@ for(int test = 0; test < scenario; test++)
     EXPECT_EQ(msg->cxl_rej_reason, 255);
 
     // 2  New Order (D)
-    MessageWithVenue<MessageTypes_t> msgWvenue2;
+    MessageWithVenue<MessageTypes_t>* msgWvenue2;
     parser_to_store.pop(msgWvenue2);
-    msg = std::get<FIXMessage*>(msgWvenue2.msg);
+    msg = std::get<FIXMessage*>(msgWvenue2->msg);
 
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->msg_type, 'D');
@@ -229,9 +231,9 @@ for(int test = 0; test < scenario; test++)
     EXPECT_EQ(msg->cxl_rej_reason, 255);
    
     // 3 Cancel (F)
-    MessageWithVenue<MessageTypes_t> msgWvenue3;
+    MessageWithVenue<MessageTypes_t>* msgWvenue3;
     parser_to_store.pop(msgWvenue3);
-    msg = std::get<FIXMessage*>(msgWvenue3.msg);
+    msg = std::get<FIXMessage*>(msgWvenue3->msg);
 
     ASSERT_NE(msg, nullptr);
     EXPECT_EQ(msg->msg_type, 'F');

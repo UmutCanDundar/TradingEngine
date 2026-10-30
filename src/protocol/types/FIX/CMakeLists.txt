@@ -8,4 +8,5 @@ target_include_directories(types_fix
 target_link_libraries(types_fix 
     INTERFACE 
         boost_headers
+        custom_spsc_queue
 )

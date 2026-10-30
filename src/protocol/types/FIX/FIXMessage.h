@@ -13,6 +13,7 @@
 #include <cstddef>
 
 #include <boost/lockfree/spsc_queue.hpp>
+#include "CustomSpscQueue.h"
 
 enum class FIXTypes : uint8_t
 {
@@ -130,5 +131,7 @@ struct FIXSessionMessage // ~80B
 
 inline constexpr size_t FIX_QUEUE_CAPACITY = 1024;
 
-using spscFIXTxSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
-using spscFIXRxSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
+// using spscFIXTxSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
+// using spscFIXRxSessionQueue_t = boost::lockfree::spsc_queue<FIXSessionMessage *, boost::lockfree::capacity<FIX_QUEUE_CAPACITY>>;
+using spscFIXTxSessionQueue_t = CustomSpscQueue<FIXSessionMessage *, FIX_QUEUE_CAPACITY>;
+using spscFIXRxSessionQueue_t = CustomSpscQueue<FIXSessionMessage *, FIX_QUEUE_CAPACITY>;

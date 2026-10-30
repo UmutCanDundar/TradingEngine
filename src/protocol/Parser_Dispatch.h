@@ -88,6 +88,7 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     SessionManager &sess_mngr_;
     spscDbQueue_t &db_to_parser_;
     NetworkIO &network_io_;
+    MWV_PoolManager_t &mwv_poolmanager_;
 
     Parser_FIX& fixparser_;
     Parser_ITCH_BIST itchparser_bist_;
@@ -97,7 +98,7 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
 
 public:
     Parser_Dispatch(spscRxPacketQueue_t &receiver_to_parser, spscMessageQueue_t &parser_to_store, spscFIXRxSessionQueue_t &parser_to_fixbuilder_rx, spscFIXTxSessionQueue_t &parser_to_fixbuilder_tx, 
-                    SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX &fixparser) noexcept;
+                    SessionManager &sess_mngr, spscDbQueue_t &db_to_parser, NetworkIO &network_io, Parser_FIX &fixparser, MWV_PoolManager_t &mwv_poolmanager) noexcept;
 
     bool dispatch();
    

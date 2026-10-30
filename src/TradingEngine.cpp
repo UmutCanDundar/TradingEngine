@@ -5,7 +5,7 @@ TradingEngine::TradingEngine()
     : 
       // ----- CORE -----
       hashtables_(),
-      marketbook_(hashtables_),
+      marketbook_(),
       limits_(hashtables_),
       session_manager_(),
       txPkt_pool_(),
@@ -31,7 +31,8 @@ TradingEngine::TradingEngine()
           session_manager_,
           db_to_parser_,
           network_io_,
-          parser_fix_),
+          parser_fix_,
+          msgWithVenue_pool_),
       ord_mngr_(
           parser_to_store_,
           store_to_risk_,
@@ -39,7 +40,9 @@ TradingEngine::TradingEngine()
           store_to_strategy_free_slot_,
           store_to_db_,
           marketbook_,
-          hashtables_),
+          hashtables_,
+          msgWithVenue_pool_,
+          dbd_pool_),
       ch_writer_(
           store_to_db_,
           db_to_parser_),

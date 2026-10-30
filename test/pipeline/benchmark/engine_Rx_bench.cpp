@@ -158,9 +158,11 @@ public:
         NASDAQ::ITCHStockDirectoryMessage *NQm = nullptr;
         engine->parser_dispatch_.itchparser_nasdaq_.itch_pools_.get_pool<NASDAQ::ITCHStockDirectoryMessage>().acquire(NQm);
 
-        engine->parser_to_store_.push(MessageWithVenue<MessageTypes_t>{BIST::ITCHMessage{&test_data_ordMngr::bist_dir}, Venue::BIST});
+        static MessageWithVenue<MessageTypes_t> msg1{BIST::ITCHMessage{&test_data_ordMngr::bist_dir}, Venue::BIST};
+        engine->parser_to_store_.push(&msg1);
         engine->ord_mngr_.store();
-        engine->parser_to_store_.push(MessageWithVenue<MessageTypes_t>{NASDAQ::ITCHMessage{&test_data_ordMngr::nasdaq_dir}, Venue::NASDAQ});
+        static MessageWithVenue<MessageTypes_t> msg2{NASDAQ::ITCHMessage{&test_data_ordMngr::nasdaq_dir}, Venue::NASDAQ};
+        engine->parser_to_store_.push(&msg2);
         engine->ord_mngr_.store();
         
         
@@ -252,10 +254,11 @@ BENCHMARK_DEFINE_F(BM_Pipeline_Rx, PerProtocolVenue)(benchmark::State& state)
             engine->risk_.orderrisk_pool_[i & (ORDER_POOL_CAPACITY - 1)].active.store(false, std::memory_order_release);
         engine->risk_.orderrisk_next_slot = 0;
 
-        const uint64_t hash = engine->hashtables_.hash_exec_id("EXEC00002");
-        const size_t idx = hash & (HashTables::EXEC_ID_TABLE_SIZE - 1);
-        for (size_t i = 0; i < HashTables::MAX_PROBE; i++)
-           *(volatile uint64_t*)(&engine->hashtables_.exec_id_hashes_[(idx + i) & (HashTables::EXEC_ID_TABLE_SIZE - 1)]) = 0;
+        // This section must be commented out when the absl_flat_hash_map is active in HashTables.h
+        // const uint64_t hash = engine->hashtables_.hash_exec_id("EXEC00002"); 
+        // const size_t idx = hash & (HashTables::EXEC_ID_TABLE_SIZE - 1);
+        // for (size_t i = 0; i < HashTables::MAX_PROBE; i++)
+        //    *(volatile uint64_t*)(&engine->hashtables_.exec_id_hashes_[(idx + i) & (HashTables::EXEC_ID_TABLE_SIZE - 1)]) = 0;
         
         engine->parser_dispatch_.flush_DbQueue();
         engine->session_manager_.getSessionState(0)->fix.set_expected_seq(1);

@@ -13,6 +13,9 @@ target_link_libraries(core
         types_itch
         types_ouch
         utils
+        ab_hash
+        ab_flat_hash_map
+        custom_spsc_queue
     PRIVATE 
         generated_headers
         project_options

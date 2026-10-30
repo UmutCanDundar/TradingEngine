@@ -5,6 +5,7 @@
 #include <cstring>
 #include <variant>
 
+
 using common_function::to_underlying;
 using namespace clickhouse;
 
@@ -19,18 +20,17 @@ ClickhouseWriter::ClickhouseWriter(spscDbQueue_t &store_to_db, spscDbQueue_t &db
 
 bool ClickhouseWriter::store() 
 {
-   DbData_t data;
+   DbData* data;
    if (!store_to_db_.pop(data))
       return false;
-
    std::visit([this, &data](const auto& item)
    { 
       // this->insert(item); this line is commented out because this class has not been fully implemented yet.
-
+      
       using ItemType = std::decay_t<decltype(item)>;
       if constexpr (!std::is_same_v<ItemType, Order*>)
          db_to_parser_.push(data);
-   }, data);
+   }, data->data);
 
    return true;
 }

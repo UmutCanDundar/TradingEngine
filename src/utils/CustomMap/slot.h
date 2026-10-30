@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <type_traits>
+#include <concepts>
 
 
 template<typename T>

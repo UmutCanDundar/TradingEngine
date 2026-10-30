@@ -94,6 +94,8 @@ public: /// Debugging and monitoring fields. Will be removed after profiling and
     Builder_FIX builder_fix_;
     SoupBinTcp sbt_;
     LoginController login_;
+    MWV_PoolManager_t msgWithVenue_pool_;
+    DbData_PoolManager dbd_pool_;
 
     // =========================
     // QUEUES (LAYER 1)

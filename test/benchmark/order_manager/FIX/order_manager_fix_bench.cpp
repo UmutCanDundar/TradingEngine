@@ -19,7 +19,9 @@ class BM_OrderManager : public benchmark::Fixture
 public:
     std::unique_ptr<HashTables> hashtables;
     std::unique_ptr<MarketBook> marketbook;
-    std::unique_ptr<OrderManager> order_manager;
+    std::unique_ptr<MWV_PoolManager_t>  mwv_pool;
+     std::unique_ptr<OrderManager> order_manager;
+    std::unique_ptr<DbData_PoolManager> dbd_pool;
 
     spscMessageQueue_t parser_to_store;
     spscOrderQueue_t store_to_strategy;
@@ -50,8 +52,9 @@ public:
         while(store_to_strategy_free_slot.pop(order)) {}
     
         hashtables    = std::make_unique<HashTables>();
-        marketbook    = std::make_unique<MarketBook>(*hashtables);
-    
+        marketbook    = std::make_unique<MarketBook>();
+        mwv_pool      = std::make_unique<MWV_PoolManager_t>();
+        dbd_pool      = std::make_unique<DbData_PoolManager>();
         order_manager = std::make_unique<OrderManager>(
                                             parser_to_store,
                                             store_to_strategy,
@@ -59,7 +62,9 @@ public:
                                             store_to_risk,
                                             store_to_db,
                                             *marketbook,
-                                            *hashtables        
+                                            *hashtables,
+                                            *mwv_pool,
+                                            *dbd_pool       
         );
 
         ord_manager_traffic = []()
@@ -83,7 +88,7 @@ public:
         
         for(size_t i = 0; i < 1; i++)
         {
-            parser_to_store.push(ord_manager_traffic[i]);
+            parser_to_store.push(&ord_manager_traffic[i]);
             order_manager->store();
         }
 
@@ -123,7 +128,7 @@ public:
 
             Order* order; 
             
-            DbData_t DbData; 
+            DbData* DbData; 
 
             while(!stop3.load(std::memory_order_acquire))
             {
@@ -184,7 +189,7 @@ BENCHMARK_DEFINE_F(BM_OrderManager, Fix)(benchmark::State& state)
     for(auto _ : state)
     {
         for(size_t i = 1; i < 4; i++)
-            parser_to_store.push(ord_manager_traffic[i]);
+            parser_to_store.push(&ord_manager_traffic[i]);
 
         bool processing = true;
         refresh_awaiting_map_per_ite();

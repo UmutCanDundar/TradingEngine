@@ -133,6 +133,111 @@ public:
     void resend_logic_logon(FIXSessionMessage *fixSesMsg, Sequence_FIX &seq_fix);
     std::pair<char *, size_t> nextFixMsg(RxPacket *pkt, size_t &data_offset) noexcept;
 
+// ====================================== SIMD PARSE FUNC ==============================================
+    // template <typename T>
+    // T* parse(const char* data, size_t len) noexcept
+    // {
+    //     T* msg{nullptr};
+
+    //     if constexpr (std::is_same_v<T, FIXMessage>)
+    //         free_fixMsg_list_.pop(msg);
+    //     else
+    //         free_fixSesMsg_list_.pop(msg);
+        
+    //     auto const &handlers = []() -> auto const &
+    //     {
+    //         if constexpr (std::is_same_v<T, FIXMessage>)
+    //             return tagHandlers;
+    //         else
+    //             return SestagHandlers;
+    //     }();
+
+    //     size_t pos = 0;
+    //     size_t tag_start = 0;
+
+    //     const __m256i eq_mask = _mm256_set1_epi8('=');
+    //     const __m256i soh_mask = _mm256_set1_epi8('\x01');
+
+    //     while (pos + 32 <= len)
+    //     {
+    //         __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(data + pos));
+
+    //         uint32_t eq_bits = _mm256_movemask_epi8(_mm256_cmpeq_epi8(chunk, eq_mask));
+    //         uint32_t soh_bits = _mm256_movemask_epi8(_mm256_cmpeq_epi8(chunk, soh_mask));
+
+    //         while (eq_bits != 0)
+    //         {
+
+    //             int eq_offset = __builtin_ctz(eq_bits);
+    //             size_t eq_pos = pos + eq_offset;
+
+    //             int soh_offset = 0;
+    //             size_t soh_pos = static_cast<size_t>(-1);
+
+    //             uint32_t soh_after = soh_bits & (~0u << (eq_offset + 1));
+
+    //             if (soh_after != 0)
+    //             {
+    //                 soh_offset = __builtin_ctz(soh_after);
+    //                 soh_pos = pos + soh_offset;
+    //             }
+    //             else
+    //             {
+    //                 size_t search_pos = eq_pos + 1;
+    //                 while (search_pos < len && data[search_pos] != '\x01')
+    //                     ++search_pos;
+    //                 soh_pos = search_pos;
+    //             }
+
+    //             std::string_view value(data + eq_pos + 1, soh_pos - (eq_pos + 1));
+
+    //             size_t tag = parseNum(std::string_view(data + tag_start, eq_pos - tag_start));
+
+    //             auto& handler = handlers[tag];
+    //             if (handler)
+    //                 handler(value, msg);
+
+    //             tag_start = soh_pos + 1;
+
+    //             eq_bits &= ~(1u << eq_offset);
+    //         }
+
+    //         pos += 32;
+    //     }
+
+    //     while (pos < len)
+    //     {
+    //         size_t eq_pos = pos;
+    //         while (data[eq_pos] != '=' && eq_pos < len)
+    //             ++eq_pos;
+
+    //         size_t tag = parseNum(std::string_view(data + tag_start, eq_pos - tag_start));
+    //         size_t soh_pos = eq_pos + 1;
+            
+    //         if(UNLIKELY(eq_pos == len)) // if pos is between last eq and last soh("10=xxx\x01"), eq_pos will be out of bound, so we need to handle this case separately
+    //         {
+    //             soh_pos = eq_pos - 1;
+    //             eq_pos -= 5;
+    //             tag_start = eq_pos - 2;
+    //             tag = parseNum(std::string_view(data + tag_start, eq_pos - tag_start));
+    //         }
+            
+    //         while (data[soh_pos] != '\x01')
+    //             ++soh_pos;
+
+    //         std::string_view value(data + eq_pos + 1, soh_pos - (eq_pos + 1));
+
+    //          auto& handler = handlers[tag];
+    //          if (handler)
+    //             handler(value, msg);
+
+    //         tag_start = soh_pos + 1;
+    //         pos = soh_pos + 1;
+    //     }
+    //     return msg;
+    // }
+
+// ====================================== SCALAR PARSE FUNC ==============================================
     template <typename T>
     T* parse(const char* data, size_t len) noexcept
     {
@@ -153,56 +258,6 @@ public:
 
         size_t pos = 0;
         size_t tag_start = 0;
-
-        const __m256i eq_mask = _mm256_set1_epi8('=');
-        const __m256i soh_mask = _mm256_set1_epi8('\x01');
-
-        while (pos + 32 <= len)
-        {
-            __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(data + pos));
-
-            uint32_t eq_bits = _mm256_movemask_epi8(_mm256_cmpeq_epi8(chunk, eq_mask));
-            uint32_t soh_bits = _mm256_movemask_epi8(_mm256_cmpeq_epi8(chunk, soh_mask));
-
-            while (eq_bits != 0)
-            {
-
-                int eq_offset = __builtin_ctz(eq_bits);
-                size_t eq_pos = pos + eq_offset;
-
-                int soh_offset = 0;
-                size_t soh_pos = static_cast<size_t>(-1);
-
-                uint32_t soh_after = soh_bits & (~0u << (eq_offset + 1));
-
-                if (soh_after != 0)
-                {
-                    soh_offset = __builtin_ctz(soh_after);
-                    soh_pos = pos + soh_offset;
-                }
-                else
-                {
-                    size_t search_pos = eq_pos + 1;
-                    while (search_pos < len && data[search_pos] != '\x01')
-                        ++search_pos;
-                    soh_pos = search_pos;
-                }
-
-                std::string_view value(data + eq_pos + 1, soh_pos - (eq_pos + 1));
-
-                size_t tag = parseNum(std::string_view(data + tag_start, eq_pos - tag_start));
-
-                auto& handler = handlers[tag];
-                if (handler)
-                    handler(value, msg);
-
-                tag_start = soh_pos + 1;
-
-                eq_bits &= ~(1u << eq_offset);
-            }
-
-            pos += 32;
-        }
 
         while (pos < len)
         {
@@ -319,4 +374,6 @@ private:
         return result * pow10[Scale - frac_digits];
     }
 };
+
+
 

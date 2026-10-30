@@ -27,8 +27,9 @@ TEST(RiskEngineTest, MixedMessageTraffic)
 
     auto hashtables    = std::make_unique<HashTables>();
     auto limits        = std::make_unique<Limits>(*hashtables);
-    auto marketbook    = std::make_unique<MarketBook>(*hashtables);
-
+    auto marketbook    = std::make_unique<MarketBook>();                                                                                      
+    auto mwv_pool      = std::make_unique<MWV_PoolManager_t>();
+    auto dbd_pool      = std::make_unique<DbData_PoolManager>();
     auto order_manager = std::make_unique<OrderManager>(
                                         parser_to_store,
                                         store_to_strategy,
@@ -36,7 +37,9 @@ TEST(RiskEngineTest, MixedMessageTraffic)
                                         store_to_risk,
                                         store_to_db,
                                         *marketbook,
-                                        *hashtables        
+                                        *hashtables,
+                                        *mwv_pool,
+                                        *dbd_pool        
     );
 
     auto risk          = std::make_unique<RiskEngine>(
@@ -52,10 +55,12 @@ TEST(RiskEngineTest, MixedMessageTraffic)
     );
 
     // SYMBOLMETA INITIALIZING  (BIST GARAN(order_book_id = 3) and NASDAQ AAPL(stock_locate = 1))
-    parser_to_store.push(MessageWithVenue<MessageTypes_t>{NASDAQ::ITCHMessage{&test_data_ordMngr::nasdaq_dir}, Venue::NASDAQ});
+    static MessageWithVenue<MessageTypes_t> msg1{BIST::ITCHMessage{&test_data_ordMngr::bist_dir}, Venue::BIST};
+    parser_to_store.push(&msg1);
     order_manager->store();
     
-    parser_to_store.push(MessageWithVenue<MessageTypes_t>{BIST::ITCHMessage{&test_data_ordMngr::bist_dir}, Venue::BIST});
+    static MessageWithVenue<MessageTypes_t> msg2{NASDAQ::ITCHMessage{&test_data_ordMngr::nasdaq_dir}, Venue::NASDAQ};
+    parser_to_store.push(&msg2);
     order_manager->store();
 
     //===========================================================================
@@ -725,34 +730,34 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             symRisk.net_position.store(0, std::memory_order_relaxed);
             symRisk.cost_basis_scaled = 0;
 
-            OrderWithRejectReason rej_order{};
+            OrderWithRejectReason* rej_order{};
             uint32_t reason = 0;  
 
             order = strategy_to_risk_traffic[0];
             strategy_to_risk.push(order);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.order, nullptr);
+            EXPECT_EQ(rej_order, nullptr);
 
             order = strategy_to_risk_traffic[1];
             strategy_to_risk.push(order);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::MinOrderSizeExceeded));
 
             order = strategy_to_risk_traffic[2];
             strategy_to_risk.push(order);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::MaxOrderSizeExceeded));
                 
             order = strategy_to_risk_traffic[3];
             strategy_to_risk.push(order);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::InvalidLotSize));
 
             order = strategy_to_risk_traffic[4];
@@ -760,7 +765,7 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             symRisk.best_bid.store(180000, std::memory_order_relaxed);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::MaxOrderNotionalLimitExceeded)
                 | static_cast<uint32_t>(RiskRejectReason::InvalidPriceRange));
             symRisk.best_bid.store(10000, std::memory_order_relaxed);
@@ -769,14 +774,14 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             strategy_to_risk.push(order);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::PriceTickInvalid));
                 
             order = strategy_to_risk_traffic[6];
             strategy_to_risk.push(order);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::FatFingerCheckFailed));
                 
             order = strategy_to_risk_traffic[7];
@@ -784,7 +789,7 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             symRisk.net_position.store(960, std::memory_order_relaxed);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::MaxPositionLimitExceeded));
             symRisk.net_position.store(0, std::memory_order_relaxed);
 
@@ -793,7 +798,7 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             accRisk.current_exposure.store(49'900'000, std::memory_order_relaxed);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::MaxNotionalLimitExceeded));
             accRisk.current_exposure.store(0, std::memory_order_relaxed);
                 
@@ -803,7 +808,7 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             accRisk.used_margin.store(0, std::memory_order_relaxed);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::AccountBalanceInsufficient)
                 | static_cast<uint32_t>(RiskRejectReason::FreeMarginInsufficient)
                 | static_cast<uint32_t>(RiskRejectReason::MaxLeverageExceeded));
@@ -814,7 +819,7 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             accRisk.open_orders_count.store(5, std::memory_order_relaxed);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::MaxOpenOrdersReachedAccount));
             accRisk.open_orders_count.store(0, std::memory_order_relaxed);
 
@@ -823,7 +828,7 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             symRisk.open_orders_count.store(3, std::memory_order_relaxed);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::MaxOpenOrdersReachedSymbol));
             symRisk.open_orders_count.store(0, std::memory_order_relaxed);
             
@@ -845,14 +850,14 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             strategy_to_risk.push(order);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::SelfTradeDetected));
                             
             order = strategy_to_risk_traffic[13];
             strategy_to_risk.push(order);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::UnrealizedLossLimitExceeded));
                 
             order = strategy_to_risk_traffic[14];
@@ -860,17 +865,17 @@ TEST(RiskEngineTest, MixedMessageTraffic)
             symRisk.avg_entry_price.store(30000, std::memory_order_relaxed);
             risk->check_risk();
             risk_to_strategy.pop(rej_order);
-            EXPECT_EQ(rej_order.RejectReason, reason 
+            EXPECT_EQ(rej_order->RejectReason, reason 
                 | static_cast<uint32_t>(RiskRejectReason::RealizedLossLimitExceeded));
-                
             // order = strategy_to_risk_traffic[14]; // Commented out during benchmarking — rate limit check interferes with test timing
             // strategy_to_risk.push(order);
             // risk->check_risk();
             // risk_to_strategy.pop(rej_order);
-            // EXPECT_EQ(rej_order.RejectReason, reason
+            // EXPECT_EQ(rej_order->RejectReason, reason
             //     | static_cast<uint32_t>(RiskRejectReason::MaxOrderRateLimitExceededSymbol)
             //     | static_cast<uint32_t>(RiskRejectReason::MaxOrderRateLimitExceededAccount));
                 
+            
     delete ticksize_entry;
     delete oR;
     Logger::Shutdown();             

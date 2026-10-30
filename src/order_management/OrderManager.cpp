@@ -8,8 +8,8 @@
 // ============================
 // Constructor & Public Methods
 // ============================
-OrderManager::OrderManager(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscOrderQueue_t &store_to_risk, spscDbQueue_t &store_to_db, MarketBook &marketbook,HashTables &hashtables) 
-    : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_risk_(store_to_risk), store_to_db_(store_to_db), marketbook_(marketbook), hashtables_(hashtables)
+OrderManager::OrderManager(spscMessageQueue_t &parser_to_store, spscOrderQueue_t &store_to_strategy, spscOrderQueue_t &store_to_strategy_free_slot, spscOrderQueue_t &store_to_risk, spscDbQueue_t &store_to_db, MarketBook &marketbook, HashTables &hashtables, MWV_PoolManager_t &mwv_poolmanager, DbData_PoolManager &dbd_poolmanager) 
+    : parser_to_store_(parser_to_store), store_to_strategy_(store_to_strategy), store_to_strategy_free_slot_(store_to_strategy_free_slot), store_to_risk_(store_to_risk), store_to_db_(store_to_db), marketbook_(marketbook), hashtables_(hashtables), mwv_poolmanager_(mwv_poolmanager), dbd_poolmanager_(dbd_poolmanager)
 {
    
    market_orders_.reserve(ORDER_MAP_CAPACITY);
@@ -30,37 +30,37 @@ OrderManager::OrderManager(spscMessageQueue_t &parser_to_store, spscOrderQueue_t
 bool OrderManager::store() noexcept
 {
    
-   MessageWithVenue<MessageTypes_t> msgWithVenue;
-
-   if (!pending_to_strategy_.empty() && ((pending_to_strategy_.front().order->canModify.load(std::memory_order_relaxed)) == (STRATEGY_DONE | RISK_DONE | BUILDER_DONE)))
+   MessageWithVenue<MessageTypes_t>* msgWithVenue;
+   
+   if (!pending_to_strategy_.empty() && ((pending_to_strategy_.front()->order->canModify.load(std::memory_order_relaxed)) == (STRATEGY_DONE | RISK_DONE | BUILDER_DONE)))
    {
-      PendingMessage<MessageWithVenue<MessageTypes_t>> PendingMessage{};
-      pending_to_strategy_.pop(PendingMessage);
-      msgWithVenue = PendingMessage.msgWithVenue;
+      PendingMessage* pm = get_pending_packet();
+      pending_to_strategy_.pop(pm);
+      msgWithVenue = pm->msgWithVenue;
    }
    else
    {
       if (!parser_to_store_.pop(msgWithVenue))
          return false;
    }
-
-   bool msg_handled = std::visit([this, &msgWithVenue](const auto& inner_msg) {
+   bool msg_handled = std::visit([this, &msgWithVenue](auto&& inner_msg) {
 
       using MsgType = std::decay_t<decltype(inner_msg)>;
-      auto msgWvenue = MessageWithVenue<MsgType>{inner_msg, msgWithVenue.venue};
-
+      
+      auto* msgWvenue = mwv_poolmanager_.get_msgWithVenue<MsgType>(std::forward<MsgType>(inner_msg), msgWithVenue->venue);
+      
       if constexpr (std::is_same_v<MsgType, FIXSessionMessage*>)
       { 
-         store_to_db_.push(msgWvenue);
+         store_to_db_.push(dbd_poolmanager_.get_DbData(msgWvenue));
          return false;
       }
       else
       {
-         this->store<MsgType>(msgWvenue); 
+         this->store<MsgType>(*msgWvenue); 
          return true;
       }
 
-   }, msgWithVenue.msg);
+   }, msgWithVenue->msg);
 
    
    return msg_handled;
@@ -160,7 +160,7 @@ Order* OrderManager::get_order_from_our_map_wtokenkey(uint64_t client_order_id) 
 // Exchange Message Handlers
 // ==========================
 // ================= BIST FIX ===================
-void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) noexcept
+void OrderManager::update_order(MessageWithVenue<FIXMessage *> &fixMsg) noexcept
 {
    const auto* msg = fixMsg.msg;
 
@@ -211,8 +211,8 @@ void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) no
       
    if (UNLIKELY(order->canModify == 0x00))
    {
-      MessageWithVenue<MessageTypes_t> resetMsg(fixMsg.msg, fixMsg.venue);
-      pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
+      auto* resetMsg = mwv_poolmanager_.get_msgWithVenue<MessageTypes_t>(fixMsg.msg, fixMsg.venue);      
+      pending_to_strategy_.push(get_pending_packet(resetMsg, order));
       return;
    }
 
@@ -229,22 +229,22 @@ void OrderManager::update_order(const MessageWithVenue<FIXMessage *> &fixMsg) no
       break;
    case '9': // OrderCancelReject
       filler_fix_.fill_fix_cancel_reject(*order, *msg);
-      store_to_db_.push(fixMsg);
-      store_to_db_.push(order);
+      store_to_db_.push(dbd_poolmanager_.get_DbData(&fixMsg));
+      store_to_db_.push(dbd_poolmanager_.get_DbData(order));
       return;
    }
 
    // order->canModify = 0x00; not required in testing mode.
    awaitingAck_orders_.erase(client_order_id); 
     
-   store_to_db_.push(fixMsg);
-   store_to_db_.push(order);
+   store_to_db_.push(dbd_poolmanager_.get_DbData(&fixMsg));
+   store_to_db_.push(dbd_poolmanager_.get_DbData(order));
    store_to_risk_.push(order);
    store_to_strategy_.push(order);
 }
 
 // ================= BIST ITCH  ===================
-void OrderManager::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchMsg) noexcept 
+void OrderManager::update_order(MessageWithVenue<BIST::ITCHMessage> &itchMsg) noexcept 
 {
    std::visit([this, &itchMsg](const auto *msg)
               {
@@ -286,8 +286,8 @@ void OrderManager::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchM
                      }
                      else if (UNLIKELY(order->canModify == 0x00))
                      {
-                        MessageWithVenue<MessageTypes_t> resetMsg(itchMsg.msg, Venue::BIST);
-                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
+                        auto* resetMsg = mwv_poolmanager_.get_msgWithVenue<MessageTypes_t>(itchMsg.msg, Venue::BIST);
+                        pending_to_strategy_.push(get_pending_packet(resetMsg, order));
                         return;
                      }
 
@@ -314,7 +314,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchM
 
                      // order->canModify = 0x00;
 
-                     this->store_to_db_.push(order);
+                     this->store_to_db_.push(dbd_poolmanager_.get_DbData(order));
                      this->store_to_risk_.push(order);
                      this->store_to_strategy_.push(order);
                  }
@@ -338,6 +338,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchM
                  }
                  else if constexpr (std::is_same_v<MsgType, BIST::ITCHOrderBookFlushMessage>)
                  {
+                  
                     const auto venue_index = to_underlying(Venue::BIST);
                     const auto symbol = instrument_cache_[venue_index].find(msg->order_book_id)->second->symbol;
                     const auto symbol_index = hashtables_.getIndex(venue_index, symbol);
@@ -345,13 +346,13 @@ void OrderManager::update_order(const MessageWithVenue<BIST::ITCHMessage> &itchM
                     this->handle_flush_status(venue_index, symbol_index);
                  }
 
-                 this->store_to_db_.push(itchMsg);
+                 this->store_to_db_.push(dbd_poolmanager_.get_DbData(&itchMsg));
               },
               itchMsg.msg);
 }
 
 // ================= NASDAQ ITCH ===================
-void OrderManager::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept
+void OrderManager::update_order(MessageWithVenue<NASDAQ::ITCHMessage> &itchMsg) noexcept
 {
   
    std::visit([this, &itchMsg](const auto *msg)
@@ -402,8 +403,8 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itc
                      }
                      else if (UNLIKELY(order->canModify == 0x00))
                      {
-                        MessageWithVenue<MessageTypes_t> resetMsg(itchMsg.msg, Venue::NASDAQ);
-                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
+                        auto* resetMsg = mwv_poolmanager_.get_msgWithVenue<MessageTypes_t>(itchMsg.msg, Venue::NASDAQ);
+                        pending_to_strategy_.push(get_pending_packet(resetMsg, order));
                         return;
                      }
                      
@@ -442,7 +443,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itc
 
                      // order->canModify = 0x00; not required in testing mode.
 
-                     this->store_to_db_.push(order);
+                     this->store_to_db_.push(dbd_poolmanager_.get_DbData(order));
                      this->store_to_risk_.push(order);
                      this->store_to_strategy_.push(order);
                }
@@ -472,13 +473,13 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::ITCHMessage> &itc
                   this->update_venue_halt_status(Venue::NASDAQ, st.first, st.second);
                }
 
-               this->store_to_db_.push(itchMsg);
+               this->store_to_db_.push(dbd_poolmanager_.get_DbData(&itchMsg));
 
             }, itchMsg.msg);
 }
 
 // ================= BIST OUCH ===================
-void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchMsg) noexcept
+void OrderManager::update_order(MessageWithVenue<BIST::OUCHMessage> &ouchMsg) noexcept
 {
    std::visit([this, &ouchMsg](const auto *msg)
               {
@@ -511,8 +512,8 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
                      }
                      else if (UNLIKELY(order->canModify == 0x00))
                      {
-                        MessageWithVenue<MessageTypes_t> resetMsg(ouchMsg.msg, Venue::BIST);
-                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
+                        auto* resetMsg = mwv_poolmanager_.get_msgWithVenue<MessageTypes_t>(ouchMsg.msg, Venue::BIST);
+                        pending_to_strategy_.push(get_pending_packet(resetMsg, order));
                         return;
                      }
 
@@ -532,7 +533,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
 
                      // order->canModify = 0x00; not required in testing mode.
 
-                     this->store_to_db_.push(order);
+                     this->store_to_db_.push(dbd_poolmanager_.get_DbData(order));
                      this->store_to_risk_.push(order);
                      this->store_to_strategy_.push(order);
                  }
@@ -543,16 +544,16 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
 
                     if (!order)
                     {
-                     order = get_order_from_awaitingAck_orders(client_order_id);
-                     if (UNLIKELY(!order))
-                       return;
-                     awaitingAck_orders_.erase(order->client_order_id);
+                        order = get_order_from_awaitingAck_orders(client_order_id);
+                        if (UNLIKELY(!order))
+                        return;
+                        awaitingAck_orders_.erase(order->client_order_id);
                     }
                     else if (UNLIKELY(order->canModify == 0x00))
                     {
-                       MessageWithVenue<MessageTypes_t> resetMsg(ouchMsg.msg, Venue::BIST);
-                       pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
-                       return;
+                        auto* resetMsg = mwv_poolmanager_.get_msgWithVenue<MessageTypes_t>(ouchMsg.msg, Venue::BIST);
+                        pending_to_strategy_.push(get_pending_packet(resetMsg, order));
+                        return;
                     }
 
                     if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderExecutedMessage>)
@@ -563,7 +564,7 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
 
                        this->store_to_risk_.push(order);
                        this->store_to_strategy_.push(order);
-                       this->store_to_db_.push(order);
+                       this->store_to_db_.push(dbd_poolmanager_.get_DbData(order));
                     }
                     else if constexpr (std::is_same_v<MsgType, BIST::RX::OUCHOrderRejectedMessage>)
                     {
@@ -571,12 +572,12 @@ void OrderManager::update_order(const MessageWithVenue<BIST::OUCHMessage> &ouchM
                     }
                  }
 
-                 this->store_to_db_.push(ouchMsg); 
+                 this->store_to_db_.push(dbd_poolmanager_.get_DbData(&ouchMsg)); 
                }, ouchMsg.msg);
 }
 
 // ================= NASDAQ OUCH ===================
-void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg) noexcept
+void OrderManager::update_order(MessageWithVenue<NASDAQ::OUCHMessage> &ouchMsg) noexcept
 {
    std::visit([this, &ouchMsg](const auto *msg)
               {
@@ -627,8 +628,8 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                      }
                      else if (UNLIKELY(order->canModify == 0x00))
                      {
-                        MessageWithVenue<MessageTypes_t> resetMsg(ouchMsg.msg, Venue::NASDAQ);
-                        pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
+                        auto* resetMsg = mwv_poolmanager_.get_msgWithVenue<MessageTypes_t>(ouchMsg.msg, Venue::NASDAQ);
+                        pending_to_strategy_.push(get_pending_packet(resetMsg, order));
                         return;
                      }
 
@@ -643,7 +644,7 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                    
                      // order->canModify = 0x00;
 
-                     this->store_to_db_.push(order);
+                     this->store_to_db_.push(dbd_poolmanager_.get_DbData(order));
                      this->store_to_risk_.push(order);
                      this->store_to_strategy_.push(order);
                  }
@@ -668,8 +669,8 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                         
                         if (UNLIKELY(order->canModify == 0x00))
                         {
-                           MessageWithVenue<MessageTypes_t> resetMsg(ouchMsg.msg, Venue::NASDAQ);
-                           pending_to_strategy_.push(PendingMessage<MessageWithVenue<MessageTypes_t>>(resetMsg, order));
+                           auto* resetMsg = mwv_poolmanager_.get_msgWithVenue<MessageTypes_t>(ouchMsg.msg, Venue::NASDAQ);
+                           pending_to_strategy_.push(get_pending_packet(resetMsg, order));
                            return;
                         }
 
@@ -687,20 +688,20 @@ void OrderManager::update_order(const MessageWithVenue<NASDAQ::OUCHMessage> &ouc
                         }
                         else
                         {
-                           this->store_to_db_.push(ouchMsg);
+                           this->store_to_db_.push(dbd_poolmanager_.get_DbData(&ouchMsg));
                            return;
                         }
 
                         // order->canModify = 0x00; not required in testing mode.
 
-                        this->store_to_db_.push(order);
+                        this->store_to_db_.push(dbd_poolmanager_.get_DbData(order));
                         this->store_to_risk_.push(order);
                         this->store_to_strategy_.push(order);
                     }
                        
                   }
 
-                  this->store_to_db_.push(ouchMsg);
+                  this->store_to_db_.push(dbd_poolmanager_.get_DbData(&ouchMsg));
                   
                   }, ouchMsg.msg);
 }

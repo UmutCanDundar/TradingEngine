@@ -16,6 +16,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     std::atomic<bool> running{true};
 
     auto txPkt_pool = std::make_unique<TxPacketPoolManager>();
+    auto mwv_pool      = std::make_unique<MWV_PoolManager_t>();
     spscFIXTxSessionQueue_t parser_to_fixbuilder_tx;
     spscRxPacketQueue_t receiver_to_parser;
     spscTxPacketQueue_t builder_to_sender;
@@ -37,7 +38,8 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
                                         *sess_mngr,
                                         db_to_parser,
                                         *network_io,
-                                        *parser_fix
+                                        *parser_fix,
+                                        *mwv_pool
     );
     uint8_t sess_index = sess_mngr->getSessionIndex(Venue::BIST, Protocol::OUCH);
     
@@ -70,12 +72,12 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
 //      ^ DIFFERENT SCENARIOS FOR OUCH PARSING ^
 // ====================================================
 
-    MessageWithVenue<MessageTypes_t> msgWvenue;
+    MessageWithVenue<MessageTypes_t>* msgWvenue;
    
     // OrderAccepted Message
     parser_to_store.pop(msgWvenue); 
 
-    auto variant_msg = std::get<BIST::OUCHMessage>(msgWvenue.msg);
+    auto variant_msg = std::get<BIST::OUCHMessage>(msgWvenue->msg);
     auto* msg1 = std::get<BIST::RX::OUCHOrderAcceptedMessage*>(variant_msg);
     
     ASSERT_NE(msg1, nullptr);
@@ -105,7 +107,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     // Cancelled Message
     parser_to_store.pop(msgWvenue); 
 
-    variant_msg = std::get<BIST::OUCHMessage>(msgWvenue.msg);
+    variant_msg = std::get<BIST::OUCHMessage>(msgWvenue->msg);
     auto* msg2 = std::get<BIST::RX::OUCHOrderCancelledMessage*>(variant_msg);
 
     ASSERT_NE(msg2, nullptr);
@@ -122,7 +124,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
   // Executed Message
     parser_to_store.pop(msgWvenue); 
 
-    variant_msg = std::get<BIST::OUCHMessage>(msgWvenue.msg);
+    variant_msg = std::get<BIST::OUCHMessage>(msgWvenue->msg);
     auto* msg3 = std::get<BIST::RX::OUCHOrderExecutedMessage*>(variant_msg);
 
     ASSERT_NE(msg3, nullptr);
@@ -140,7 +142,7 @@ TEST(OuchParserDispatchTest, MultOuchPkt)
     // Executed Message
     parser_to_store.pop(msgWvenue); 
 
-    variant_msg = std::get<BIST::OUCHMessage>(msgWvenue.msg);
+    variant_msg = std::get<BIST::OUCHMessage>(msgWvenue->msg);
     auto* msg4 = std::get<BIST::RX::OUCHOrderExecutedMessage*>(variant_msg);
 
     ASSERT_NE(msg4, nullptr);

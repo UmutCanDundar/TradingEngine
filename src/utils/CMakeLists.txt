@@ -19,3 +19,4 @@ target_link_libraries(utils
 target_compile_features(utils PRIVATE cxx_std_23)
 
 add_subdirectory(CustomMap)
+add_subdirectory(CustomSpscQueue)

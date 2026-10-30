@@ -13,6 +13,7 @@ target_link_libraries(risk
         utils
         ab_flat_hash_map
         boost_headers
+        custom_spsc_queue
     PRIVATE
         order_management
         market

@@ -34,12 +34,14 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
     spscDbQueue_t store_to_db;
 
     auto hashtables    = std::make_unique<HashTables>();
-    auto marketbook    = std::make_unique<MarketBook>(*hashtables);
+    auto marketbook    = std::make_unique<MarketBook>();                                                                                      
+    auto mwv_pool      = std::make_unique<MWV_PoolManager_t>();
     auto sess_mngr     = std::make_unique<SessionManager>();
     auto sbt           = std::make_unique<SoupBinTcp>(*sess_mngr);
     auto builder_fix   = std::make_unique<Builder_FIX>(*sess_mngr);
     auto login         = std::make_unique<LoginController>(*sbt, *builder_fix, *sess_mngr);
     auto parser_fix    = std::make_unique<Parser_FIX>(parser_to_fixbuilder_tx);
+    auto dbd_pool      = std::make_unique<DbData_PoolManager>();
     auto order_manager = std::make_unique<OrderManager>(
                                         parser_to_store,
                                         store_to_strategy,
@@ -47,7 +49,9 @@ TEST(BuilderDispatchTest, MixedMessageTraffic)
                                         store_to_risk,
                                         store_to_db,
                                         *marketbook,
-                                        *hashtables        
+                                        *hashtables,
+                                        *mwv_pool,
+                                        *dbd_pool        
     );
 
     auto builder_dispatch = std::make_unique<Builder_Dispatch>(

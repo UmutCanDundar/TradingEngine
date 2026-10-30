@@ -36,6 +36,7 @@
 #include <cstddef>
 
 #include <boost/lockfree/spsc_queue.hpp>
+#include "CustomSpscQueue.h"
 
 enum class SyncState : uint8_t 
 {
@@ -146,5 +147,6 @@ struct alignas(64) Order // 192B
    
 };
 
-inline constexpr size_t ORDER_QUEUE_CAPACITY = 65536;
-using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
+inline constexpr size_t ORDER_QUEUE_CAPACITY = 1024;
+// using spscOrderQueue_t = boost::lockfree::spsc_queue<Order *, boost::lockfree::capacity<ORDER_QUEUE_CAPACITY>>;
+using spscOrderQueue_t = CustomSpscQueue<Order *, ORDER_QUEUE_CAPACITY>;

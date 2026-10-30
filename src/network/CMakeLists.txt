@@ -13,6 +13,7 @@ target_link_libraries(network
         utils
         session
         boost_headers
+        custom_spsc_queue
     PRIVATE
         project_options
 )

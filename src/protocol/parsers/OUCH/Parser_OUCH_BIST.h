@@ -49,6 +49,8 @@
 //    inlined via switch-case or template dispatch, while cold handlers remain in the function table.
 // =====================================================================================================
 
+// =================================== FPTR DISPATCH =========================================
+
 #pragma once
 
 #include "OUCHTypes_BIST.h"
@@ -98,3 +100,58 @@ public:
         return OUCHmsg;
     }
 };
+
+
+// =================================== SWITCH-CASE DISPATCH =========================================
+// #pragma once
+
+// #include "OUCHTypes_BIST.h"
+// #include "MessagePool.h"
+
+// #include <cstddef>
+// #include <array>
+// #include <variant>
+// #include <type_traits>
+
+// class Parser_OUCH_BIST
+// {
+// private:
+//    static constexpr size_t MAX_MESSAGES = 14;
+
+//    MessagePools<BIST::OUCHMessageTypes> ouch_pools_;
+
+//    void dispatch(size_t index, const char *data, BIST::OUCHMessage &msg) noexcept;
+
+//    void parseOrderAccepted(const char *data, BIST::OUCHMessage &msg) noexcept;
+//    void parseOrderRejected(const char *data, BIST::OUCHMessage &msg) noexcept;
+//    void parseOrderReplaced(const char *data, BIST::OUCHMessage &msg) noexcept;
+//    void parseOrderCancelled(const char *data, BIST::OUCHMessage &msg) noexcept;
+//    void parseOrderExecuted(const char *data, BIST::OUCHMessage &msg) noexcept;
+
+// public:
+//    Parser_OUCH_BIST() noexcept;
+
+//    template <typename T>
+//    void release(T *ouchMsg) noexcept
+//    {
+//       ouch_pools_.get_pool<T>().release(ouchMsg);
+//    }
+
+//    void releaseOUCH(BIST::OUCHMessage &ouchMsg) noexcept
+//    {
+//       std::visit([this](auto *ptr)
+//                  {
+//          using T = std::remove_pointer_t<decltype(ptr)>;
+//          release<T>(ptr); },
+//                  ouchMsg);
+//    }
+
+//    BIST::OUCHMessage parse(const char *data) noexcept
+//    {
+//       BIST::OUCHMessage OUCHmsg;
+//       size_t index = static_cast<size_t>(BIST::ouchMessageIndex(*(data + 3)));
+//       if (index != 99)
+//          dispatch(index, data + 3, OUCHmsg);
+//       return OUCHmsg;
+//    }
+// };

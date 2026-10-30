@@ -1,7 +1,7 @@
+// ==============================  BTREE_MAP-VECTOR =========================================
 #include "MarketBook.h"
 
-MarketBook::MarketBook(HashTables &hashtables) noexcept : hashtables_(hashtables) 
-{}
+MarketBook::MarketBook() noexcept  {}
 
 void MarketBook::flush(uint8_t venue_index, uint32_t symbol_index) noexcept
 {
