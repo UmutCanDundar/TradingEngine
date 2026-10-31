@@ -131,7 +131,7 @@ bool RiskEngine::update_risk()
             update_order_risk(*order, venue_index);
             update_account_risk(accRisk, accLim, *order, metrics);
         }
-        order->canModify.store(order->canModify | RISK_DONE, std::memory_order_release);
+        order->canModify.fetch_or(RISK_DONE, std::memory_order_release);
 
         pipeline_seq.fetch_add(1, std::memory_order_release); // Rx test end
         return true;
@@ -163,7 +163,7 @@ bool RiskEngine::check_risk() noexcept
         {
             if(check_cancel_rate_limit(accRisk, symRisk, *order)) 
             {
-                order->canModify.store(order->canModify | RISK_DONE, std::memory_order_relaxed);
+                order->canModify.fetch_or(RISK_DONE, std::memory_order_relaxed);
                 risk_to_builder_.push(order);
                 return true;
             }
@@ -195,7 +195,7 @@ bool RiskEngine::check_risk() noexcept
         if (RejectReason){risk_to_strategy_.push(get_reject_order_packet(order, RejectReason)); continue;}
 
         
-        order->canModify.store(order->canModify | RISK_DONE, std::memory_order_relaxed);
+        order->canModify.fetch_or(RISK_DONE, std::memory_order_relaxed);
         risk_to_builder_.push(order);
         return true;
     }
