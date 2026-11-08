@@ -1,5 +1,6 @@
 #include "ParserFlow.h"
 #include "config_utils.h"
+#include "FlowException.h"
 
 #include <immintrin.h>
 
@@ -12,13 +13,20 @@ void ParserFlow::start()
 {
     running_.store(true, std::memory_order_release);
 
-    parser_thread_ = std::thread([this]
-                                  {
+    parser_thread_ = std::thread([this] {
    
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
-    configure_affinity(2);       
+        try 
+        {
+            configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+            configure_affinity(2);       
+            run();
+        }
+        catch (...) 
+        {
+            thread_failure.report(std::current_exception());
+        }   
 
-    run(); });
+    });
 }
 
 void ParserFlow::run() noexcept

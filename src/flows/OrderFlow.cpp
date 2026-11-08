@@ -1,5 +1,6 @@
 #include "OrderFlow.h"
 #include "config_utils.h"
+#include "FlowException.h"
 
 #include <immintrin.h>
 
@@ -12,21 +13,33 @@ void OrderFlow::start()
 {
     running_.store(true, std::memory_order_release);
 
-    ord_mngr_thread_ = std::thread([this]
-                                     {
-   
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
-    configure_affinity(4);       
+    ord_mngr_thread_ = std::thread([this] {
+       
+        try 
+        {
+            configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+            configure_affinity(4);       
+            run_order_manager();
+        }
+        catch (...) 
+        {
+            thread_failure.report(std::current_exception());
+        }     
+    });
 
-    run_order_manager(); });
-
-    ch_writer_thread_ = std::thread([this]
-                                      {
-   
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
-    configure_affinity(13);        
-
-    run_clickhouse_writer(); });
+    ch_writer_thread_ = std::thread([this] {
+    
+        try 
+        {
+            configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+            configure_affinity(13);        
+            run_clickhouse_writer();
+        }
+        catch (...) 
+        {
+            thread_failure.report(std::current_exception());
+        }    
+    });
 }
 
 void OrderFlow::run_order_manager() noexcept

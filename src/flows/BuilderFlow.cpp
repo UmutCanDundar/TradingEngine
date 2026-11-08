@@ -1,5 +1,6 @@
 #include "BuilderFlow.h"
 #include "config_utils.h"
+#include "FlowException.h"
 
 #include <immintrin.h>
 
@@ -13,9 +14,17 @@ void BuilderFlow::start()
     running_.store(true, std::memory_order_release);
 
     builder_thread_ = std::thread([this] {
-        configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
-        configure_affinity(8);       
-        run(); 
+        
+        try 
+        {
+            configure_realtime(sched_get_priority_max(SCHED_FIFO));
+            configure_affinity(8);
+            run();
+        }
+        catch (...) 
+        {
+            thread_failure.report(std::current_exception());
+        }
     });
 }
 

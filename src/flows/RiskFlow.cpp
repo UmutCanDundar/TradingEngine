@@ -1,5 +1,6 @@
 #include "RiskFlow.h"
 #include "config_utils.h"
+#include "FlowException.h"
 
 #include <immintrin.h>
 
@@ -12,21 +13,33 @@ void RiskFlow::start()
 {
     running_.store(true, std::memory_order_release);
 
-    risk_check_thread_ = std::thread([this]
-                                  {
-   
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
-    configure_affinity(12);         
+    risk_check_thread_ = std::thread([this] {
 
-    run_check(); });
+        try 
+        {
+            configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+            configure_affinity(12);         
+            run_check(); 
+        }
+        catch (...) 
+        {
+            thread_failure.report(std::current_exception());
+        }   
+    });
 
-    risk_update_thread_ = std::thread([this]
-                                     {
-   
-    configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
-    configure_affinity(10);       
-
-    run_update(); });
+    risk_update_thread_ = std::thread([this] {
+        
+        try 
+        {
+            configure_realtime(sched_get_priority_max(SCHED_FIFO)); 
+            configure_affinity(10);       
+            run_update(); 
+        }
+        catch (...) 
+        {
+            thread_failure.report(std::current_exception());
+        }   
+   });
 }
 
 void RiskFlow::run_check() noexcept

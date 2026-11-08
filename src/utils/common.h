@@ -1,6 +1,7 @@
 #pragma once
 
 #include <type_traits>
+#include <exception>
 
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 
@@ -16,3 +17,5 @@ namespace common_function
         return static_cast<std::underlying_type_t<Enum>>(e);
     }
 }
+
+std::exception_ptr eptr{};
